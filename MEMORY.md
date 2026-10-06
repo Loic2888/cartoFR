@@ -55,6 +55,7 @@ oublie de l'alimenter au moment où ça fait mal.
 - **2026-10-05** — Sigle écrit "M H C S" au registre et "MHCS" ailleurs : mettre les deux variantes dans les marques.
 - **2026-10-05** — Majorité du groupe à une adresse calculée trop tôt dans la boucle : elle ne joue qu'une fois les mandats ajoutés.
 - **2026-10-05** — FTP INPI : il faut le mode passif en ignorant l'IP renvoyée, et des reprises automatiques (`ftp_download.py`). Les navigateurs n'ouvrent plus les liens ftp://.
+- **2026-10-06** — `pyright worker` lancé depuis la racine ne vérifie aucun fichier et sort à 0 sans rien afficher : faux vert. Toujours `pyright -p worker`, qui lit `worker/pyproject.toml`.
 - **2026-10-06** — Equans (groupe Bouygues) dans les réglages VINCI a fait entrer ~150 fausses sociétés ; "VINCI" et "ASF" doivent toujours exiger une deuxième preuve.
 
 <!-- Exemple :

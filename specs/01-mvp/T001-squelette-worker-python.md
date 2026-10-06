@@ -30,10 +30,10 @@ Paquet `worker/cartofr` installable, ruff, pyright et pytest configurés, un tes
 Scripts courts, docstring en tête de fichier (convention CLAUDE.md).
 
 ## Critères de succès
-- [ ] **C1** : `.venv/bin/ruff check worker` sort en code 0
-- [ ] **C2** : `.venv/bin/pyright worker` sort en code 0
-- [ ] **C3** : `.venv/bin/pytest worker` passe avec au moins 1 test
-- [ ] **C4** : `AGENTS.md` liste ces trois commandes
+- [x] **C1** : `.venv/bin/ruff check worker` sort en code 0
+- [x] **C2** : `.venv/bin/pyright -p worker` sort en code 0 (sans `-p`, pyright ne trouve aucun fichier et sort à 0 sans rien vérifier)
+- [x] **C3** : `.venv/bin/pytest worker` passe avec au moins 1 test
+- [x] **C4** : `AGENTS.md` liste ces trois commandes
 
 ## Tests et validation
 

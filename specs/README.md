@@ -19,7 +19,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 
 ## Phase 1 : Setup
 
-- [ ] `T001` [P] — Poser le paquet Python du worker et son outillage
+- [x] `T001` [P] — Poser le paquet Python du worker et son outillage
 - [ ] `T002` [P] — Poser l'application Next.js et son outillage
 - [ ] `T003` [P] — Brancher la CI sur chaque PR *(après T001, T002)*
 - [ ] `T004` [P] — Écrire l'infrastructure Docker Compose *(après T001, T002)*
