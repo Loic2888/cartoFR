@@ -1,0 +1,17 @@
+# HTTPS et aiguillage (T004).
+# DOMAINE vaut localhost en local : Caddy signe alors avec sa propre autorité
+# (curl -k). Sur le serveur, un vrai nom de domaine : certificat Let's Encrypt.
+# Pas de journal d'accès : il contiendrait les adresses IP (RGPD, règle 4).
+
+{$DOMAINE:localhost} {
+	encode zstd gzip
+
+	@supabase path /auth/v1/* /rest/v1/*
+	handle @supabase {
+		reverse_proxy kong:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

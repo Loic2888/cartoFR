@@ -1,0 +1,16 @@
+# Contexte de build de l'image worker (worker/). Ni secret, ni données.
+.env
+.env.*
+**/.env
+**/.env.*
+data
+**/data
+.venv
+**/__pycache__
+*.egg-info
+build
+dist
+.pytest_cache
+.ruff_cache
+tests
+.git

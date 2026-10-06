@@ -1,0 +1,265 @@
+# Services de cartoFR sur un seul serveur (ARCHI, Infrastructure ; ADR-003).
+#
+# Usage, depuis la racine du dépôt :
+#   bash infra/generer-secrets.sh                                       # une fois : crée infra/.env
+#   docker compose -f infra/docker-compose.yml --profile dev up -d --build   # en local (avec mailpit)
+#   docker compose -f infra/docker-compose.yml up -d --build                 # sur le serveur
+#
+# Aucune valeur secrète ici (garde-fou 5) : seulement des ${VARIABLES}, lues dans
+# infra/.env (hors git), et le .env de la racine pour le worker (INPI, INSEE).
+# Supabase réduit à db, auth, rest, kong, meta et studio : ni realtime, ni
+# storage, ni analytics, ni functions, ni pooler (mémoire, ARCHI).
+# Seul caddy publie des ports sur l'extérieur. studio et mailpit n'écoutent que
+# sur 127.0.0.1 (tunnel SSH sur le serveur).
+# Images Supabase : versions reprises du docker-compose officiel
+# (supabase/supabase, dossier docker), à monter ensemble.
+
+name: cartofr
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    # Ports de l'hôte réglables si 80 ou 443 sont déjà pris (en local).
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      DOMAINE: ${DOMAINE:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_started
+      kong:
+        condition: service_started
+    logging: *logging
+
+  web:
+    build:
+      context: ../web
+      dockerfile: ../infra/web.Dockerfile
+    restart: unless-stopped
+    environment:
+      # Adresses internes, utilisées côté serveur par T005 (client Supabase).
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+  worker:
+    build:
+      context: ../worker
+      dockerfile: ../infra/worker.Dockerfile
+    restart: unless-stopped
+    # Attente passive : remplacé par `python -m cartofr` en T008.
+    command: ["python", "-c", "import cartofr, signal; print('worker cartofr prêt', flush=True); signal.pause()"]
+    env_file:
+      # Identifiants INPI et INSEE, à la racine du dépôt (hors git).
+      - path: ../.env
+        required: false
+    volumes:
+      # Registre et stocks (19 Go) : montés, jamais copiés dans l'image.
+      - ../data:/app/data
+    # Aucun port publié : joignable seulement depuis le réseau Docker.
+    logging: *logging
+
+  db:
+    image: supabase/postgres:15.8.1.060
+    restart: unless-stopped
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf", "-c", "log_min_messages=fatal"]
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: 5432
+      POSTGRES_PORT: 5432
+      PGDATABASE: postgres
+      POSTGRES_DB: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: ${JWT_EXPIRY:-3600}
+    volumes:
+      - ./supabase/db/roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      - ./supabase/db/jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:ro
+      - db_data:/var/lib/postgresql/data
+      - db_config:/etc/postgresql-custom
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  auth:
+    image: supabase/gotrue:v2.177.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_SITE_URL: ${SITE_URL}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      # Inscription fermée : on n'entre que sur invitation (ARCHI, Connexion et droits).
+      GOTRUE_DISABLE_SIGNUP: "true"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      # Lien magique par e-mail, rien d'autre.
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_SMS_AUTOCONFIRM: "false"
+      # SMTP : Brevo en production (smtp-relay.brevo.com:587), mailpit en local.
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL}
+      GOTRUE_SMTP_HOST: ${SMTP_HOST}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME}
+      # Objets des e-mails en français (règle produit 1). Le corps des
+      # modèles reste celui de GoTrue : à traduire avec l'écran de connexion.
+      GOTRUE_MAILER_SUBJECTS_MAGIC_LINK: Votre lien de connexion à cartoFR
+      GOTRUE_MAILER_SUBJECTS_INVITE: Votre invitation à cartoFR
+      GOTRUE_MAILER_SUBJECTS_CONFIRMATION: Confirmez votre adresse pour cartoFR
+      GOTRUE_MAILER_SUBJECTS_RECOVERY: Votre lien de connexion à cartoFR
+      GOTRUE_MAILER_SUBJECTS_EMAIL_CHANGE: Confirmez votre nouvelle adresse pour cartoFR
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    logging: *logging
+
+  rest:
+    image: postgrest/postgrest:v12.2.12
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["postgrest"]
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
+    logging: *logging
+
+  kong:
+    image: kong:2.8.1
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      # Un worker nginx par cœur par défaut : ~1,2 Go mesuré. Deux suffisent.
+      KONG_NGINX_WORKER_PROCESSES: 2
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+    volumes:
+      - ./supabase/kong.yml:/home/kong/temp.yml:ro
+    # Les clés sont injectées au démarrage depuis l'environnement, comme dans
+    # le setup officiel : kong.yml n'en contient aucune.
+    entrypoint: bash -c 'eval "echo \"$$(cat ~/temp.yml)\"" > ~/kong.yml && /docker-entrypoint.sh kong docker-start'
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+  meta:
+    image: supabase/postgres-meta:v0.91.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+    logging: *logging
+
+  studio:
+    image: supabase/studio:2025.06.30-sha-6f5982d
+    restart: unless-stopped
+    depends_on:
+      meta:
+        condition: service_started
+    # Jamais exposé : 127.0.0.1 seulement (tunnel SSH sur le serveur).
+    ports:
+      - "127.0.0.1:${STUDIO_PORT:-3001}:3000"
+    environment:
+      HOSTNAME: 0.0.0.0
+      NEXT_TELEMETRY_DISABLED: 1
+      STUDIO_PG_META_URL: http://meta:8080
+      PG_META_CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DEFAULT_ORGANIZATION_NAME: cartoFR
+      DEFAULT_PROJECT_NAME: cartoFR
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_PUBLIC_URL: ${API_EXTERNAL_URL}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      NEXT_PUBLIC_ENABLE_LOGS: "false"
+      NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/platform/profile').then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    logging: *logging
+
+  # Local seulement : reçoit les liens magiques (profil dev).
+  mailpit:
+    image: axllent/mailpit:v1.27
+    profiles: ["dev"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *logging
+
+volumes:
+  db_data:
+  db_config:
+  caddy_data:
+  caddy_config:

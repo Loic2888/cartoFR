@@ -32,11 +32,11 @@ Docker Compose avec `caddy`, `web`, `worker` et Supabase réduit (db, auth, rest
 Services réduits pour tenir dans 16 Go (ARCHI, Infrastructure).
 
 ## Critères de succès
-- [ ] **C1** : `docker compose -f infra/docker-compose.yml up` démarre les services sans erreur
-- [ ] **C2** : `infra/docker-compose.yml` ne contient aucune valeur secrète en dur, seulement `env_file`
-- [ ] **C3** : `.env.example` liste chaque variable utilisée, sans valeur
-- [ ] **C4** : Chaque service déclare `logging.options.max-size`
-- [ ] **C5** : Aucun service `realtime`, `storage`, `analytics` ni `functions`
+- [x] **C1** : `docker compose -f infra/docker-compose.yml up` démarre les services sans erreur
+- [x] **C2** : `infra/docker-compose.yml` ne contient aucune valeur secrète en dur, seulement `env_file`
+- [x] **C3** : `.env.example` liste chaque variable utilisée, sans valeur
+- [x] **C4** : Chaque service déclare `logging.options.max-size`
+- [x] **C5** : Aucun service `realtime`, `storage`, `analytics` ni `functions`
 
 ## Tests et validation
 
