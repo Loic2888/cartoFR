@@ -37,7 +37,7 @@ line-length = 110
 select = ["E", "F", "I", "B", "UP"]
 
 [tool.pyright]
-include = ["cartofr", "tests"]
+include = ["cartofr", "tests", "scripts"]
 pythonVersion = "3.12"
 typeCheckingMode = "standard"
 venvPath = ".."

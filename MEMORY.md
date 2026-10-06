@@ -75,6 +75,7 @@ formats imposés, dépendances qui bougent, contraintes légales.
 - **2026-10-03** — Licence INPI : les données personnes ne servent pas à la prospection ; `diffusionCommerciale = false` = opposition à la prospection (75 sociétés sur 174 chez LVMH).
 - **2026-10-06** — Stock RNE local = photo du 2026-03-04. Tout ce qui a changé depuis manque tant que la synchro quotidienne n'existe pas.
 - **2026-10-06** — Caisses locales du Crédit Mutuel (~1 400) : aucun mandat au registre, le moteur ne peut pas les trouver par les liens.
+- **2026-10-06** — API INPI `/diff` : une journée complète (2026-10-05, un lundi) = 39 131 fiches, 394 requêtes de 100, 6 min 48 s, aucun 429. Jour J = `from=J-1&to=J`, page suivante dans l'en-tête `pagination-search-after`, `/diff/count` muet au-delà de 10 000.
 
 ---
 
