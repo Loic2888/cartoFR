@@ -28,9 +28,9 @@ Tables `organisations`, `membres`, `travaux`, `etat_registre`, avec leurs politi
 Pas d'ORM (ADR-005).
 
 ## Critères de succès
-- [ ] **C1** : `supabase/migrations/0001_socle.sql` active RLS sur chaque table qui porte `organisation_id`
-- [ ] **C2** : `worker/tests/test_rls.py` vérifie qu'un membre de A ne lit aucune ligne de B
-- [ ] **C3** : Aucune colonne de personne physique dans le schéma (principe 6)
+- [x] **C1** : `supabase/migrations/0001_socle.sql` active RLS sur chaque table qui porte `organisation_id`
+- [x] **C2** : `worker/tests/test_rls.py` vérifie qu'un membre de A ne lit aucune ligne de B
+- [x] **C3** : Aucune colonne de personne physique dans le schéma (principe 6)
 
 ## Tests et validation
 

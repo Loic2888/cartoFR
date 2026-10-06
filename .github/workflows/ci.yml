@@ -22,6 +22,24 @@ jobs:
   worker:
     name: worker (Python)
     runs-on: ubuntu-latest
+    # Base éphémère pour le test RLS (T006) : même image que infra/docker-compose.yml.
+    # Elle fournit déjà le schéma auth, auth.users, auth.uid() et les rôles anon,
+    # authenticated et service_role.
+    services:
+      postgres:
+        image: supabase/postgres:15.8.1.060
+        env:
+          # Valeur factice : conteneur jetable, détruit à la fin du job.
+          POSTGRES_PASSWORD: postgres-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -h localhost"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres-ci-only@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v7
 
@@ -47,8 +65,17 @@ jobs:
       - name: Typecheck (pyright)
         run: .venv/bin/pyright -p worker
 
+      # Chaque migration dans sa transaction, dans l'ordre des noms ; la première erreur arrête tout.
+      - name: Appliquer les migrations
+        run: |
+          for f in supabase/migrations/*.sql; do
+            echo "migration : $f"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -1 -f "$f"
+          done
+
+      # CI est défini par GitHub : sans base, le test RLS échoue au lieu d'être ignoré.
       - name: Tests (pytest)
-        run: .venv/bin/pytest worker
+        run: .venv/bin/pytest worker -rs
 
   web:
     name: web (Next.js)
