@@ -16,7 +16,7 @@ Un fichier `registre.duckdb` construit depuis `data/rne_links/`, `data/sieges.pa
 - `worker/cartofr/registre/schema.py` — création des tables
 - `worker/cartofr/registre/construire.py` — chargement initial depuis les parquets
 - `worker/cartofr/registre/journal.py` — écriture dans `mises_a_jour`
-- `worker/tests/registre/test_construire.py`
+- `worker/tests/test_registre_construire.py`
 
 ### Fonctionnement attendu
 - Colonnes `opposition_prospection` et `non_diffusible` (INSEE) sur `societes`
