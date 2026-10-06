@@ -29,11 +29,11 @@ Un fichier `registre.duckdb` construit depuis `data/rne_links/`, `data/sieges.pa
 Le registre ne quitte pas le worker (principe 6).
 
 ## Critères de succès
-- [ ] **C1** : `python -m cartofr.registre.construire` produit `data/registre.duckdb`
-- [ ] **C2** : Le nombre de liens actifs est égal à celui de `data/rne_links/liens.parquet` (1 644 581 au 2026-10-06)
-- [ ] **C3** : `societes` et `liens` ont les colonnes `debut` et `fin`
-- [ ] **C4** : `societes.non_diffusible` est renseignée depuis SIRENE
-- [ ] **C5** : `worker/tests/registre/test_construire.py` passe sur un mini-jeu de parquets générés
+- [x] **C1** : `python -m cartofr.registre.construire` produit `data/registre.duckdb`
+- [x] **C2** : `liens` compte autant de lignes que `data/rne_links/liens.parquet` (1 644 581 au 2026-10-06), et le nombre de liens en vigueur (`fin` vide) est égal au nombre de liens actifs du parquet au sens du moteur, `coalesce(actif, true)` (1 644 581 au 2026-10-06 : 1 400 270 `actif = true`, 244 311 `actif` vide, aucun `actif = false`)
+- [x] **C3** : `societes` et `liens` ont les colonnes `debut` et `fin`
+- [x] **C4** : `societes.non_diffusible` est renseignée depuis SIRENE
+- [x] **C5** : `worker/tests/test_registre_construire.py` passe sur un mini-jeu de parquets générés
 
 ## Tests et validation
 
