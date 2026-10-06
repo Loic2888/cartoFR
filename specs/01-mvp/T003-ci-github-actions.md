@@ -27,9 +27,9 @@ Un workflow GitHub Actions qui lance lint, typecheck et tests pour `worker/` et 
 La CI ne voit que du code (ARCHI, Contrôle constitutionnel R5).
 
 ## Critères de succès
-- [ ] **C1** : `.github/workflows/ci.yml` lance ruff, pyright, pytest, eslint, tsc, vitest
-- [ ] **C2** : Le workflow se déclenche sur `pull_request` vers `main`
-- [ ] **C3** : Aucune étape ne lit `data/`, `basile/`, `out/` ni un secret
+- [x] **C1** : `.github/workflows/ci.yml` lance ruff, pyright, pytest, eslint, tsc, vitest
+- [x] **C2** : Le workflow se déclenche sur `pull_request` vers `main`
+- [x] **C3** : Aucune étape ne lit `data/`, `basile/`, `out/` ni un secret
 
 ## Tests et validation
 

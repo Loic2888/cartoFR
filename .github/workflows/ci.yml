@@ -1,0 +1,84 @@
+# CI de cartoFR : lint, typecheck, tests et build du worker et de l'interface.
+# Le merge d'une PR vers main exige ces deux jobs au vert (garde-fou 4).
+# Aucun secret, aucune donnée du registre : la CI ne voit que du code.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Un nouveau push sur la même branche annule le run précédent.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  worker:
+    name: worker (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: worker/pyproject.toml
+
+      # Venv à la racine, comme en local : pyright y est pointé (venvPath dans worker/pyproject.toml).
+      - name: Installer le worker
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -e "worker[dev]"
+
+      - name: Lint (ruff)
+        run: .venv/bin/ruff check worker
+
+      - name: Format (ruff)
+        run: .venv/bin/ruff format --check worker
+
+      # Toujours -p : sans lui, pyright ne vérifie rien et sort à 0.
+      - name: Typecheck (pyright)
+        run: .venv/bin/pyright -p worker
+
+      - name: Tests (pytest)
+        run: .venv/bin/pytest worker
+
+  web:
+    name: web (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Lint (eslint)
+        run: npm run lint
+
+      - name: Typecheck (tsc)
+        run: npm run typecheck
+
+      - name: Tests (vitest)
+        run: npm test
+
+      # Le build télécharge les polices Geist : réseau requis.
+      - name: Build
+        run: npm run build
