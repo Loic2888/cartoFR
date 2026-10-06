@@ -1,0 +1,47 @@
+# Paquet du worker cartoFR : moteur, registre, synchro et file de travaux.
+# Installation, depuis la racine du dépôt : .venv/bin/pip install -e "worker[dev]"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cartofr"
+version = "0.1.0"
+description = "Worker cartoFR : registre des sociétés, synchro INPI et INSEE, moteur de cartographie"
+requires-python = ">=3.12"
+dependencies = [
+    "duckdb>=1.5",          # registre et moteur
+    "pandas>=3.0",          # moteur (repris du prototype)
+    "pyarrow>=25",          # lecture des parquets du prototype
+    "psycopg[binary]>=3.2", # base de l'app (file de travaux, cartos)
+    "pydantic>=2.10",       # schéma des réglages, partagé avec Zod côté web
+    "httpx>=0.28",          # API INPI et API Sirene
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.14",
+    "pyright>=1.1.400",
+    "pytest>=8.4",
+]
+
+[tool.setuptools.packages.find]
+include = ["cartofr*"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pyright]
+include = ["cartofr", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+venvPath = ".."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

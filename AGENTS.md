@@ -22,7 +22,10 @@ Un travail n'est pas fini quand le code est écrit. Il est fini quand :
 ```
 .venv/bin/python engine.py config/<g>.json   ← pour lvmh, vinci, cmaf (tableau Commandes de CLAUDE.md)
 .venv/bin/python compare.py <g>              ← scores au moins égaux à ceux de CLAUDE.md
-<lint / typecheck / tests unitaires>         ← à ajouter ici quand la tâche de fondation les pose
+.venv/bin/ruff check worker                  ← lint du worker
+.venv/bin/ruff format --check worker         ← format du worker
+.venv/bin/pyright -p worker                  ← typecheck du worker (sans -p, pyright ne vérifie rien et sort à 0)
+.venv/bin/pytest worker                      ← tests du worker
 ```
 
 sont **passées et vertes**. Si l'une échoue, tu corriges — tu ne rends pas en
