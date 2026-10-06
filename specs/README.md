@@ -5,10 +5,11 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 ## Le projet en bref
 
 **D'après le PRD** : une app interne Youno qui tient sa propre copie du registre français, mise à jour avec au plus 7 jours de retard (US1). Elle rend en quelques minutes l'arbre d'un groupe, avec la preuve, la confiance A/B/C et l'indication ciblable de chaque lien (US2).
-**Stack (ARCHI)** : Next.js 15 + shadcn/ui · Supabase auto-hébergé (Postgres, Auth, RLS) · worker Python 3.12 + DuckDB · VPS Hetzner CX43 en UE, Docker Compose.
+**Stack (ARCHI)** : Next.js 16 + shadcn/ui · Supabase auto-hébergé (Postgres, Auth, RLS) · worker Python 3.12 + DuckDB · VPS Hetzner CX43 en UE, Docker Compose.
 **État actuel** :
 - ✅ Prototype à la racine : moteur (`engine.py`), tables nationales (`data/rne_links/`, 1,6 M liens), non-régression (`compare.py`). Scores au 2026-10-06 : LVMH 90 %, VINCI 81 %, CMAF 83 %.
-- ❌ Pas encore de `web/`, `worker/`, `infra/` ni `supabase/`. Ni lint, ni typecheck, ni tests.
+- ✅ `worker/` (T001) et `web/` (T002) : squelettes, lint, typecheck et tests en place (commandes dans `AGENTS.md`).
+- ❌ Pas encore d'`infra/` ni de `supabase/`. Pas de CI.
 
 ## Comment lire ce fichier
 
@@ -20,7 +21,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 ## Phase 1 : Setup
 
 - [x] `T001` [P] — Poser le paquet Python du worker et son outillage
-- [ ] `T002` [P] — Poser l'application Next.js et son outillage
+- [x] `T002` [P] — Poser l'application Next.js et son outillage
 - [ ] `T003` [P] — Brancher la CI sur chaque PR *(après T001, T002)*
 - [ ] `T004` [P] — Écrire l'infrastructure Docker Compose *(après T001, T002)*
 - [ ] `T005` — Déployer sur le VPS Hetzner et poser les sauvegardes *(préalable humain : compte Hetzner et nom de domaine)*

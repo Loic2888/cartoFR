@@ -16,6 +16,7 @@ Un workflow GitHub Actions qui lance lint, typecheck et tests pour `worker/` et 
 - `.github/workflows/ci.yml` — deux jobs, `worker` et `web`
 
 ### Fonctionnement attendu
+- Node 22 (`web/.nvmrc`), `NEXT_TELEMETRY_DISABLED=1`, `npm ci` dans `web/`. Le build a besoin du réseau (polices Geist)
 - Créer le venv à la racine (`.venv`), comme en local : `worker/pyproject.toml` y pointe pyright (`venvPath`). Lancer `pyright -p worker`, jamais `pyright worker` (faux vert)
 - Aucun secret, aucune donnée du registre : tests sur fixtures seulement
 

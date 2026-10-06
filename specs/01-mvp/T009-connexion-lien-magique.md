@@ -16,7 +16,7 @@ Page de connexion, retour du lien, protection des pages, gabarit mobile, invitat
 - `web/app/connexion/page.tsx`
 - `web/app/auth/callback/route.ts`
 - `web/lib/supabase/server.ts`, `web/lib/supabase/client.ts`
-- `web/middleware.ts`
+- `web/proxy.ts` — `middleware.ts` renommé en Next.js 16
 - `web/app/(app)/layout.tsx` — en-tête et navigation, mobile d'abord
 - `web/app/(app)/admin/membres/page.tsx` et `actions.ts` — invitation
 - `web/lib/erreurs.ts` — erreurs Supabase traduites en français
@@ -27,13 +27,13 @@ Page de connexion, retour du lien, protection des pages, gabarit mobile, invitat
 - Seul l'e-mail est demandé (minimisation RGPD)
 
 ### Technologies
-- Supabase Auth (GoTrue) via `@supabase/ssr`, Brevo SMTP, Zod
+- Supabase Auth (GoTrue) via `@supabase/ssr` ; lire `web/node_modules/next/dist/docs/` (Next.js 16) avant d'écrire `proxy.ts`, Brevo SMTP, Zod
 
 ### Motifs d'architecture
 Server Actions pour les écritures.
 
 ## Critères de succès
-- [ ] **C1** : `web/middleware.ts` redirige vers `/connexion` toute page sans session
+- [ ] **C1** : `web/proxy.ts` redirige vers `/connexion` toute page sans session
 - [ ] **C2** : Les inscriptions libres sont désactivées dans la configuration GoTrue de `infra/`
 - [ ] **C3** : `web/lib/erreurs.ts` traduit les codes d'erreur d'auth, testé par Vitest
 - [ ] **C4** : Le champ e-mail de `web/app/connexion/page.tsx` a un `<label>` associé

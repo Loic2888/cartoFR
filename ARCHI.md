@@ -9,7 +9,7 @@ Date : 2026-10-06. Part de `PRD.md`. Le PRD dit le quoi, ce document dit le comm
 **Approche** : garder le moteur Python du prototype, qui marche et qui est mesuré, et l'entourer du minimum pour en faire une app. Le registre (lourd, plein de données personnelles) reste à côté du moteur. La base de l'app ne garde que ce qui s'affiche. Un seul serveur, à 20 €/mois au plus.
 
 **Stack en bref**
-- Interface : Next.js 15 (App Router) + TypeScript, shadcn/ui + Tailwind
+- Interface : Next.js 16 (App Router) + TypeScript, shadcn/ui (Base UI) + Tailwind
 - Base de l'app : Supabase auto-hébergé (Postgres 15, Auth, RLS, PostgREST)
 - Registre et moteur : worker Python 3.12, DuckDB sur fichiers locaux
 - Hébergement : un VPS Hetzner CX43 (Allemagne, UE), Docker Compose, Caddy pour le HTTPS
@@ -29,11 +29,11 @@ Date : 2026-10-06. Part de `PRD.md`. Le PRD dit le quoi, ce document dit le comm
 
 ## Interface (frontend)
 
-- **Framework : Next.js 15, App Router, TypeScript strict.**
+- **Framework : Next.js 16, App Router, TypeScript strict.** (15 prévu au départ ; 16.3 retenu le 2026-10-06 à T002, version courante. Conséquence : `proxy.ts` remplace `middleware.ts`.)
   - **Pourquoi** : stack visée dans CLAUDE.md, rendu serveur par défaut, Server Actions pour les écritures.
   - **Compromis** : plus lourd qu'une page statique, mais la connexion et les formulaires de réglages le justifient.
 - **Composants : shadcn/ui + Tailwind.**
-  - **Pourquoi** : composants Radix accessibles au clavier, copiés dans le code donc modifiables, mobile-first par défaut avec Tailwind.
+  - **Pourquoi** : composants Base UI (shadcn 4) accessibles au clavier, motifs WAI-ARIA, copiés dans le code donc modifiables, mobile-first par défaut avec Tailwind.
   - **Compromis** : pas de composant d'arbre. On écrit un arbre maison selon le motif WAI-ARIA `treeview` (flèches, Entrée, `aria-expanded`).
 - **État** : hooks React seulement. Pas de store global.
 - **Données serveur** : Server Components qui lisent Supabase. L'état d'une carto en cours se rafraîchit toutes les 3 s tant qu'elle tourne, sans temps réel.
