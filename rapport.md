@@ -88,3 +88,12 @@ Date : 2026-10-03. Dossier de travail : `zyzx/`.
 - **Règles ajoutées** : co-entreprise (une société extérieure la dirige aussi) rangée en participation ; nom réduit à la marque sans salarié ni autre indice : deuxième preuve exigée ; GIE dont tous les membres sont du groupe : retenu ; comités d'entreprise exclus. **Règle retirée** : l'adresse seule (même à plus de 85 %) ne suffit plus (fonds domiciliés chez La Française).
 - **Résultats finaux** : LVMH 90 % (154/172, 15 en plus), VINCI 81 % (813/1 007, 176 en plus), Crédit Mutuel 83 % (43/52). Les règles privilégient la justesse : avec les règles souples, on retrouvait plus (92 %, 86 %, 87 %) mais avec plus de faux.
 - **Skill account-mapping copié et mis à jour dans `zyzx/skills/account-mapping/` (version 2.0.0)**, sans toucher à youno-workspace : nouveau `references/moteur-france.md` (données, réglages, règles, limites, résultats), moteur dans `scripts/moteur_france/`, `to_skill_tables.py` pour produire les 6 tables du skill. Validation et import HubSpot du skill testés sur les trois groupes : 0 erreur.
+
+### 2026-10-06, soir
+
+- **Quota de l'API diff de l'INPI mesuré (T010).** Lecture complète du lundi 2026-10-05 avec `worker/scripts/mesure_quota_diff.py`, 100 fiches par page (le maximum).
+- Résultat : **39 131 fiches lues, journée complète, aucune erreur 429.** Une fiche est l'état complet d'une société (un SIREN), qui peut regrouper plusieurs formalités. 392 pages, 394 requêtes (les pages, la page vide de fin et le comptage), 6 min 48 s.
+- Le volume d'un jour est donc d'environ 39 000 fiches, le double des 15 000 à 20 000 annoncés par l'INPI. Le lundi rattrape peut-être le week-end : un jour de milieu de semaine reste à mesurer.
+- Le quota observé le 2026-10-05 (environ 10 000 fiches par jour) comptait des requêtes d'une fiche chacune. Avec `/diff`, une requête rend 100 fiches : une journée coûte environ 400 requêtes. L'hypothèse, non vérifiée, est que le quota compte les requêtes.
+- `/diff/count` ne donne pas le total d'une journée : il répond seulement « plus de 10 000 ». Les en-têtes `pagination-count` et `pagination-max-page` sont vides.
+- Décision : la mise à jour quotidienne passe par l'API diff (ADR-002 confirmé). Le rattrapage depuis le stock du 2026-03-04 peut passer par `/diff`, étalé avec reprise sur curseur.

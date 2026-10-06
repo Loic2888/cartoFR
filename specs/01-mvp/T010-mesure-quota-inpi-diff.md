@@ -28,9 +28,9 @@ Un client de `/api/companies/diff` avec reprise par `searchAfter`, et une mesure
 Les identifiants viennent de `.env` (garde-fou 5).
 
 ## Critères de succès
-- [ ] **C1** : `worker/cartofr/registre/inpi_diff.py` reprend une lecture à partir d'un curseur sauvegardé
-- [ ] **C2** : `rapport.md` contient, à la date de la mesure, le nombre de formalités lues avant le 429 et le volume d'une journée
-- [ ] **C3** : `ARCHI.md` ADR-002 dit si la voie API est retenue ou si l'on bascule sur le FTP
+- [x] **C1** : `worker/cartofr/registre/inpi_diff.py` reprend une lecture à partir d'un curseur sauvegardé
+- [x] **C2** : `rapport.md` contient, à la date de la mesure, le nombre de formalités lues avant le 429 et le volume d'une journée
+- [x] **C3** : `ARCHI.md` ADR-002 dit si la voie API est retenue ou si l'on bascule sur le FTP
 
 ## Tests et validation
 
