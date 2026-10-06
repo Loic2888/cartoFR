@@ -9,7 +9,8 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 **État actuel** :
 - ✅ Prototype à la racine : moteur (`engine.py`), tables nationales (`data/rne_links/`, 1,6 M liens), non-régression (`compare.py`). Scores au 2026-10-06 : LVMH 90 %, VINCI 81 %, CMAF 83 %.
 - ✅ `worker/` (T001) et `web/` (T002) : squelettes, lint, typecheck et tests en place (commandes dans `AGENTS.md`).
-- ❌ Pas encore d'`infra/` ni de `supabase/`. Pas de CI.
+- ✅ `infra/` (T004) : Docker Compose, Supabase réduit, Caddy, testé en local. CI GitHub Actions sur chaque PR (T003).
+- ❌ Pas encore de serveur (T005) ni de schéma `supabase/migrations/` (T006).
 
 ## Comment lire ce fichier
 
@@ -22,8 +23,8 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 
 - [x] `T001` [P] — Poser le paquet Python du worker et son outillage
 - [x] `T002` [P] — Poser l'application Next.js et son outillage
-- [ ] `T003` [P] — Brancher la CI sur chaque PR *(après T001, T002)*
-- [ ] `T004` [P] — Écrire l'infrastructure Docker Compose *(après T001, T002)*
+- [x] `T003` [P] — Brancher la CI sur chaque PR *(après T001, T002)*
+- [x] `T004` [P] — Écrire l'infrastructure Docker Compose *(après T001, T002)*
 - [ ] `T005` — Déployer sur le VPS Hetzner et poser les sauvegardes *(préalable humain : compte Hetzner et nom de domaine)*
 
 ## Phase 2 : Foundational (bloque toutes les stories)
