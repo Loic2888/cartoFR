@@ -8,7 +8,7 @@
 L'interface des consultants. Cette tâche pose le projet vide, en français, mobile-first.
 
 ## Périmètre
-Projet Next.js 15 dans `web/`, TypeScript strict, Tailwind, shadcn/ui initialisé, ESLint et Vitest.
+Projet Next.js 16 dans `web/`, TypeScript strict, Tailwind, shadcn/ui initialisé, ESLint et Vitest.
 
 ## Mise en œuvre
 
@@ -24,17 +24,17 @@ Projet Next.js 15 dans `web/`, TypeScript strict, Tailwind, shadcn/ui initialis�
 - Focus visible conservé sur tous les composants
 
 ### Technologies
-- Next.js 15 App Router, TypeScript strict, Tailwind, shadcn/ui, ESLint, Vitest
+- Next.js 16 App Router, TypeScript strict, Tailwind, shadcn/ui, ESLint, Vitest
 
 ### Motifs d'architecture
 Server Components par défaut (ARCHI, Interface).
 
 ## Critères de succès
-- [ ] **C1** : `npm --prefix web run lint` sort en code 0
-- [ ] **C2** : `npm --prefix web run typecheck` (`tsc --noEmit`) sort en code 0
-- [ ] **C3** : `npm --prefix web test` passe avec au moins 1 test
-- [ ] **C4** : `npm --prefix web run build` produit `web/.next/standalone`
-- [ ] **C5** : `web/app/layout.tsx` déclare `lang="fr"`
+- [x] **C1** : `npm --prefix web run lint` sort en code 0
+- [x] **C2** : `npm --prefix web run typecheck` (`tsc --noEmit`) sort en code 0
+- [x] **C3** : `npm --prefix web test` passe avec au moins 1 test
+- [x] **C4** : `npm --prefix web run build` produit `web/.next/standalone`
+- [x] **C5** : `web/app/layout.tsx` déclare `lang="fr"`
 
 ## Tests et validation
 

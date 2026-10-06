@@ -26,6 +26,10 @@ Un travail n'est pas fini quand le code est écrit. Il est fini quand :
 .venv/bin/ruff format --check worker         ← format du worker
 .venv/bin/pyright -p worker                  ← typecheck du worker (sans -p, pyright ne vérifie rien et sort à 0)
 .venv/bin/pytest worker                      ← tests du worker
+npm --prefix web run lint                    ← lint de l'interface
+npm --prefix web run typecheck               ← typecheck (next typegen puis tsc)
+npm --prefix web test                        ← tests de l'interface
+npm --prefix web run build                   ← build de production
 ```
 
 sont **passées et vertes**. Si l'une échoue, tu corriges — tu ne rends pas en

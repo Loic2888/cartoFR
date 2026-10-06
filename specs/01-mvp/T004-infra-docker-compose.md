@@ -20,6 +20,7 @@ Docker Compose avec `caddy`, `web`, `worker` et Supabase réduit (db, auth, rest
 - `.env.example` — noms des variables (Supabase, Brevo SMTP, INPI, INSEE), sans valeur
 
 ### Fonctionnement attendu
+- Image web : Node 22 (`web/.nvmrc`), `NEXT_TELEMETRY_DISABLED=1`, démarrage par `node server.js` du dossier `standalone` (`next start` ne marche pas avec `output: "standalone"`), en copiant `.next/static`
 - SMTP de GoTrue réglé sur Brevo
 - Journaux Docker avec rotation `max-size`
 - Le worker n'expose aucun port publié

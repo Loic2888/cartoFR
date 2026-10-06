@@ -40,7 +40,7 @@ tournent sur une base locale (DuckDB + parquet). La vision produit est dans
 
 ## Stack
 
-`Next.js 15 + TypeScript` · `shadcn/ui + Tailwind` · `Supabase auto-hébergé (Postgres, Auth, RLS) + worker Python 3.12 / DuckDB` · `VPS Hetzner CX43, Docker Compose` · région `UE (Allemagne)`
+`Next.js 16 + TypeScript` · `shadcn/ui + Tailwind` · `Supabase auto-hébergé (Postgres, Auth, RLS) + worker Python 3.12 / DuckDB` · `VPS Hetzner CX43, Docker Compose` · région `UE (Allemagne)`
 
 Prototype actuel, à la racine : Python 3.12 · DuckDB · pandas · pyarrow · parquet local.
 
@@ -85,7 +85,7 @@ Les scripts lisent des chemins relatifs : les lancer depuis la racine.
 | Non-régression | `.venv/bin/python compare.py <g>` pour `lvmh`, `vinci` et `cmaf` (scores ci-dessous) |
 | Export skill | `.venv/bin/python to_skill_tables.py config/<g>.json` |
 | Reconstruire les tables | `.venv/bin/python build_sieges.py` puis `.venv/bin/python build_links.py data/rne_stock/<stock>.zip` (~15 min) |
-| Typecheck / Lint / Tests unitaires | **pas encore en place**, à poser dans la tâche de fondation |
+| Lint / Typecheck / Tests | `.venv/bin/ruff check worker` · `.venv/bin/pyright -p worker` · `.venv/bin/pytest worker` · `npm --prefix web run lint` · `npm --prefix web run typecheck` · `npm --prefix web test` · `npm --prefix web run build` (détail dans `AGENTS.md`) |
 
 > Claude lance ces commandes pour se valider. Tant que lint et tests unitaires
 > n'existent pas, la seule validation réelle du moteur est la non-régression.
