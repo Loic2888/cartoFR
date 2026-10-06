@@ -1,0 +1,12 @@
+# Contexte de build de l'image web (web/). Jamais de .env dans une image :
+# Next.js les lirait au build et les figerait dans le bundle.
+.env
+.env.*
+**/.env
+**/.env.*
+node_modules
+.next
+out
+coverage
+*.log
+.git
