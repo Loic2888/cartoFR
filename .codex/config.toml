@@ -1,0 +1,15 @@
+#:schema https://developers.openai.com/codex/config-schema.json
+
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+
+[sandbox_workspace_write]
+network_access = true
+
+experimental_use_rmcp_client = true
+
+# Same Cargo MCP server as .mcp.json (Claude Code) and .cursor/mcp.json (Cursor).
+# Export CARGO_API_KEY in your shell before launching Codex.
+[mcp_servers.cargo]
+url = "https://mcp.getcargo.io"
+bearer_token_env_var = "CARGO_API_KEY"

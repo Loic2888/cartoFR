@@ -1,0 +1,54 @@
+{
+  "extraKnownMarketplaces": {
+    "cargo": {
+      "source": { "source": "github", "repo": "getcargohq/cargo-skills" }
+    }
+  },
+  "enabledPlugins": { "cargo@cargo": true },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash",
+      "Edit",
+      "Write",
+      "Read",
+      "Glob",
+      "Grep"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(rm -fr:*)",
+      "Bash(rm -r -f:*)",
+      "Bash(rm -f -r:*)",
+      "Bash(rm --recursive --force:*)",
+      "Bash(git clean -fdx:*)",
+      "Bash(git clean -xdf:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --delete:*)",
+      "Bash(git push origin --delete:*)",
+      "Bash(git filter-branch:*)",
+      "Bash(git reflog expire:*)",
+      "Bash(truncate:*)",
+      "Bash(shred:*)",
+      "Bash(mkfs:*)",
+      "Bash(dd if=:*)",
+      "Bash(cargo-ai cdk deploy*)",
+      "Bash(cargo-ai cdk destroy*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/git-guardrail.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "skills": {
+    "cargo": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo/SKILL.md",
+      "computedHash": "2370b9a2f846693ff0cfbb2f13211a8263867ce43b94681e0a0289c8c42d608a"
+    },
+    "cargo-ai": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-ai/SKILL.md",
+      "computedHash": "cadcde87353ef86189083f4ff05e2c771465adca9bf8d35b04df139a44cdee79"
+    },
+    "cargo-analytics": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-analytics/SKILL.md",
+      "computedHash": "88265466f767f458c311e7d74741335192eefef0bb02d7f0f393630295894001"
+    },
+    "cargo-billing": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-billing/SKILL.md",
+      "computedHash": "9f4b06ccb4211cd019e900ea8cdba9a992e497a80caf81f45c1cbf4f183f1ed5"
+    },
+    "cargo-cdk": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-cdk/SKILL.md",
+      "computedHash": "c37911f6f0b20059694503534ba859bbda484742e7fbe511b5d6be7847aba9d5"
+    },
+    "cargo-connection": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-connection/SKILL.md",
+      "computedHash": "41c46ed22fc7447a39131799c66d4bf8e9e19da3492ff74a2285c97a677d6aa1"
+    },
+    "cargo-content": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-content/SKILL.md",
+      "computedHash": "e3f2423e17571d74b5d53d752f32011db08f84f4175a6b310170018df8b3e1f1"
+    },
+    "cargo-context": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-context/SKILL.md",
+      "computedHash": "7832c37061800c82b4f727604c8370c1e4bdf094eba53b7ed6c245b3ec68cf99"
+    },
+    "cargo-diagnostics": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-diagnostics/SKILL.md",
+      "computedHash": "401ab69dbdafebcd3f7936956decd61bab0bf0eccf7459b476010a9bfca692a5"
+    },
+    "cargo-gtm": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-gtm/SKILL.md",
+      "computedHash": "33a96a7ef35c97e3d55f7aa461521b326b13eba4ad3c27bf5501903810fd7478"
+    },
+    "cargo-hosting": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-hosting/SKILL.md",
+      "computedHash": "37435dcc03d9ef1753b4452b39524dbe2ae801182383089f6b18902598fa5436"
+    },
+    "cargo-mailbox-management": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-mailbox-management/SKILL.md",
+      "computedHash": "1fd1f5f4fb157e5fc06fc56a85b57eb9438a041a6a4a538a550f1bffc6dc5211"
+    },
+    "cargo-mcp": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-mcp/SKILL.md",
+      "computedHash": "9f5e0c41e7ad7c2a0a6e0fd0e845cfdb12b2b9037d157e3de74cba71b8209c74"
+    },
+    "cargo-observability": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-observability/SKILL.md",
+      "computedHash": "91f46d28e646500087dfc5be571a196a748611dbb79eea094975b681086c40bc"
+    },
+    "cargo-orchestration": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-orchestration/SKILL.md",
+      "computedHash": "d866e7b10e99e2b36473bcb3e44affe77117762e4ec190802c107ce3f7809a0e"
+    },
+    "cargo-project": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-project/SKILL.md",
+      "computedHash": "372c51debaa58daa922259949e73dcbdcf515cbdba196a92ce3088077ae0e123"
+    },
+    "cargo-quickstart": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-quickstart/SKILL.md",
+      "computedHash": "1fe200d4455876e4a90dcc10f8c3ad6ed3bf9ee1517e980d1fc8d662a340ab8c"
+    },
+    "cargo-segmentation": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-segmentation/SKILL.md",
+      "computedHash": "f961dfa0ec93dfe3448839bd59be588713a771afb4fb8e2497076eefd517bf5e"
+    },
+    "cargo-storage": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-storage/SKILL.md",
+      "computedHash": "e3f6cc7d0c12b5d4605f6d7bb2f38f43600343aec5733f4bdd9b82fd83a70de4"
+    },
+    "cargo-workspace-management": {
+      "source": "getcargohq/cargo-skills",
+      "sourceType": "github",
+      "skillPath": "cargo-workspace-management/SKILL.md",
+      "computedHash": "a97fc1e5573d9d17a92b01df5265742e4cd14ac0d21a9147adfd782283a1aed0"
+    }
+  }
+}
