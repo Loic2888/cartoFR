@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+data/
+
+# Données tierces (Basile) et sorties client : jamais dans un repo public
+basile/
+out/
+
+.env
+.env.*
+!.env.example
+
+# Per-agent personal overrides
+CLAUDE.local.md
+.claude/settings.local.json
+
+.DS_Store

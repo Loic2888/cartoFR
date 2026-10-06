@@ -1,0 +1,13 @@
+interface:
+  display_name: Account Mapping
+  short_description: Cartographie sourcée de groupes, filiales, sous-filiales et marques
+  brand_color: '#1F6E43'
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true
