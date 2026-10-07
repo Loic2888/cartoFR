@@ -26,11 +26,11 @@ Un jeu de tests sur de petits registres fabriqués, une règle à la fois.
 Tests sur noms inventés seulement (R6).
 
 ## Critères de succès
-- [ ] **C1** : `test_regles.py` couvre confiance A, B et C
-- [ ] **C2** : `test_regles.py` couvre le choix de la maison mère directe
-- [ ] **C3** : `test_regles.py` couvre ciblable Oui et Non avec la raison
-- [ ] **C4** : `test_regles.py` vérifie que l'adresse seule ne fait pas entrer une société
-- [ ] **C5** : `test_regles.py` vérifie qu'une marque ambiguë exige une deuxième preuve
+- [x] **C1** : `test_regles.py` couvre confiance A, B et C
+- [x] **C2** : `test_regles.py` couvre le choix de la maison mère directe
+- [x] **C3** : `test_regles.py` couvre ciblable Oui et Non avec la raison
+- [x] **C4** : `test_regles.py` vérifie que l'adresse seule ne fait pas entrer une société
+- [x] **C5** : `test_regles.py` vérifie qu'une marque ambiguë exige une deuxième preuve
 
 ## Tests et validation
 
