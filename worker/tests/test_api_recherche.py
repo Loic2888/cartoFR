@@ -40,15 +40,6 @@ CHAMPS = {"siren", "nom", "sigle", "ville", "statut"}
 PERSONNE = "ZORGLUB"
 CLE_PERSONNE = f"{PERSONNE}|ARMANDINE|1970-01"
 
-UNITES_LEGALES = """
-create table unites_legales (
-    siren varchar primary key, denomination varchar, sigle varchar,
-    denomination_usuelle_1 varchar, denomination_usuelle_2 varchar, denomination_usuelle_3 varchar,
-    categorie_juridique bigint, naf varchar, tranche_effectifs varchar, etat_administratif varchar,
-    debut date not null, fin date
-)
-"""
-
 
 def _registre(chemin: Path, avec_unites_legales: bool) -> Path:
     con = duckdb.connect(str(chemin))
@@ -86,13 +77,16 @@ def _registre(chemin: Path, avec_unites_legales: bool) -> Path:
         "insert into dirigeants_personnes (siren, personne, role, debut) values (?, ?, '30', ?)",
         ["100000001", CLE_PERSONNE, JOUR],
     )
-    if avec_unites_legales:
-        con.execute(UNITES_LEGALES)
+    if not avec_unites_legales:
+        # Registre d'avant T016 : la table n'existait pas, la recherche s'en passe.
+        con.execute("drop table unites_legales")
+    else:
+        # Table réelle de creer_tables : sa contrainte refuse déjà les entrepreneurs
+        # individuels (cj 1000) ; celui de `sieges` sert au test « aucune personne ».
         unites = [
             ("100000001", "FROMAGERIE ETHEREE", "FEQ", 5710, "41", "A"),
             ("100000006", "BOULONNERIE QUANTIQUE", "BQ", 5710, "21", "A"),
             ("100000007", "SOCIETE SANS RNE", "FEQ2", 5499, "03", "A"),
-            ("100000009", f"{PERSONNE} ARMANDINE", None, 1000, "00", "A"),
         ]
         for siren, nom, sigle, cj, tranche, etat in unites:
             con.execute(
