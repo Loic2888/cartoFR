@@ -1,0 +1,17 @@
+{
+  "id": "fiche-fictive-ei",
+  "siren": "000000003",
+  "updatedAt": "2026-01-15T10:00:00+01:00",
+  "formality": {
+    "siren": "000000003",
+    "typePersonne": "P",
+    "diffusionCommerciale": true,
+    "content": {
+      "personnePhysique": {
+        "identite": {
+          "entrepreneur": {"descriptionPersonne": {"nom": "Personne Fictive 3", "prenoms": ["Prenom Fictif"]}}
+        }
+      }
+    }
+  }
+}
