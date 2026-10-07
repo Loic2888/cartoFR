@@ -6,8 +6,10 @@ Usage, depuis la racine du dépôt :
 Entrées, dans le dossier `CARTOFR_DATA` (par défaut `data`, relatif au dossier courant) :
 - rne_links/liens.parquet, rne_links/societes.parquet, rne_links/personnes.parquet (build_links.py)
 - sieges.parquet (build_sieges.py)
-- unite_legale.parquet (stock SIRENE) : seules quatre colonnes sont lues, aucune
-  colonne de personne (prénom, nom, sexe) n'entre dans le registre (règle produit 4).
+- unite_legale.parquet (stock SIRENE) : seules des colonnes de société sont lues,
+  et la table `unites_legales` écarte les entreprises individuelles (catégorie 1000).
+  Aucune colonne de personne (prénom, nom, sexe, pseudonyme, nom d'usage) n'entre
+  dans le registre (règle produit 4).
 Sortie : `<CARTOFR_DATA>/registre.duckdb`, et une ligne dans sa table `mises_a_jour`.
 
 Écriture atomique : la base est construite dans un fichier temporaire du même
@@ -80,6 +82,18 @@ CHARGEMENTS = {
         from read_parquet($personnes)
     """,
     "sieges": "insert into sieges by name select * from read_parquet($sieges)",
+    # Personnes morales seulement : une entreprise individuelle (catégorie 1000) porte le nom
+    # d'une personne. `<> 1000` écarte aussi les catégories vides, comme le moteur.
+    "unites_legales": """
+        insert into unites_legales
+        select siren, denominationUniteLegale, sigleUniteLegale,
+               denominationUsuelle1UniteLegale, denominationUsuelle2UniteLegale,
+               denominationUsuelle3UniteLegale, categorieJuridiqueUniteLegale,
+               activitePrincipaleUniteLegale, trancheEffectifsUniteLegale,
+               etatAdministratifUniteLegale, $debut, null
+        from read_parquet($unite_legale)
+        where categorieJuridiqueUniteLegale <> 1000
+    """,
 }
 
 COMPTES = {
@@ -91,6 +105,7 @@ COMPTES = {
     "liens_fermes": "select count(*) from liens where fin is not null",
     "dirigeants_personnes": "select count(*) from dirigeants_personnes",
     "sieges": "select count(*) from sieges",
+    "unites_legales": "select count(*) from unites_legales",
 }
 
 

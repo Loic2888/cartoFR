@@ -2,7 +2,7 @@
 
 Usage : `creer_tables(con)` sur une connexion DuckDB vide.
 Entrées : aucune. Sorties : les tables `societes`, `liens`, `dirigeants_personnes`,
-`sieges` et `mises_a_jour`, vides.
+`sieges`, `unites_legales` et `mises_a_jour`, vides.
 
 Règles portées par le schéma :
 - un lien ou une société n'est jamais effacé, il est fermé : `debut` et `fin`
@@ -72,6 +72,27 @@ create table sieges (
     tranche varchar                     -- tranche d'effectif SIRENE
 );
 
+-- Unités légales SIRENE des personnes morales : les noms que le moteur cherche
+-- (dénomination, sigle, enseigne) pour trouver les sociétés d'une marque (T016).
+-- Hors entreprises individuelles (catégorie 1000) : leur nom est celui d'une personne.
+-- Aucune colonne de personne : ni prénom, ni nom, ni sexe, ni pseudonyme, ni nom d'usage.
+create table unites_legales (
+    siren varchar primary key,
+    denomination varchar,              -- denominationUniteLegale
+    sigle varchar,                     -- sigleUniteLegale
+    denomination_usuelle_1 varchar,    -- denominationUsuelle1UniteLegale (enseigne)
+    denomination_usuelle_2 varchar,
+    denomination_usuelle_3 varchar,
+    categorie_juridique bigint,        -- jamais 1000
+    naf varchar,                       -- activitePrincipaleUniteLegale
+    tranche_effectifs varchar,         -- trancheEffectifsUniteLegale
+    etat_administratif varchar,        -- 'A' active, 'C' cessée
+    debut date not null,
+    fin date,
+    check (fin is null or fin >= debut),
+    check (categorie_juridique <> 1000)
+);
+
 -- Journal : une ligne par construction ou synchro du registre (FR-003).
 create sequence mises_a_jour_id;
 create table mises_a_jour (
@@ -90,6 +111,8 @@ comment on table liens is 'Liens société dirige société, avec debut et fin. 
 comment on table dirigeants_personnes is
     'Usage interne au calcul seulement. Données personnelles : ne quitte jamais le worker.';
 comment on table sieges is 'Siège actif des personnes morales actives (SIRENE).';
+comment on table unites_legales is
+    'Unités légales SIRENE des personnes morales (hors catégorie 1000), colonnes de société seulement.';
 comment on table mises_a_jour is 'Journal des constructions et synchros du registre.';
 """
 

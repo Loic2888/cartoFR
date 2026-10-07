@@ -23,6 +23,7 @@ from cartofr.registre.construire import (
 from cartofr.registre.schema import creer_tables
 
 ALPHA, BETA, GAMMA, DELTA = "100000001", "100000002", "100000003", "100000004"
+EPSILON = "100000005"
 
 
 def _ecrire(chemin: Path, colonnes: dict[str, list]) -> None:
@@ -95,13 +96,24 @@ def donnees(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     _ecrire(
         tmp_path / "unite_legale.parquet",
         {
-            "siren": [ALPHA, BETA, GAMMA],
-            "statutDiffusionUniteLegale": ["O", "P", "O"],
-            "dateCreationUniteLegale": [date(2000, 1, 1), date(2010, 5, 2), None],
-            "etatAdministratifUniteLegale": ["A", "A", "C"],
-            "prenom1UniteLegale": [None, "PRENOM FICTIF", None],
-            "sexeUniteLegale": [None, "M", None],
-            "nomUniteLegale": [None, "PERSONNE FICTIVE 3", None],
+            # EPSILON est une entreprise individuelle (catégorie 1000) : son nom est une personne.
+            "siren": [ALPHA, BETA, GAMMA, EPSILON],
+            "statutDiffusionUniteLegale": ["O", "P", "O", "O"],
+            "dateCreationUniteLegale": [date(2000, 1, 1), date(2010, 5, 2), None, date(2015, 1, 1)],
+            "etatAdministratifUniteLegale": ["A", "A", "C", "A"],
+            "denominationUniteLegale": ["SOCIETE ALPHA", "SOCIETE BETA", "SOCIETE GAMMA", None],
+            "sigleUniteLegale": ["SA1", None, None, None],
+            "denominationUsuelle1UniteLegale": ["ENSEIGNE ALPHA", None, None, "ENSEIGNE FICTIVE"],
+            "denominationUsuelle2UniteLegale": [None, None, None, None],
+            "denominationUsuelle3UniteLegale": [None, None, None, None],
+            "categorieJuridiqueUniteLegale": [5710, 5499, 6540, 1000],
+            "activitePrincipaleUniteLegale": ["70.10Z", "64.20Z", "68.20B", "47.11A"],
+            "trancheEffectifsUniteLegale": ["11", "NN", None, "00"],
+            "prenom1UniteLegale": [None, "PRENOM FICTIF", None, "PRENOM FICTIF"],
+            "sexeUniteLegale": [None, "M", None, "F"],
+            "nomUniteLegale": [None, "PERSONNE FICTIVE 3", None, "PERSONNE FICTIVE 4"],
+            "nomUsageUniteLegale": [None, None, None, "PERSONNE FICTIVE 5"],
+            "pseudonymeUniteLegale": [None, None, None, "PSEUDO FICTIF"],
         },
     )
     monkeypatch.setenv("CARTOFR_DATA", str(tmp_path))
@@ -185,8 +197,45 @@ def test_aucune_colonne_personnelle_hors_dirigeants(donnees: Path) -> None:
             "personne",
             "parent_nom",
         }
-    for table in ("societes", "liens", "sieges"):
+    for table in ("societes", "liens", "sieges", "unites_legales"):
         assert "FICTI" not in repr(_lire(registre, f"select * from {table}"))
+
+
+def test_unites_legales_sans_entreprise_individuelle_ni_colonne_de_personne(donnees: Path) -> None:
+    comptes = construire()
+    registre = donnees / NOM_REGISTRE
+    assert comptes["unites_legales"] == 3
+    assert _colonnes(registre, "unites_legales") == {
+        "siren",
+        "denomination",
+        "sigle",
+        "denomination_usuelle_1",
+        "denomination_usuelle_2",
+        "denomination_usuelle_3",
+        "categorie_juridique",
+        "naf",
+        "tranche_effectifs",
+        "etat_administratif",
+        "debut",
+        "fin",
+    }
+    lignes = _lire(
+        registre,
+        "select siren, denomination, sigle, denomination_usuelle_1, categorie_juridique, naf,"
+        " tranche_effectifs, etat_administratif, debut, fin from unites_legales order by siren",
+    )
+    assert lignes == [
+        (ALPHA, "SOCIETE ALPHA", "SA1", "ENSEIGNE ALPHA", 5710, "70.10Z", "11", "A", DATE_STOCK, None),
+        (BETA, "SOCIETE BETA", None, None, 5499, "64.20Z", "NN", "A", DATE_STOCK, None),
+        (GAMMA, "SOCIETE GAMMA", None, None, 6540, "68.20B", None, "C", DATE_STOCK, None),
+    ]
+    con = duckdb.connect()
+    creer_tables(con)
+    with pytest.raises(duckdb.ConstraintException):  # le schéma refuse une entreprise individuelle
+        con.execute(
+            "insert into unites_legales (siren, categorie_juridique, debut) values (?, 1000, current_date)",
+            [EPSILON],
+        )
 
 
 def test_journal_succes(donnees: Path) -> None:
