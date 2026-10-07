@@ -29,6 +29,11 @@ export default async function GabaritApp({ children }: LayoutProps<"/">) {
                   Accueil
                 </Link>
               </li>
+              <li>
+                <Link href="/groupes" className={LIEN}>
+                  Groupes
+                </Link>
+              </li>
               {estAdmin ? (
                 <li>
                   <Link href="/admin/membres" className={LIEN}>

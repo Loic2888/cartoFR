@@ -1,9 +1,9 @@
 # infra — lancer cartoFR en Docker Compose
 
 Un seul serveur, quatre blocs (ARCHI, Infrastructure ; ADR-003) :
-`caddy` (HTTPS), `web` (Next.js), `worker` (Python) et Supabase réduit
-(`db`, `auth`, `rest`, `kong`, `meta`, `studio`). En local, `mailpit` reçoit
-les e-mails (profil `dev`).
+`caddy` (HTTPS), `web` (Next.js), `worker` (Python, avec sa route
+`recherche`) et Supabase réduit (`db`, `auth`, `rest`, `kong`, `meta`,
+`studio`). En local, `mailpit` reçoit les e-mails (profil `dev`).
 
 ## Prérequis
 
@@ -128,6 +128,41 @@ Les variables de `web` sont lues au démarrage du conteneur, pas au build
 n'est lue que côté serveur (`web/lib/supabase/admin.ts`, `server-only`).
 
 Si le port 8025 de mailpit est pris : `MAILPIT_PORT` dans `infra/.env`.
+
+## Le worker et la recherche (T008, T019)
+
+Deux services partent de la même image Python (`infra/worker.Dockerfile`) :
+
+| Service | Commande | Ce qu'il fait |
+|---|---|---|
+| `worker` | `python -m cartofr` | La file de travaux (cartos, synchro). Se connecte à `db` en direct, rôle `postgres` (`DATABASE_URL` construite depuis `POSTGRES_PASSWORD`). Monte `data/` en lecture et écriture. |
+| `recherche` | `python -m cartofr.api_recherche` | `GET /recherche?q=` : 20 sociétés au plus par nom, sigle ou SIREN (SIREN, nom, sigle, ville, statut ; jamais de personne). Monte `data/` en lecture seule. |
+
+La synchro de nuit (T013) est réglée dans `worker` :
+`CARTOFR_SYNCHRO_HEURE` (`02:00`), **sans elle aucune synchro de nuit ne
+part** ; `CARTOFR_SYNCHRO_JOURS_MAX` (`7`), le retard rattrapé au plus ;
+`CARTOFR_SYNCHRO_DECALAGE` (`2`), la synchro lit jusqu'à J-2 pour ne pas
+manquer les publications tardives (un jour appliqué n'est jamais relu).
+
+Aucun des deux ne publie de port : `recherche` n'est joignable que par `web`
+(`RECHERCHE_URL=http://recherche:8080`), sur le réseau Docker. Pour la
+tester à la main :
+
+```bash
+docker compose -f infra/docker-compose.yml exec recherche \
+  python -c "import urllib.request as u; print(u.urlopen('http://127.0.0.1:8080/recherche?q=LVMH').read().decode())"
+```
+
+- **Registre absent** (`data/registre.duckdb`) : la route répond 503
+  `registre_absent`, la page « Nouveau groupe » le dit en français.
+- **Synchro en cours** : DuckDB n'accepte qu'un écrivain, et pas de lecteur
+  d'un autre processus pendant qu'il écrit. La route répond alors 503
+  `registre_occupe` (« recherche momentanément indisponible ») au lieu
+  d'attendre. `recherche` ouvre le registre à chaque requête et le referme
+  aussitôt : il ne le garde jamais ouvert entre deux requêtes. L'inverse vaut aussi : une recherche (1 à 3 s) tient un verrou
+  de lecture, la synchro doit donc réessayer d'ouvrir le registre.
+- **Journaux** : le nombre de résultats et la durée, jamais le texte cherché
+  (ce peut être un nom de personne).
 
 ## Arrêter
 
