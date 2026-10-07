@@ -441,3 +441,144 @@ def test_entrepreneur_individuel_jamais_ecrit(con: duckdb.DuckDBPyConnection) ->
     assert con.execute("select count(*) from sieges where siren = '000000005' or cj = 1000").fetchone() == (
         0,
     )
+
+
+# --- unites_legales (T013) : la recherche des marques suit SIRENE --------------------------
+
+
+def unite(
+    siren: str, cj: str | None = "5710", etat: str = "A", statut: str = "O", **champs: str | None
+) -> dict[str, Any]:
+    """Une unité légale brute de l'API, avec les champs de `CHAMPS_UNITES` seulement."""
+    periode = {
+        "dateFin": None,
+        "dateDebut": "2020-01-01",
+        "etatAdministratifUniteLegale": etat,
+        "denominationUniteLegale": champs.get("denomination", f"SOCIETE {siren}"),
+        "categorieJuridiqueUniteLegale": cj,
+        "denominationUsuelle1UniteLegale": champs.get("du1"),
+        "denominationUsuelle2UniteLegale": None,
+        "denominationUsuelle3UniteLegale": None,
+        "activitePrincipaleUniteLegale": champs.get("naf", "70.10Z"),
+    }
+    return {
+        "siren": siren,
+        "statutDiffusionUniteLegale": statut,
+        "dateCreationUniteLegale": "2001-01-01",
+        "sigleUniteLegale": champs.get("sigle"),
+        "trancheEffectifsUniteLegale": champs.get("tranche", "11"),
+        "periodesUniteLegale": [periode],
+    }
+
+
+def unites_legales(c: duckdb.DuckDBPyConnection) -> dict[str, tuple[Any, ...]]:
+    lignes = c.execute(
+        "select siren, denomination, sigle, denomination_usuelle_1, categorie_juridique, naf,"
+        " tranche_effectifs, etat_administratif, debut, fin from unites_legales order by siren"
+    ).fetchall()
+    return {ligne[0]: ligne[1:] for ligne in lignes}
+
+
+@pytest.fixture
+def con_ul(con: duckdb.DuckDBPyConnection) -> duckdb.DuckDBPyConnection:
+    """Le registre miniature, avec deux unités légales issues du stock."""
+    con.execute(
+        "insert into unites_legales values"
+        " ('000000001', 'SOCIETE ALPHA', 'VIEUX', 'ENSEIGNE ALPHA', null, null, 5710, '70.10Z', '11', 'A',"
+        "  $d, null),"
+        " ('000000003', 'SOCIETE GAMMA', 'SG', 'ENSEIGNE GAMMA', null, null, 5710, '68.20B', '12', 'A',"
+        "  $d, null)",
+        {"d": DEBUT},
+    )
+    return con
+
+
+def test_unites_legales_mises_a_jour_et_ajoutees(con_ul: duckdb.DuckDBPyConnection) -> None:
+    lot = [
+        unite("000000001", denomination="SOCIETE ALPHA", sigle="SA1", naf="70.22Z", tranche="21"),
+        # Non diffusible : valeurs masquées, la valeur connue reste.
+        unite(
+            "000000003", statut="P", denomination="[ND]", sigle="[ND]", du1="[ND]", naf="68.20B", tranche="12"
+        ),
+        unite("000000004", denomination="SOCIETE DELTA", sigle="SD"),
+        unite("000000006", etat="C", denomination="SOCIETE CESSEE"),  # cessée : entre, comme au stock
+    ]
+    bilan = Bilan()
+    appliquer_unites(con_ul, lot, JOUR, bilan)
+    ul = unites_legales(con_ul)
+    # Diffusible : la fiche fait foi, une enseigne retirée est vidée.
+    assert ul["000000001"] == ("SOCIETE ALPHA", "SA1", None, 5710, "70.22Z", "21", "A", DEBUT, None)
+    assert ul["000000003"] == (
+        "SOCIETE GAMMA",
+        "SG",
+        "ENSEIGNE GAMMA",
+        5710,
+        "68.20B",
+        "12",
+        "A",
+        DEBUT,
+        None,
+    )
+    assert ul["000000004"] == ("SOCIETE DELTA", "SD", None, 5710, "70.10Z", "11", "A", JOUR, None)
+    assert ul["000000006"][6:] == ("C", JOUR, None)
+    assert (bilan.unites_legales_modifiees, bilan.unites_legales_ajoutees) == (1, 2)
+
+    # Rejouer le même lot ne change rien.
+    bilan = Bilan()
+    appliquer_unites(con_ul, lot, JOUR, bilan)
+    assert unites_legales(con_ul) == ul
+    assert (bilan.unites_legales_modifiees, bilan.unites_legales_ajoutees) == (0, 0)
+
+
+def test_unites_legales_cessation_sans_rien_vider(con_ul: duckdb.DuckDBPyConnection) -> None:
+    appliquer_unites(con_ul, [unite("000000001", cj=None, etat="C", denomination=None)], JOUR, Bilan())
+    ligne = unites_legales(con_ul)["000000001"]
+    # Nom et catégorie gardés, cessation lue dans l'état ; la ligne n'est ni fermée ni supprimée.
+    assert (ligne[0], ligne[3], ligne[6], ligne[8]) == ("SOCIETE ALPHA", 5710, "C", None)
+
+
+def test_unites_legales_jamais_d_entrepreneur_individuel(con_ul: duckdb.DuckDBPyConnection) -> None:
+    lot = [unite("000000005", cj="1000"), unite("000000008", cj=None), unite("000000009", cj="abc")]
+    bilan = Bilan()
+    appliquer_unites(con_ul, lot, JOUR, bilan)
+    assert set(unites_legales(con_ul)) == {"000000001", "000000003"}
+    assert bilan.unites_legales_ajoutees == 0
+
+
+def test_unites_legales_par_la_synchro(con_ul: duckdb.DuckDBPyConnection) -> None:
+    synchroniser(con_ul, JOUR, client(FauxSirene()))
+    ul = unites_legales(con_ul)
+    # Fixtures : 002, 004 et 006 (cessée) entrent ; 005 est un entrepreneur individuel.
+    assert set(ul) == {"000000001", "000000002", "000000003", "000000004", "000000006"}
+    assert ul["000000004"][0] == "SOCIETE DELTA NOUVELLE" and ul["000000004"][7] == JOUR
+    assert ul["000000003"][0] == "SOCIETE GAMMA"  # [ND] n'écrase pas le nom
+    assert con_ul.execute(
+        "select count(*) from unites_legales where categorie_juridique = 1000"
+    ).fetchone() == (0,)
+
+
+def test_unites_legales_annulees_avec_le_reste(
+    con_ul: duckdb.DuckDBPyConnection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    avant = unites_legales(con_ul)
+
+    def casse(*_: Any) -> None:
+        raise RuntimeError("panne simulée")
+
+    monkeypatch.setattr(synchro_sirene, "appliquer_sieges", casse)
+    with pytest.raises(RuntimeError):
+        synchroniser(con_ul, JOUR, client(FauxSirene()))
+    assert unites_legales(con_ul) == avant
+
+
+def test_champs_des_unites_legales_demandes_sans_personne() -> None:
+    attendus = {
+        "sigleUniteLegale",
+        "denominationUsuelle1UniteLegale",
+        "denominationUsuelle2UniteLegale",
+        "denominationUsuelle3UniteLegale",
+        "activitePrincipaleUniteLegale",
+        "trancheEffectifsUniteLegale",
+    }
+    assert attendus <= set(CHAMPS_UNITES)
+    assert not set(CHAMPS_UNITES) & CHAMPS_PERSONNE

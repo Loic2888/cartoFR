@@ -31,9 +31,9 @@ Un type de travail `synchro`, un cron qui l'insère chaque nuit, et la copie du 
 Synchro et cartos ne se chevauchent jamais (ADR-004).
 
 ## Critères de succès
-- [ ] **C1** : `test_synchro.py` vérifie qu'un passage réussi met à jour `etat_registre` (date, volumes)
-- [ ] **C2** : `test_synchro.py` vérifie qu'un échec écrit sa cause dans `etat_registre`
-- [ ] **C3** : `infra/cron/synchro` insère un travail `synchro` chaque nuit
+- [x] **C1** : `test_synchro.py` vérifie qu'un passage réussi met à jour `etat_registre` (date, volumes)
+- [x] **C2** : `test_synchro.py` vérifie qu'un échec écrit sa cause dans `etat_registre`
+- [x] **C3** : `worker/cartofr/travaux.py` insère un travail `synchro` chaque nuit (heure réglable), une seule fois par jour
 
 ## Tests et validation
 

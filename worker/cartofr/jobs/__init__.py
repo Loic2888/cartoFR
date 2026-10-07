@@ -55,3 +55,7 @@ def enregistrer(type_travail: str) -> Callable[[Execution], Execution]:
 @enregistrer("ping")
 def ping(ctx: Contexte) -> None:
     """Travail vide : sert aux tests et à vérifier que la boucle tourne."""
+
+
+# Types de travaux enregistrés par leur module (import en bas : ils importent ce module).
+from cartofr.jobs import synchro as synchro  # noqa: E402

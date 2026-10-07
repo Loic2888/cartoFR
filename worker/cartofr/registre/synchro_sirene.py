@@ -1,7 +1,7 @@
 """Applique au registre les changements SIRENE d'une journée (API Sirene de l'INSEE).
 
-But : tenir `societes` et `sieges` à jour avec les unités légales et les
-établissements sièges que l'INSEE a traités un jour donné.
+But : tenir `societes`, `unites_legales` et `sieges` à jour avec les unités
+légales et les établissements sièges que l'INSEE a traités un jour donné.
 
 Usage, depuis la racine du dépôt :
     .venv/bin/python -m cartofr.registre.synchro_sirene --jour 2026-10-05 [--registre data/registre.duckdb]
@@ -11,7 +11,8 @@ Entrées :
       `charger_env()` la prend dans le fichier CARTOFR_ENV_FILE (`.env` par défaut).
     - le registre `<CARTOFR_DATA>/registre.duckdb` (ou `--registre`).
 Sorties :
-    - `societes` et `sieges` mis à jour, une ligne `sirene` dans `mises_a_jour` ;
+    - `societes`, `unites_legales` et `sieges` mis à jour, une ligne `sirene`
+      dans `mises_a_jour` ;
     - sur la sortie standard, des volumes seulement.
 
 Ce que dit l'API (Sirene 3.11, sonde du 2026-10-07) :
@@ -40,6 +41,14 @@ Règles d'application :
       sociétés déjà cessées au chargement initial gardent `fin` vide, comme lui.
     - Une unité légale active absente de `societes` y entre, avec `debut` = le jour.
       `diffusion_commerciale` reste vide : c'est une donnée RNE.
+    - `unites_legales` (T013, sert la recherche des marques) : personnes morales
+      seulement, catégorie juridique connue et jamais 1000, aucune colonne de
+      personne. Une unité connue est mise à jour ; une inconnue y entre avec
+      `debut` = le jour, cessée ou non, comme au chargement initial (la
+      cessation se lit dans `etat_administratif`, `fin` reste vide). Unité non
+      diffusible : une valeur masquée ou vide ne remplace pas la valeur connue.
+      Unité diffusible : la fiche fait foi (un sigle retiré est vidé).
+      Dénomination, catégorie et état ne sont jamais vidés.
     - `sieges` : le siège actif d'une unité active (règles de `build_sieges.py`,
       dont `adresse_cle`) est mis à jour ou ajouté, clé SIREN. Un siège fermé ou
       une unité cessée n'y change rien : la table n'a ni `debut` ni `fin`, et la
@@ -88,6 +97,13 @@ CHAMPS_UNITES = (
     "etatAdministratifUniteLegale",
     "denominationUniteLegale",
     "categorieJuridiqueUniteLegale",
+    # Pour `unites_legales` (T013) : sigle, enseignes, activité, effectif. Aucune personne.
+    "sigleUniteLegale",
+    "denominationUsuelle1UniteLegale",
+    "denominationUsuelle2UniteLegale",
+    "denominationUsuelle3UniteLegale",
+    "activitePrincipaleUniteLegale",
+    "trancheEffectifsUniteLegale",
 )
 CHAMPS_ETABLISSEMENTS = (
     "siren",
@@ -295,6 +311,14 @@ def _date(valeur: Any) -> date | None:
     return date.fromisoformat(str(v)) if v is not None else None
 
 
+def _entier(valeur: Any) -> int | None:
+    v = _v(valeur)
+    try:
+        return int(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _periode_en_cours(periodes: Any) -> dict[str, Any]:
     """La période sans `dateFin`, sinon la première (l'API rend la plus récente d'abord)."""
     if not isinstance(periodes, list) or not periodes:
@@ -313,6 +337,13 @@ SCHEMA_UNITES = pa.schema(
         ("etat", pa.string()),
         ("date_etat", pa.date32()),
         ("date_creation", pa.date32()),
+        ("sigle", pa.string()),
+        ("denomination_usuelle_1", pa.string()),
+        ("denomination_usuelle_2", pa.string()),
+        ("denomination_usuelle_3", pa.string()),
+        ("cj", pa.int64()),
+        ("naf", pa.string()),
+        ("tranche", pa.string()),
     ]
 )
 
@@ -353,6 +384,13 @@ def lignes_unites(unites: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "etat": _v(p.get("etatAdministratifUniteLegale")),
             "date_etat": _date(p.get("dateDebut")),
             "date_creation": _date(u.get("dateCreationUniteLegale")),
+            "sigle": _v(u.get("sigleUniteLegale")),
+            "denomination_usuelle_1": _v(p.get("denominationUsuelle1UniteLegale")),
+            "denomination_usuelle_2": _v(p.get("denominationUsuelle2UniteLegale")),
+            "denomination_usuelle_3": _v(p.get("denominationUsuelle3UniteLegale")),
+            "cj": _entier(p.get("categorieJuridiqueUniteLegale")),
+            "naf": _v(p.get("activitePrincipaleUniteLegale")),
+            "tranche": _v(u.get("trancheEffectifsUniteLegale")),
         }
     return list(lignes.values())
 
@@ -416,6 +454,8 @@ class Bilan:
     societes_cessees: int = 0
     societes_reactivees: int = 0
     passages_non_diffusible: int = 0
+    unites_legales_modifiees: int = 0
+    unites_legales_ajoutees: int = 0
     sieges_lus: int = 0
     sieges_modifies: int = 0
     sieges_ajoutes: int = 0
@@ -430,7 +470,7 @@ def _compte(con: duckdb.DuckDBPyConnection, sql: str, params: dict[str, Any] | N
 def appliquer_unites(
     con: duckdb.DuckDBPyConnection, unites: list[dict[str, Any]], jour: date, bilan: Bilan
 ) -> None:
-    """Met `societes` à jour depuis des unités légales brutes de l'API. Sans transaction propre."""
+    """Met `societes` et `unites_legales` à jour depuis des unités légales brutes. Sans transaction propre."""
     table = pa.Table.from_pylist(lignes_unites(unites), schema=SCHEMA_UNITES)
     bilan.unites_lues += table.num_rows
     con.register("sirene_unites", table)
@@ -473,8 +513,53 @@ def appliquer_unites(
             " and not exists (select 1 from societes s where s.siren = u.siren)",
             params,
         )
+        _appliquer_unites_legales(con, jour, bilan)
     finally:
         con.unregister("sirene_unites")
+
+
+# (colonne de `unites_legales`, colonne de `sirene_unites`). Pour une unité non diffusible,
+# une valeur vide ou masquée garde la valeur connue ; sinon la fiche fait foi.
+_UNITES_LEGALES_FICHE = (
+    ("sigle", "sigle"),
+    ("denomination_usuelle_1", "denomination_usuelle_1"),
+    ("denomination_usuelle_2", "denomination_usuelle_2"),
+    ("denomination_usuelle_3", "denomination_usuelle_3"),
+    ("naf", "naf"),
+    ("tranche_effectifs", "tranche"),
+)
+# Jamais vidées : une personne morale garde un nom, une catégorie et un état.
+_UNITES_LEGALES_GARDEES = (
+    ("denomination", "denomination"),
+    ("categorie_juridique", "cj"),
+    ("etat_administratif", "etat"),
+)
+
+
+def _appliquer_unites_legales(con: duckdb.DuckDBPyConnection, jour: date, bilan: Bilan) -> None:
+    """Met `unites_legales` à jour depuis la vue `sirene_unites`. Jamais de catégorie 1000 ni vide."""
+    valeurs = [
+        (c, f"case when u.non_diffusible then coalesce(u.{v}, l.{c}) else u.{v} end")
+        for c, v in _UNITES_LEGALES_FICHE
+    ] + [(c, f"coalesce(u.{v}, l.{c})") for c, v in _UNITES_LEGALES_GARDEES]
+    affectations = ", ".join(f"{c} = {v}" for c, v in valeurs)
+    differences = " or ".join(f"l.{c} is distinct from {v}" for c, v in valeurs)
+    bilan.unites_legales_modifiees += _compte(
+        con,
+        f"update unites_legales l set {affectations} from sirene_unites u"
+        f" where l.siren = u.siren and ({differences})",
+    )
+    bilan.unites_legales_ajoutees += _compte(
+        con,
+        "insert into unites_legales (siren, denomination, sigle, denomination_usuelle_1,"
+        " denomination_usuelle_2, denomination_usuelle_3, categorie_juridique, naf, tranche_effectifs,"
+        " etat_administratif, debut)"
+        " select u.siren, u.denomination, u.sigle, u.denomination_usuelle_1, u.denomination_usuelle_2,"
+        " u.denomination_usuelle_3, u.cj, u.naf, u.tranche, u.etat, $jour"
+        f" from sirene_unites u where u.cj is not null and u.cj <> {CJ_ENTREPRENEUR_INDIVIDUEL}"
+        " and not exists (select 1 from unites_legales l where l.siren = u.siren)",
+        {"jour": jour},
+    )
 
 
 COLONNES_SIEGE = (

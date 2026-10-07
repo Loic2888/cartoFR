@@ -28,17 +28,29 @@ démarrage).
 Journaux et colonne `erreur` : identifiants, types, durées et nom de la
 classe d'exception seulement. Jamais les paramètres d'un travail ni le texte
 d'une exception, qui peuvent contenir des données (garde-fou 6, règle 4).
+
+Synchro nocturne (T013) : à chaque tour, la boucle appelle `planifier_synchro`,
+qui insère un travail `synchro` une fois par jour, dès que l'heure de Paris
+atteint CARTOFR_SYNCHRO_HEURE (`HH:MM`). Le conteneur worker n'a pas de cron :
+c'est la boucle qui planifie. La planification n'est active que si
+CARTOFR_SYNCHRO_HEURE est définie (ou `planifier=True`) : un test ou un outil
+qui lance la boucle ne déclenche jamais de synchro, donc aucun appel INPI ou
+INSEE. En production : CARTOFR_SYNCHRO_HEURE=02:00.
 """
 
 import logging
+import os
 import threading
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, date, datetime, time
 from typing import Any, LiteralString
+from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg import pq
+from psycopg.types.json import Jsonb
 
 from cartofr.db import connecter
 from cartofr.jobs import TRAVAUX, Contexte
@@ -189,6 +201,65 @@ def traiter_un(conn: Connexion) -> bool:
         _rendre_verrou(conn)
 
 
+VARIABLE_HEURE = "CARTOFR_SYNCHRO_HEURE"
+HEURE_SYNCHRO = time(2, 0)
+FUSEAU = ZoneInfo("Europe/Paris")
+
+# Clé du verrou de transaction qui sérialise la planification (une seule insertion par jour).
+CLE_PLANIFICATION = 7_013_000_001
+
+# Un travail `synchro` créé depuis l'heure du jour (planifié ou lancé à la main) suffit.
+_PLANIFIER: LiteralString = """
+insert into public.travaux (type, parametres, cree_le)
+select 'synchro', %s, %s
+ where not exists (
+         select 1 from public.travaux where type = 'synchro' and cree_le >= %s
+       )
+returning id
+"""
+
+
+def heure_synchro(valeur: str | None = None) -> time:
+    """L'heure de la synchro, `HH:MM` (CARTOFR_SYNCHRO_HEURE), 02:00 si vide."""
+    brut = (valeur if valeur is not None else os.environ.get(VARIABLE_HEURE, "")).strip()
+    if not brut:
+        return HEURE_SYNCHRO
+    try:
+        heures, minutes = brut.split(":")
+        return time(int(heures), int(minutes))
+    except ValueError:
+        raise ValueError(f"{VARIABLE_HEURE} doit être au format HH:MM, par exemple 02:00.") from None
+
+
+def planifier_synchro(conn: Connexion, maintenant: datetime, heure: time = HEURE_SYNCHRO) -> int | None:
+    """Insère le travail `synchro` du jour s'il est l'heure et qu'il n'existe pas encore.
+
+    Le jour et l'heure sont ceux de Paris (changements d'heure compris). Un
+    travail `synchro` créé depuis l'heure du jour, quel que soit son statut,
+    suffit : aucun second n'est inséré. Deux appels simultanés sont sérialisés
+    par un verrou de transaction ; le second voit la ligne du premier. `cree_le`
+    vaut `maintenant`. Rend l'id inséré, ou None.
+    """
+    local = maintenant.astimezone(FUSEAU)
+    if local.time() < heure:
+        return None
+    seuil = datetime.combine(local.date(), heure, tzinfo=FUSEAU)
+    try:
+        conn.execute("select pg_advisory_xact_lock(%s)", (CLE_PLANIFICATION,))
+        # Requête distincte : sa photo est prise après le verrou, elle voit l'insertion d'un concurrent.
+        ligne = conn.execute(
+            _PLANIFIER, (Jsonb({"planifie_le": local.date().isoformat()}), maintenant, seuil)
+        ).fetchone()
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    if ligne is None:
+        return None
+    log.info("travail %s (synchro) planifié", ligne[0])
+    return int(ligne[0])
+
+
 def _fermer(conn: Connexion | None) -> None:
     if conn is None or conn.closed:
         return
@@ -202,22 +273,38 @@ def boucle(
     arret: threading.Event | None = None,
     intervalle: float = INTERVALLE_S,
     connecteur: Callable[[], Connexion] = connecter,
+    planifier: bool | None = None,
 ) -> None:
     """Traite la file jusqu'à ce que `arret` soit levé.
 
     File vide : attend `intervalle` secondes. Toute exception est journalisée
     (nom de classe seulement) et la boucle continue ; une connexion perdue
     est rouverte au tour suivant.
+
+    `planifier` : insérer le travail `synchro` de chaque nuit. None (défaut) :
+    seulement si CARTOFR_SYNCHRO_HEURE est définie.
     """
     arret = arret or threading.Event()
+    if planifier is None:
+        planifier = bool(os.environ.get(VARIABLE_HEURE, "").strip())
+    heure = heure_synchro() if planifier else HEURE_SYNCHRO
+    planifie_pour: date | None = None  # jour (Paris) déjà vérifié : pas de requête à chaque tour
     conn: Connexion | None = None
     log.info("file de travaux : démarrage (intervalle %s s)", intervalle)
+    if planifier:
+        log.info("synchro planifiée chaque jour à %s, heure de Paris", heure.strftime("%H:%M"))
     try:
         while not arret.is_set():
             try:
                 if conn is None or conn.closed or conn.broken:
                     _fermer(conn)
                     conn = connecteur()
+                if planifier:
+                    maintenant = datetime.now(UTC)
+                    local = maintenant.astimezone(FUSEAU)
+                    if local.date() != planifie_pour and local.time() >= heure:
+                        planifier_synchro(conn, maintenant, heure)
+                        planifie_pour = local.date()
                 if not traiter_un(conn):
                     arret.wait(intervalle)
             except Exception as exc:
