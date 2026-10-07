@@ -10,7 +10,8 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 - ✅ Prototype à la racine : moteur (`engine.py`), tables nationales (`data/rne_links/`, 1,6 M liens), non-régression (`compare.py`). Scores au 2026-10-06 : LVMH 90 %, VINCI 81 %, CMAF 83 %.
 - ✅ `worker/` (T001) et `web/` (T002) : squelettes, lint, typecheck et tests en place (commandes dans `AGENTS.md`).
 - ✅ `infra/` (T004) : Docker Compose, Supabase réduit, Caddy, testé en local. CI GitHub Actions sur chaque PR (T003).
-- ❌ Pas encore de serveur (T005) ni de schéma `supabase/migrations/` (T006).
+- ✅ Schéma de base et RLS (T006), `data/registre.duckdb` (T007), client de l'API diff INPI et mesure du quota (T010).
+- ❌ Pas encore de serveur (T005).
 
 ## Comment lire ce fichier
 
@@ -29,14 +30,14 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 
 ## Phase 2 : Foundational (bloque toutes les stories)
 
-- [ ] `T006` [P] — Créer le schéma de base et le cloisonnement RLS
-- [ ] `T007` [P] — Construire `registre.duckdb` avec dates de début et de fin
+- [x] `T006` [P] — Créer le schéma de base et le cloisonnement RLS
+- [x] `T007` [P] — Construire `registre.duckdb` avec dates de début et de fin
 - [ ] `T008` — Écrire la file de travaux du worker *(après T006)*
 - [ ] `T009` [P] — Mettre en place la connexion par lien magique et le gabarit *(après T006)*
 
 ## Phase 3 : US1 — La base se met à jour toute seule (P1) 🎯 MVP
 
-- [ ] `T010` [P] — Mesurer le quota réel de l'API diff de l'INPI *(peut commencer dès T001)*
+- [x] `T010` [P] — Mesurer le quota réel de l'API diff de l'INPI *(peut commencer dès T001)*
 - [ ] `T011` [P] — Appliquer les changements du RNE au registre *(après T010)*
 - [ ] `T012` [P] — Appliquer les changements de SIRENE au registre
 - [ ] `T013` — Planifier la synchro nocturne et publier l'état du registre
