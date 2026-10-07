@@ -52,6 +52,8 @@ variables = {
     "ANON_KEY": jwt("anon", jwt_secret),
     "SERVICE_ROLE_KEY": jwt("service_role", jwt_secret),
     "PG_META_CRYPTO_KEY": secrets.token_hex(16),
+    # Empreinte HMAC des familles exclues des réglages (garde-fou 6)
+    "CARTOFR_CLE_EMPREINTE": secrets.token_hex(32),
     # SMTP (mailpit en local, Brevo en production)
     "SMTP_HOST": "mailpit",
     "SMTP_PORT": "1025",

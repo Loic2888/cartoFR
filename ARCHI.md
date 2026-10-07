@@ -93,6 +93,15 @@ Chaque table métier porte `organisation_id`, avec une politique RLS `organisati
 - **Recherche de la tête (US2)** : le worker expose une seule route HTTP interne, `GET /recherche?q=` (nom ou SIREN, 20 résultats au plus : SIREN, nom, ville, statut). Elle lit `registre.duckdb` en lecture seule, n'est joignable que depuis le conteneur `web` (réseau Docker, aucun port publié) et ne rend jamais de personne. Ajoutée le 2026-10-06 au découpage des tâches : sans elle, l'interface ne peut pas chercher dans le registre.
 - **Planification** : `cron` du conteneur worker, qui insère un travail `synchro` chaque nuit.
 
+### Familles exclues : masquées par empreinte (garde-fou 6)
+Décidé le 2026-10-07. Le réglage `familles_exclues` contient des noms de famille (la famille qui contrôle le groupe, dont les holdings personnelles ne doivent pas entrer dans la carto). Ces noms ne s'écrivent jamais en clair dans la base de l'app ni à l'écran.
+- **Stockage** : `reglages.contenu.familles_exclues_empreintes`, liste de HMAC-SHA256 de `upper(trim(nom))` avec la clé serveur `CARTOFR_CLE_EMPREINTE` (`worker/cartofr/empreinte.py`). Une contrainte SQL refuse la clé `familles_exclues` en clair.
+- **Saisie (T020)** : le consultant tape le nom une fois ; le serveur calcule l'empreinte ; l'écran affiche « N famille(s) exclue(s) », jamais le nom.
+- **Moteur (T021)** : compare l'empreinte du nom de chaque dirigeant à la liste. La non-régression, qui lit `config/*.json` côté worker, garde les noms.
+- **Pourquoi un HMAC et pas un SHA-256** : un nom de famille connu se retrouve en une seconde en essayant des noms. Sans la clé, non.
+- **Écarté** : amender le garde-fou ; garder ce réglage hors de l'app (plus modifiable depuis l'interface).
+- **Limite** : `config/*.json` et le seed, publics dans git, contiennent encore le nom, comme avant.
+
 ### IA (P2, US3)
 - **SDK** : `anthropic` (Python), dans le worker. Modèle choisi au moment de US3.
 - **Usage** : lire le site et le rapport annuel du groupe (recherche web), proposer les marques, les maisons et les exclusions, chacune avec sa source.
