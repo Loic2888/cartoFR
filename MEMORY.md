@@ -72,6 +72,8 @@ oublie de l'alimenter au moment où ça fait mal.
 Ce qui vient de l'extérieur et qu'on ne choisit pas : limites d'API, quotas,
 formats imposés, dépendances qui bougent, contraintes légales.
 
+- **2026-10-06** — Stock RNE : `actif` n'est jamais `false`, il vaut `true` ou vide (244 311 liens vides). Vide = actif, comme le moteur (`coalesce(actif, true)`). Un filtre `actif = true` perd 15 % des liens.
+
 - **2026-10-05** — API INPI : ~10 000 fiches/jour/compte, erreur 429 au-delà, pas de recherche inverse, 10 000 résultats max par requête.
 - **2026-10-03** — Licence INPI : les données personnes ne servent pas à la prospection ; `diffusionCommerciale = false` = opposition à la prospection (75 sociétés sur 174 chez LVMH).
 - **2026-10-06** — Stock RNE local = photo du 2026-03-04. Tout ce qui a changé depuis manque tant que la synchro quotidienne n'existe pas.
