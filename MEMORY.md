@@ -33,6 +33,7 @@ code.
 - **2026-10-05** — Registre complet en local plutôt qu'appels d'API par carto. L'API INPI plafonne à ~10 000 fiches/jour (VINCI seul en demandait deux jours) ; en local, une carto prend quelques minutes. Les API ne servent plus qu'à la mise à jour.
 - **2026-10-06** — Recherche "sociétés dirigées par X" faite sur `data/rne_links/liens.parquet` (1,6 M liens), construit depuis le stock FTP INPI. L'API INPI ne sait pas chercher dans ce sens.
 - **2026-10-06** — Règles réglées pour la justesse : les règles souples retrouvaient plus (92/86/87 %) mais avec plus de faux. On a gardé les strictes (90/81/83 %).
+- **2026-10-07** — Synchro nocturne planifiée par la boucle du worker, pas par un cron, et seulement si `CARTOFR_SYNCHRO_HEURE` est définie (pour qu'un test ou un lancement local ne déclenche jamais d'appel INPI réel). Variable absente en production = aucune synchro, seul signe : une date vieillissante dans `etat_registre`. Ne jamais supprimer `data/synchro/jours.json` d'un registre déjà synchronisé : de vieux jours seraient rejoués sur des plus récents.
 - **2026-10-07** — Noms de famille exclus des réglages masqués par empreinte HMAC (`CARTOFR_CLE_EMPREINTE`), jamais en clair en base ni à l'écran (garde-fou 6). Choisi plutôt qu'amender le garde-fou. Changer la clé rend toutes les empreintes fausses : à garder stable par environnement.
 - **2026-10-06** — L'adresse seule ne suffit plus à faire entrer une société, même à plus de 85 % du groupe à l'adresse : les fonds domiciliés chez La Française entraient à tort.
 

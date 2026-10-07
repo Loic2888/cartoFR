@@ -8,14 +8,14 @@
 Relie les deux synchros à la file de travaux, chaque nuit, et rend leur état visible par l'app.
 
 ## Périmètre
-Un type de travail `synchro`, un cron qui l'insère chaque nuit, et la copie du dernier état dans `etat_registre`.
+Un type de travail `synchro`, inséré chaque nuit par la boucle du worker (pas de cron), et la copie du dernier état dans `etat_registre`.
 
 ## Mise en œuvre
 
 ### Fichiers à créer ou modifier
 - `worker/cartofr/jobs/synchro.py`
 - `worker/cartofr/jobs/__init__.py` — enregistrement du type
-- `infra/cron/synchro`
+- `worker/cartofr/travaux.py` — planification dans la boucle (`planifier_synchro`)
 - `worker/tests/jobs/test_synchro.py`
 
 ### Fonctionnement attendu
@@ -25,15 +25,15 @@ Un type de travail `synchro`, un cron qui l'insère chaque nuit, et la copie du 
 - Échec visible dans `etat_registre` avec sa cause
 
 ### Technologies
-- cron, psycopg
+- psycopg, zoneinfo (Europe/Paris)
 
 ### Motifs d'architecture
 Synchro et cartos ne se chevauchent jamais (ADR-004).
 
 ## Critères de succès
-- [ ] **C1** : `test_synchro.py` vérifie qu'un passage réussi met à jour `etat_registre` (date, volumes)
-- [ ] **C2** : `test_synchro.py` vérifie qu'un échec écrit sa cause dans `etat_registre`
-- [ ] **C3** : `infra/cron/synchro` insère un travail `synchro` chaque nuit
+- [x] **C1** : `test_synchro.py` vérifie qu'un passage réussi met à jour `etat_registre` (date, volumes)
+- [x] **C2** : `test_synchro.py` vérifie qu'un échec écrit sa cause dans `etat_registre`
+- [x] **C3** : `worker/cartofr/travaux.py` insère un travail `synchro` chaque nuit (heure réglable), une seule fois par jour
 
 ## Tests et validation
 
