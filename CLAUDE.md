@@ -157,7 +157,12 @@ Les points 1 et 3 sont en plus **bloqués en dur** par
      (cartographies client), ni aucun dump.
    - Les dirigeants personnes physiques servent seulement de **preuve interne**
      pendant le calcul. Aucun nom de personne dans une sortie, un export, un
-     log, une table exposée ou l'interface.
+     log, une table exposée ou l'interface. *Précisé le 2026-10-07 (T023,
+     décision de Loïc)* : la raison sociale officielle d'une société (SIRENE),
+     même si elle contient le nom de son fondateur (« Jean Dupont SAS »), est
+     une donnée de société, pas un dirigeant tiré du registre : elle s'affiche
+     et s'exporte. Ce qui est interdit, c'est de faire sortir une personne de
+     `dirigeants_personnes`.
    - Les sociétés avec `diffusionCommerciale = false` sont marquées
      (`opposition_prospection`), jamais cachées ni présentées comme démarchables.
 
