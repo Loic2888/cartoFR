@@ -30,6 +30,7 @@ from typing import Any
 
 import duckdb
 
+from cartofr.empreinte import cle_depuis_env, empreinte
 from cartofr.moteur.marques import Candidate, chercher_candidates, norm
 from cartofr.moteur.modele import (
     Carto,
@@ -94,7 +95,9 @@ _COLONNES_SIEGE = ("siren", "siret_siege", "adresse_cle", "nom", "cj", "naf", "t
 
 
 class _Moteur:
-    def __init__(self, cfg: dict[str, Any], con: duckdb.DuckDBPyConnection) -> None:
+    def __init__(
+        self, cfg: dict[str, Any], con: duckdb.DuckDBPyConnection, cle_empreinte: str | None = None
+    ) -> None:
         self.cfg = cfg
         self.db = con
         self.info: dict[str, dict[str, Any] | None] = {}
@@ -102,7 +105,15 @@ class _Moteur:
         self.ev: collections.defaultdict[str, list[Indice]] = collections.defaultdict(list)
         self.retained: dict[str, str] = {}  # siren -> raison d'entrée
         self.foreign: dict[str, str | None] = {}
+        # Familles exclues : en clair (config/*.json, non-régression) ou par empreinte (réglages de
+        # l'app, garde-fou 6). Les deux listes peuvent coexister ; une famille de l'une ou l'autre
+        # est exclue.
         self.family = {n.upper() for n in cfg.get("familles_exclues", [])}
+        self.family_empreintes = frozenset(cfg.get("familles_exclues_empreintes", []))
+        self.cle_empreinte = cle_empreinte
+        if self.family_empreintes and not cle_empreinte:
+            self.cle_empreinte = cle_depuis_env()  # CleManquante : jamais de comparaison sans clé
+        self._famille_vue: dict[str, bool] = {}
         self.excluded = set(cfg.get("exclus", []))
         self.local_done: set[str] = set()
         self.heads: dict[str, str] = {}
@@ -140,7 +151,7 @@ class _Moteur:
             " where fin is null and siren in (select unnest($s))",
             {"s": todo},
         ).fetchall():
-            if key.split("|")[0] not in self.family:
+            if not self.famille_exclue(key.split("|")[0]):
                 self.rne[s].persons.setdefault(key, set()).add(r)
         for s, dc, sal, nd in self.db.execute(
             "select siren, diffusion_commerciale, salaries, non_diffusible from societes"
@@ -149,6 +160,25 @@ class _Moteur:
         ).fetchall():
             fiche = self.rne[s]
             fiche.diffusion_commerciale, fiche.salaries, fiche.non_diffusible = dc, sal, nd
+
+    def famille_exclue(self, nom: str) -> bool:
+        """Le nom de famille d'un dirigeant (début de sa clé) est-il exclu par les réglages ?
+
+        En clair : égalité avec un nom en majuscules, comme le prototype. Par empreinte :
+        HMAC du nom (`cartofr.empreinte`, mêmes majuscules, espaces des bords retirés) présent
+        dans la liste. Le résultat est gardé par nom : une empreinte par famille, pas par ligne.
+        Seul écart entre les deux : un nom écrit au registre avec des blancs au bord est exclu par
+        empreinte, pas en clair (LVMH, 2026-10-07 : une variante, 5 mandats ; cartos identiques).
+        """
+        if nom in self.family:
+            return True
+        if not self.family_empreintes:
+            return False
+        vu = self._famille_vue.get(nom)
+        if vu is None:
+            vu = empreinte(nom, self.cle_empreinte or "") in self.family_empreintes
+            self._famille_vue[nom] = vu
+        return vu
 
     def discover_local(self) -> None:
         """Toutes les sociétés dont une société retenue est dirigeante, d'après le registre."""
@@ -524,15 +554,18 @@ def cartographier(
     reglages: dict[str, Any],
     registre: Path,
     candidates: Callable[[duckdb.DuckDBPyConnection, dict[str, Any]], list[Candidate]] = chercher_candidates,
+    cle_empreinte: str | None = None,
 ) -> Carto:
     """Calcule la carto du groupe décrit par `reglages` sur le registre local, sans appel réseau.
 
     `candidates` permet de fournir les sociétés de marque autrement (diagnostic, tests).
+    `cle_empreinte` : la clé des empreintes de `familles_exclues_empreintes` ; sans elle,
+    CARTOFR_CLE_EMPREINTE (CleManquante si elle manque alors que la liste n'est pas vide).
     """
     con = ouvrir_registre(registre)
     try:
         trouvees = candidates(con, reglages)
-        moteur = _Moteur(reglages, con).run(trouvees)
+        moteur = _Moteur(reglages, con, cle_empreinte).run(trouvees)
         return moteur.build(date_des_donnees(con))
     finally:
         con.close()

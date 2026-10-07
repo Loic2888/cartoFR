@@ -104,3 +104,10 @@ Date : 2026-10-03. Dossier de travail : `zyzx/`.
 - Non-régression du moteur porté, sur les mêmes données que le prototype : LVMH 154/172 (15 en plus), VINCI 813/1 007 (176 en plus), CMAF 43/52. Exactement les scores du 2026-10-06.
 - Même ensemble de SIREN que le prototype pour les trois groupes (169, 989 et 572). Quelques maisons mères directes changent (8 LVMH, 38 VINCI, 1 CMAF) : le prototype dépendait d'un tri instable, le portage trie de façon stable. Contre Basile, même mère directe : 108/154 au lieu de 105/154 pour LVMH, 513/813 pour VINCI.
 - Une carto prend environ 45 s, dont 35 s pour normaliser les noms. Le registre passe à 2,4 Go avec la table `unites_legales`.
+
+### 2026-10-07, après-midi (T021)
+
+- Une carto se lance depuis l'app : bouton « Lancer la carto » sur la fiche du groupe, travail `carto` dans la file du worker, résultat écrit dans `cartos`, `carto_societes` et `carto_liens`.
+- Le moteur exclut les familles par empreinte (`familles_exclues_empreintes`), comme les réglages lus en base. Non-régression avec les empreintes : LVMH 154/172 (15 en plus), VINCI 813/1 007 (176 en plus), CMAF 43/52. Sociétés, liens, participations et sociétés étrangères identiques, champ par champ, à la carto aux noms en clair, pour les trois groupes.
+- Seul écart mesuré sur tout le registre : une variante du nom exclu de LVMH, écrite avec des blancs au bord (5 mandats), est exclue par l'empreinte et ne l'était pas en clair. Sans effet sur la carto LVMH.
+- Carto LVMH lancée de bout en bout depuis l'interface sur le registre réel : 169 sociétés (les mêmes SIREN que la non-régression), 115 liens, 51 s de calcul. Date des données : 04/03/2026 (le stock), signalée en avertissement tant que la synchro n'a pas rattrapé.

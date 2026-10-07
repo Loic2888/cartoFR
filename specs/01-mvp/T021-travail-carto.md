@@ -32,10 +32,10 @@ Un bouton « Lancer la carto », un type de travail `carto`, l'écriture du rés
 Le worker écrit en rôle service mais respecte l'organisation du travail.
 
 ## Critères de succès
-- [ ] **C1** : `test_carto.py` vérifie le refus d'une version non validée
-- [ ] **C2** : `test_carto.py` vérifie que chaque ligne `carto_*` porte l'`organisation_id` du travail
-- [ ] **C3** : `cartos` enregistre la date des données et la durée du calcul
-- [ ] **C4** : `test_carto.py` vérifie l'avertissement pour une tête sans aucun lien
+- [x] **C1** : `test_carto.py` vérifie le refus d'une version non validée
+- [x] **C2** : `test_carto.py` vérifie que chaque ligne `carto_*` porte l'`organisation_id` du travail
+- [x] **C3** : `cartos` enregistre la date des données et la durée du calcul
+- [x] **C4** : `test_carto.py` vérifie l'avertissement pour une tête sans aucun lien
 
 ## Tests et validation
 
