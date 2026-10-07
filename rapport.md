@@ -111,3 +111,31 @@ Date : 2026-10-03. Dossier de travail : `zyzx/`.
 - Le moteur exclut les familles par empreinte (`familles_exclues_empreintes`), comme les réglages lus en base. Non-régression avec les empreintes : LVMH 154/172 (15 en plus), VINCI 813/1 007 (176 en plus), CMAF 43/52. Sociétés, liens, participations et sociétés étrangères identiques, champ par champ, à la carto aux noms en clair, pour les trois groupes.
 - Seul écart mesuré sur tout le registre : une variante du nom exclu de LVMH, écrite avec des blancs au bord (5 mandats), est exclue par l'empreinte et ne l'était pas en clair. Sans effet sur la carto LVMH.
 - Carto LVMH lancée de bout en bout depuis l'interface sur le registre réel : 169 sociétés (les mêmes SIREN que la non-régression), 115 liens, 51 s de calcul. Date des données : 04/03/2026 (le stock), signalée en avertissement tant que la synchro n'a pas rattrapé.
+
+### 2026-10-07, recette du MVP (T024)
+
+Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel monté en lecture seule, synchro coupée (aucun appel INPI). Un membre fictif de l'organisation Youno, connecté par lien magique depuis la page de connexion. Les cartos sont lancées depuis l'interface (Chromium sans écran), une à la fois, sur les réglages de départ validés. Machine : 16 cœurs, 15 Go de mémoire (6 Go libres), une vingtaine de conteneurs d'autres projets au repos ; charge moyenne de 0,7 à 1,2 avant chaque mesure, montée à 5–10 par la carto elle-même. Aucune limite de CPU ni de mémoire sur le conteneur `worker`.
+
+**SC-001, scores obtenus depuis l'app** (`non_regression.py --depuis-postgres --organisation Youno`, cartos lues dans `carto_societes`) :
+
+| Groupe | Retrouvées | En plus | Seuil | Même mère | Sociétés | Liens | Calcul (worker) | Du clic à « Voir l'arbre » |
+|---|---|---|---|---|---|---|---|---|
+| LVMH | 90 % (154/172) | 15 | ≥ 154/172, ≤ 16 | 70 % | 169 | 115 | 53,1 s | 57 s |
+| VINCI | 81 % (813/1 007) | 176 | ≥ 813/1 007, ≤ 193 | 63 % | 989 | 1 084 | 53,1 s | 57 s |
+| CMAF | 83 % (43/52) | (529, non mesuré) | ≥ 43/52 | — | 572 | 756 | 41,5 s | 48 s |
+
+- Exactement les scores du prototype (2026-10-06) et du moteur porté : les trois groupes passent leurs seuils.
+- Le moteur lancé en direct (`non_regression.py` sans option, même registre) donne les mêmes chiffres (54 s, 60 s, 44 s ; 2,0 Go au plus). Comparaison ligne à ligne app / moteur direct : mêmes SIREN (169, 989, 572), même maison mère et même « ciblable » pour chaque société, mêmes liens (115, 1 084, 756), pour les trois groupes.
+- Le « clic à l'arbre » ajoute 4 à 6 s au calcul : prise du travail par la file (sondage toutes les 5 s) et rafraîchissement de la page (toutes les 3 s).
+
+**SC-004, VINCI sous 5 minutes : tenu.** Mesuré seul (charge 0,95 au départ, rien d'autre en cours) : **45,4 s** de calcul dans le worker (`cartos.duree_ms`), 51 s du clic à l'arbre. La première mesure, juste après LVMH, donnait 53,1 s. Même score dans les deux cas (813/1 007, 176 en plus). Marge : six fois sous la cible.
+
+**Contrôle à 320 px et au clavier des écrans de US2 (C4)**, avec Chromium à 320 × 640 px : connexion, liste des groupes, nouveau groupe (vide, avec 20 résultats, sans résultat), fiche d'un groupe (réglé, et neuf sans réglages validés), réglages (validés, et brouillon vide), carto en cours, arbre (LVMH 169 sociétés, VINCI 989 sociétés tout déplié, 6 niveaux), lien d'export.
+
+- Aucun défilement horizontal, sur aucun écran ; à 6 niveaux de profondeur, la carte la plus étroite de VINCI fait encore 213 px, sans débordement.
+- Tous les éléments interactifs atteints au Tab, chacun avec un focus visible (anneau). L'arbre suit le motif ARIA « tree » : un seul arrêt de tabulation, flèches pour se déplacer ; les 169 et 989 sociétés sont atteintes aux flèches avec l'anneau ; « Voir la preuve » s'atteint au Tab et s'ouvre à Entrée. « Exporter (CSV) » s'atteint au Tab, Entrée télécharge `cartofr-lvmh-2026-03-04.csv` (BOM, 169 sociétés).
+- Chaque champ a son label (aucun champ sans label). Aucun texte anglais visible (recherche de Loading, Submit, Error, undefined, null, NaN et d'une trentaine d'autres mots). Contraste AA tenu partout (aucun texte sous 4,5:1). Aucune erreur dans la console.
+- Seul défaut, mineur : après *Enregistrer le brouillon* au clavier, le focus retombe au début de la page (observé), parce que le bouton se désactive pendant l'envoi ; *Valider la version* et *Lancer la carto* ont le même motif dans le code, non observé (`disabled={enCours}`, dans `web/app/(app)/groupes/[id]/reglages/editeur-reglages.tsx` et `web/app/(app)/groupes/[id]/cartos/lancer-carto.tsx`). Rien n'est bloqué, mais il faut retabuler. Non corrigé ici.
+- Captures d'écran regardées (connexion, recherche, fiche, réglages, carto en cours, arbre déplié).
+
+**SC-002 : à mesurer par Loïc, guide dans `docs/recette-sc002.md`.** Trois groupes jamais réglés y sont proposés (Bigard, Fayat, Roullier ; 38 à 83 sociétés avec un brouillon minimal).
