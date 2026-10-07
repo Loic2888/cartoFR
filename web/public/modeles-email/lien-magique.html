@@ -1,0 +1,24 @@
+<!-- Modèle GoTrue : lien magique (T009). Lu par le service auth (infra/docker-compose.yml). -->
+<!doctype html>
+<html lang="fr">
+  <body style="margin:0;padding:24px;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;background:#ffffff;">
+    <h1 style="font-size:20px;margin:0 0 16px;">Connexion à cartoFR</h1>
+    <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">Bonjour,</p>
+    <p style="font-size:16px;line-height:1.5;margin:0 0 24px;">
+      Vous avez demandé à vous connecter à cartoFR. Ouvrez ce lien pour accéder à l'application :
+    </p>
+    <p style="margin:0 0 24px;">
+      <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&amp;type=magiclink"
+         style="display:inline-block;padding:12px 20px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:16px;">
+        Se connecter à cartoFR
+      </a>
+    </p>
+    <p style="font-size:14px;line-height:1.5;color:#4a4a4a;margin:0 0 8px;">
+      Ce lien ne sert qu'une fois. S'il a expiré, demandez-en un nouveau sur la page de connexion.
+    </p>
+    <p style="font-size:14px;line-height:1.5;color:#4a4a4a;margin:0;">
+      Vous n'êtes pas à l'origine de cette demande ? Ignorez cet e-mail : personne ne pourra se
+      connecter sans ce lien.
+    </p>
+  </body>
+</html>

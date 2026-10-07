@@ -90,6 +90,36 @@ curl -sk -X POST https://localhost/auth/v1/magiclink \
 curl -s http://127.0.0.1:8025/api/v1/messages | python3 -m json.tool | grep -m1 Subject
 ```
 
+## Se connecter à l'app et inviter (T009)
+
+L'app ne crée aucun compte seule : le premier admin se crée à la main, une
+fois par organisation. Les suivants sont invités depuis la page Membres.
+
+```bash
+# 1. Le compte (étape 2 ci-dessus), puis l'organisation et le rôle admin
+docker compose -f infra/docker-compose.yml exec -T db psql -U postgres -d postgres -c \
+  "with o as (insert into public.organisations (nom) values ('Youno') returning id)
+   insert into public.membres (organisation_id, user_id, role)
+   select o.id, u.id, 'admin' from o, auth.users u where u.email = 'test@example.com';"
+```
+
+2. Ouvrir https://localhost/connexion, saisir l'adresse : le lien arrive dans
+   mailpit, en français. L'ouvrir connecte et mène à l'accueil.
+3. Menu **Membres** (admins seulement) : saisir l'adresse à inviter. L'e-mail
+   d'invitation arrive dans mailpit ; son lien connecte le nouveau membre.
+
+Le texte des e-mails vient de `web/public/modeles-email/`, que GoTrue lit sur
+`http://web:3000` à chaque envoi. Si `web` ne répond pas, GoTrue envoie ses
+modèles anglais par défaut : vérifier `web` avant de chercher ailleurs.
+`SITE_URL` doit être l'adresse publique de l'app : les liens des e-mails la
+reprennent.
+
+Les variables de `web` sont lues au démarrage du conteneur, pas au build
+(aucune `NEXT_PUBLIC_`) : une même image sert partout. `SUPABASE_SERVICE_ROLE_KEY`
+n'est lue que côté serveur (`web/lib/supabase/admin.ts`, `server-only`).
+
+Si le port 8025 de mailpit est pris : `MAILPIT_PORT` dans `infra/.env`.
+
 ## Arrêter
 
 ```bash
