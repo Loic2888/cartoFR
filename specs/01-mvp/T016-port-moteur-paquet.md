@@ -29,9 +29,9 @@ Le moteur du prototype (`engine.py`, `brand_scan.py`) devient une fonction du pa
 Le registre est lu en lecture seule.
 
 ## Critères de succès
-- [ ] **C1** : `worker/scripts/non_regression.py` donne au moins 90 % (LVMH), 81 % (VINCI) et 83 % (CMAF), avec au plus 16 et 193 « en plus »
-- [ ] **C2** : Un test lance le moteur avec le réseau coupé (socket bloqué) et réussit
-- [ ] **C3** : Le type de sortie de `modele.py` n'a aucun champ de personne physique
+- [x] **C1** : `worker/scripts/non_regression.py` donne au moins 90 % (LVMH), 81 % (VINCI) et 83 % (CMAF), avec au plus 16 et 193 « en plus »
+- [x] **C2** : Un test lance le moteur avec le réseau coupé (socket bloqué) et réussit
+- [x] **C3** : Le type de sortie de `modele.py` n'a aucun champ de personne physique
 
 ## Tests et validation
 

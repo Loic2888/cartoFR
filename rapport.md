@@ -97,3 +97,10 @@ Date : 2026-10-03. Dossier de travail : `zyzx/`.
 - Le quota observé le 2026-10-05 (environ 10 000 fiches par jour) comptait des requêtes d'une fiche chacune. Avec `/diff`, une requête rend 100 fiches : une journée coûte environ 400 requêtes. L'hypothèse, non vérifiée, est que le quota compte les requêtes.
 - `/diff/count` ne donne pas le total d'une journée : il répond seulement « plus de 10 000 ». Les en-têtes `pagination-count` et `pagination-max-page` sont vides.
 - Décision : la mise à jour quotidienne passe par l'API diff (ADR-002 confirmé). Le rattrapage depuis le stock du 2026-03-04 peut passer par `/diff`, étalé avec reprise sur curseur.
+
+### 2026-10-07
+
+- Moteur rangé dans le paquet `cartofr.moteur` (T016) et branché sur `data/registre.duckdb`. Le mode API (INPI, Annuaire, BODACC) est supprimé : une carto ne fait plus aucun appel extérieur.
+- Non-régression du moteur porté, sur les mêmes données que le prototype : LVMH 154/172 (15 en plus), VINCI 813/1 007 (176 en plus), CMAF 43/52. Exactement les scores du 2026-10-06.
+- Même ensemble de SIREN que le prototype pour les trois groupes (169, 989 et 572). Quelques maisons mères directes changent (8 LVMH, 38 VINCI, 1 CMAF) : le prototype dépendait d'un tri instable, le portage trie de façon stable. Contre Basile, même mère directe : 108/154 au lieu de 105/154 pour LVMH, 513/813 pour VINCI.
+- Une carto prend environ 45 s, dont 35 s pour normaliser les noms. Le registre passe à 2,4 Go avec la table `unites_legales`.

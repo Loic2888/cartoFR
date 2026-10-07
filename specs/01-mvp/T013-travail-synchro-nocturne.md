@@ -19,6 +19,8 @@ Un type de travail `synchro`, un cron qui l'insère chaque nuit, et la copie du 
 - `worker/tests/jobs/test_synchro.py`
 
 ### Fonctionnement attendu
+- Tenir aussi à jour `unites_legales` (ajoutée par T016) dans la synchro SIRENE : personnes morales seulement, aucune colonne de personne. Sinon la recherche des marques dérive du registre
+- Appliquer les jours dans l'ordre et ne pas relire un jour déjà en `succes` (T011 : environ 400 requêtes INPI par jour)
 - Reprise du lendemain si le quota coupe
 - Échec visible dans `etat_registre` avec sa cause
 
