@@ -91,7 +91,7 @@ Chaque table métier porte `organisation_id`, avec une politique RLS `organisati
   - SIRENE : API Sirene de l'INSEE (changements par date de traitement), chaque jour. Fichiers stock mensuels de data.gouv.fr pour un rechargement complet.
   - Chaque passage écrit une ligne dans `mises_a_jour`. Un échec laisse la base dans son état précédent (écriture dans une transaction DuckDB).
 - **Recherche de la tête (US2)** : le worker expose une seule route HTTP interne, `GET /recherche?q=` (nom ou SIREN, 20 résultats au plus : SIREN, nom, ville, statut). Elle lit `registre.duckdb` en lecture seule, n'est joignable que depuis le conteneur `web` (réseau Docker, aucun port publié) et ne rend jamais de personne. Ajoutée le 2026-10-06 au découpage des tâches : sans elle, l'interface ne peut pas chercher dans le registre.
-- **Planification** : `cron` du conteneur worker, qui insère un travail `synchro` chaque nuit.
+- **Planification** (T013, 2026-10-07) : la boucle du worker insère elle-même un travail `synchro` chaque nuit, une seule fois par jour, à `CARTOFR_SYNCHRO_HEURE` (heure de Paris) ; pas de cron (le conteneur n'en a pas). Sans cette variable, aucune synchro ne tourne : elle est posée dans le compose. Chaque passage lit au plus `CARTOFR_SYNCHRO_JOURS_MAX` jours par source (7), dans l'ordre, jusqu'à J-`CARTOFR_SYNCHRO_DECALAGE` (2 en production : un jour appliqué n'est jamais relu, une publication tardive serait perdue). Le dernier jour appliqué par source est gardé dans `data/synchro/jours.json` (à remplacer par une colonne `jour` de `mises_a_jour`).
 
 ### Familles exclues : masquées par empreinte (garde-fou 6)
 Décidé le 2026-10-07. Le réglage `familles_exclues` contient des noms de famille (la famille qui contrôle le groupe, dont les holdings personnelles ne doivent pas entrer dans la carto). Ces noms ne s'écrivent jamais en clair dans la base de l'app ni à l'écran.
@@ -205,7 +205,7 @@ worker/
   cartofr/travaux.py    boucle de la file de travaux
   tests/                pytest : règles du moteur, synchro, RLS, aucun nom de personne
 supabase/migrations/    schéma de l'app et politiques RLS
-infra/                  docker-compose.yml, Caddyfile, cron, script de sauvegarde
+infra/                  docker-compose.yml, Caddyfile, scripts de migration et de sauvegarde
 config/                 réglages historiques (LVMH, VINCI, CMAF), importés comme données de départ
 skills/account-mapping/ le skill, inchangé (export P3)
 ```

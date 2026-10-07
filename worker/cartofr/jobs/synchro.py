@@ -111,9 +111,26 @@ class EtatSource:
 # --- Dates ------------------------------------------------------------------------
 
 
+VARIABLE_DECALAGE = "CARTOFR_SYNCHRO_DECALAGE"
+
+
+def decalage() -> int:
+    """Jours d'écart avec aujourd'hui pour le dernier jour lu (CARTOFR_SYNCHRO_DECALAGE, 1 par défaut).
+
+    Un jour appliqué n'est jamais relu : si l'INPI ou l'INSEE publient tard, lire
+    la veille dès 2 h perdrait ces publications. La production lit J-2 (compose).
+    """
+    brut = os.environ.get(VARIABLE_DECALAGE, "").strip()
+    try:
+        valeur = int(brut) if brut else 1
+    except ValueError:
+        valeur = 1
+    return max(valeur, 1)
+
+
 def veille_a_paris(maintenant: datetime) -> date:
-    """La veille du jour en cours à Paris : le dernier jour complet à lire."""
-    return maintenant.astimezone(FUSEAU).date() - timedelta(days=1)
+    """Le dernier jour complet à lire, à Paris : la veille, ou plus tôt selon le décalage."""
+    return maintenant.astimezone(FUSEAU).date() - timedelta(days=decalage())
 
 
 def jours_a_lire(dernier: date, jusqua: date, maximum: int) -> list[date]:

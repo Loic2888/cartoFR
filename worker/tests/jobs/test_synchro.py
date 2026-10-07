@@ -595,3 +595,13 @@ def test_boucle_planifie_seulement_si_l_heure_est_reglee(
     monkeypatch.setattr(travaux, "traiter_un", traiter)
     travaux.boucle(arret, 0.0, connecteur=lambda: cast(Connexion, FausseConnexion()))
     assert tours["n"] == 5 and len(appels) == attendu  # une seule vérification pour le jour en cours
+
+
+@pytest.mark.parametrize(("brut", "attendu"), [("", 1), ("2", 2), ("0", 1), ("x", 1)])
+def test_decalage_reglable(monkeypatch: pytest.MonkeyPatch, brut: str, attendu: int) -> None:
+    """Le dernier jour lu recule de CARTOFR_SYNCHRO_DECALAGE jours (1 par défaut, jamais moins)."""
+    from cartofr.jobs import synchro
+
+    monkeypatch.setenv(synchro.VARIABLE_DECALAGE, brut)
+    midi = datetime(2026, 10, 7, 12, 0, tzinfo=synchro.FUSEAU)
+    assert synchro.veille_a_paris(midi) == date(2026, 10, 7) - timedelta(days=attendu)
