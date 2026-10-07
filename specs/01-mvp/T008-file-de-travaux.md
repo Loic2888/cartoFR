@@ -30,9 +30,9 @@ Une boucle qui prend le plus ancien travail en attente, l'exécute selon son typ
 Un seul processus, pas de Redis (ADR-004).
 
 ## Critères de succès
-- [ ] **C1** : `worker/tests/test_travaux.py` vérifie qu'un travail passe de `en_attente` à `termine` ou `echec`
-- [ ] **C2** : Deux travaux ne tournent jamais en même temps (test avec deux boucles)
-- [ ] **C3** : La durée de chaque travail est enregistrée dans `travaux`
+- [x] **C1** : `worker/tests/test_travaux.py` vérifie qu'un travail passe de `en_attente` à `termine` ou `echec`
+- [x] **C2** : Deux travaux ne tournent jamais en même temps (test avec deux boucles)
+- [x] **C3** : La durée de chaque travail est enregistrée dans `travaux`
 
 ## Tests et validation
 
