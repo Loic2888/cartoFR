@@ -1,0 +1,14 @@
+{
+  "id": "fiche-fictive-invalide",
+  "siren": "000000004",
+  "formality": {
+    "siren": "000000004",
+    "typePersonne": "M",
+    "content": {
+      "personneMorale": {
+        "identite": {"entreprise": {"siren": "000000004", "denomination": "SOCIETE FICTIVE INVALIDE"}},
+        "composition": {"pouvoirs": "pas une liste"}
+      }
+    }
+  }
+}

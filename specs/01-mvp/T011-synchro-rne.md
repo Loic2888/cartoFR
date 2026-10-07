@@ -30,11 +30,11 @@ Une fonction qui prend les formalités modifiées d'une période et met le regis
 Fermer, jamais effacer (principe 4).
 
 ## Critères de succès
-- [ ] **C1** : `test_synchro_rne.py` vérifie qu'un nouveau lien est ouvert avec sa date de début
-- [ ] **C2** : `test_synchro_rne.py` vérifie qu'un lien disparu est fermé et non supprimé
-- [ ] **C3** : `test_synchro_rne.py` vérifie qu'une erreur en cours de lot laisse le registre inchangé
-- [ ] **C4** : `grep -ri "delete" worker/cartofr/registre/synchro_rne.py` ne trouve aucun `DELETE` SQL
-- [ ] **C5** : Les fixtures de `worker/tests/fixtures/rne/` ne contiennent que des noms inventés
+- [x] **C1** : `test_synchro_rne.py` vérifie qu'un nouveau lien est ouvert avec sa date de début
+- [x] **C2** : `test_synchro_rne.py` vérifie qu'un lien disparu est fermé et non supprimé
+- [x] **C3** : `test_synchro_rne.py` vérifie qu'une erreur en cours de lot laisse le registre inchangé
+- [x] **C4** : `grep -ri "delete" worker/cartofr/registre/synchro_rne.py` ne trouve aucun `DELETE` SQL
+- [x] **C5** : Les fixtures de `worker/tests/fixtures/rne/` ne contiennent que des noms inventés
 
 ## Tests et validation
 

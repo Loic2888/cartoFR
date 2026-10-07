@@ -1,0 +1,50 @@
+{
+  "id": "fiche-fictive-a-1",
+  "siren": "000000001",
+  "updatedAt": "2026-01-14T10:00:00+01:00",
+  "nombreRepresentantsActifs": 3,
+  "formality": {
+    "siren": "000000001",
+    "typePersonne": "M",
+    "diffusionCommerciale": true,
+    "diffusionINSEE": "O",
+    "content": {
+      "personneMorale": {
+        "identite": {
+          "entreprise": {
+            "siren": "000000001",
+            "denomination": "SOCIETE FICTIVE A",
+            "nombreSalarie": 12
+          }
+        },
+        "composition": {
+          "pouvoirs": [
+            {
+              "typeDePersonne": "ENTREPRISE",
+              "roleEntreprise": "5132",
+              "actif": true,
+              "entreprise": {"siren": "000000010", "denomination": "SOCIETE FICTIVE MERE", "roleEntreprise": "5132"}
+            },
+            {
+              "typeDePersonne": "ENTREPRISE",
+              "roleEntreprise": "5110",
+              "entreprise": {"siren": "000000011", "denomination": "SOCIETE FICTIVE B"}
+            },
+            {
+              "typeDePersonne": "INDIVIDU",
+              "roleEntreprise": "5132",
+              "actif": true,
+              "individu": {
+                "descriptionPersonne": {
+                  "nom": "Personne Fictive 1",
+                  "prenoms": ["Prenom Fictif"],
+                  "dateDeNaissance": "1970-01"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
