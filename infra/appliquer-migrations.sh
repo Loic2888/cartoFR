@@ -21,13 +21,30 @@ else
   fichiers=(supabase/migrations/*.sql)
 fi
 
+# Le seed calcule les empreintes des familles exclues (garde-fou 6) avec la clé
+# CARTOFR_CLE_EMPREINTE d'infra/.env, passée à psql sans être affichée.
+cle=""
+if [ -f infra/.env ]; then
+  cle="$(grep -E '^CARTOFR_CLE_EMPREINTE=' infra/.env | head -1 | cut -d= -f2- || true)"
+fi
+
 for f in "${fichiers[@]}"; do
   if [ ! -f "$f" ]; then
     echo "Fichier introuvable : $f" >&2
     exit 1
   fi
   echo "Migration : $f"
-  docker compose -f infra/docker-compose.yml exec -T db \
+  options=()
+  case "$f" in
+    supabase/seed/*)
+      if [ -z "$cle" ]; then
+        echo "CARTOFR_CLE_EMPREINTE absente d'infra/.env : le seed a besoin de cette clé." >&2
+        exit 1
+      fi
+      options=(-e "PGOPTIONS=-c cartofr.cle_empreinte=$cle")
+      ;;
+  esac
+  docker compose -f infra/docker-compose.yml exec -T "${options[@]}" db \
     psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q -1 -f - < "$f"
 done
 

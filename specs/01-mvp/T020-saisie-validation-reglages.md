@@ -21,6 +21,7 @@ Les réglages font la qualité (Equans : 150 fausses sociétés). Ils sont valid
 - `worker/tests/test_reglages.py`, `web/lib/reglages/schema.test.ts`
 
 ### Fonctionnement attendu
+- Familles exclues (garde-fou 6, ARCHI « Familles exclues ») : le nom est saisi une fois, le serveur stocke seulement son empreinte (`familles_exclues_empreintes`, HMAC avec `CARTOFR_CLE_EMPREINTE`, même normalisation que `worker/cartofr/empreinte.py`) ; l'écran affiche le nombre de familles exclues, jamais le nom
 - Une validation part toujours de la dernière version (sinon refus)
 - Une colonne sur mobile
 

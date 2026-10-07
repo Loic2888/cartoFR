@@ -9,6 +9,13 @@
 -- l'app : origine 'depart', valide_le posé, valide_par nul (voir le
 -- commentaire de public.reglages dans 0002_cartos.sql).
 --
+-- Familles exclues (garde-fou 6) : `familles_exclues` (noms de famille) ne
+-- passe jamais en clair dans la base. Le seed stocke à la place
+-- `familles_exclues_empreintes`, HMAC-SHA256 de upper(btrim(nom)) calculé avec
+-- la clé du serveur, lue dans le réglage de session `cartofr.cle_empreinte`
+-- (psql : PGOPTIONS="-c cartofr.cle_empreinte=$CARTOFR_CLE_EMPREINTE").
+-- Sans ce réglage, le seed échoue au lieu d'écrire un nom ou une empreinte vide.
+--
 -- Idempotent : rejouer ce fichier ne change rien. Il crée l'organisation
 -- Youno si aucune n'existe, et sinon prend la plus ancienne de ce nom.
 -- À jouer après les migrations, en une transaction : psql -v ON_ERROR_STOP=1 -1 -f
@@ -34,7 +41,8 @@ with g as (
     )
 )
 insert into public.reglages (groupe_id, organisation_id, version, contenu, origine, valide_le)
-select g.id, g.organisation_id, 1, $r0${
+select g.id, g.organisation_id, 1,
+  $r0${
   "groupe": "CMAF",
   "tete": "588505354",
   "marques_sures": [
@@ -101,7 +109,6 @@ select g.id, g.organisation_id, 1, $r0${
     "CREDIT MUTUEL ARKEA",
     "ARKEA"
   ],
-  "familles_exclues": [],
   "marques_sures_homonymes": [
     "CIC",
     "ACM",
@@ -132,7 +139,10 @@ select g.id, g.organisation_id, 1, $r0${
     "EBRA",
     "Societe du Journal L Est Republicain"
   ]
-}$r0$::jsonb, 'depart', now() from g
+}$r0$::jsonb
+  || jsonb_build_object('familles_exclues_empreintes', '[]'::jsonb),
+  'depart', now()
+from g
 on conflict (groupe_id, version) do nothing;
 
 -- lvmh : config/lvmh.json
@@ -152,7 +162,8 @@ with g as (
     )
 )
 insert into public.reglages (groupe_id, organisation_id, version, contenu, origine, valide_le)
-select g.id, g.organisation_id, 1, $r0${
+select g.id, g.organisation_id, 1,
+  $r0${
   "groupe": "LVMH",
   "tete": "775670417",
   "marques_sures": [
@@ -239,9 +250,6 @@ select g.id, g.organisation_id, 1, $r0${
     "775625767",
     "314685454"
   ],
-  "familles_exclues": [
-    "ARNAULT"
-  ],
   "marques_sures_homonymes": [
     "SEPHORA",
     "BELMOND",
@@ -307,7 +315,12 @@ select g.id, g.organisation_id, 1, $r0${
     "Tanneries Roux",
     "White 1921"
   ]
-}$r0$::jsonb, 'depart', now() from g
+}$r0$::jsonb
+  || jsonb_build_object('familles_exclues_empreintes', jsonb_build_array(
+    encode(extensions.hmac(upper(btrim('ARNAULT')), current_setting('cartofr.cle_empreinte'), 'sha256'), 'hex')
+  )),
+  'depart', now()
+from g
 on conflict (groupe_id, version) do nothing;
 
 -- vinci : config/vinci.json
@@ -327,7 +340,8 @@ with g as (
     )
 )
 insert into public.reglages (groupe_id, organisation_id, version, contenu, origine, valide_le)
-select g.id, g.organisation_id, 1, $r0${
+select g.id, g.organisation_id, 1,
+  $r0${
   "groupe": "VINCI",
   "tete": "552037806",
   "marques_sures": [
@@ -406,7 +420,6 @@ select g.id, g.organisation_id, 1, $r0${
     "Consortium Stade de France"
   ],
   "exclus": [],
-  "familles_exclues": [],
   "marques_sures_homonymes": [
     "ASF",
     "CITEOS",
@@ -460,5 +473,8 @@ select g.id, g.organisation_id, 1, $r0${
     "Aeroports du Grand Ouest",
     "VINCI Stadium"
   ]
-}$r0$::jsonb, 'depart', now() from g
+}$r0$::jsonb
+  || jsonb_build_object('familles_exclues_empreintes', '[]'::jsonb),
+  'depart', now()
+from g
 on conflict (groupe_id, version) do nothing;

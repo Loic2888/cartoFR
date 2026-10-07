@@ -30,6 +30,7 @@ from psycopg import sql
 from psycopg.types.json import Jsonb
 
 from cartofr.db import VARIABLE_URL, connecter
+from cartofr.empreinte import VARIABLE_CLE, empreinte
 
 RACINE = Path(__file__).resolve().parents[2]
 SEED = RACINE / "supabase" / "seed" / "reglages_depart.sql"
@@ -41,6 +42,8 @@ TABLES = TABLES_SOCLE + TABLES_CARTOS
 
 # Les réglages de départ : fichier de config → tête du groupe.
 CONFIGS_DEPART = {"lvmh": "775670417", "vinci": "552037806", "cmaf": "588505354"}
+# Clé d'empreinte des familles exclues : la même que celle du seed déjà joué (CI).
+CLE_EMPREINTE = os.environ.get(VARIABLE_CLE, "cle-locale-tests")
 
 Connexion = psycopg.Connection[tuple[Any, ...]]
 
@@ -462,6 +465,7 @@ def test_le_seed_charge_les_reglages_de_depart_valides(conn: Connexion) -> None:
     il est idempotent, et le test passe que la base l'ait déjà reçu (CI) ou non.
     """
     script = SEED.read_text(encoding="utf-8")
+    conn.execute("select set_config('cartofr.cle_empreinte', %s, true)", (CLE_EMPREINTE,))
     conn.execute(script.encode())
     conn.execute(script.encode())
 
@@ -480,7 +484,10 @@ def test_le_seed_charge_les_reglages_de_depart_valides(conn: Connexion) -> None:
     assert len(lignes) == len(par_tete), "une seule version 1 par groupe"
     assert set(par_tete) == set(CONFIGS_DEPART.values())
     for fichier, tete in CONFIGS_DEPART.items():
-        attendu = json.loads((RACINE / "config" / f"{fichier}.json").read_text(encoding="utf-8"))
+        config = json.loads((RACINE / "config" / f"{fichier}.json").read_text(encoding="utf-8"))
+        # Garde-fou 6 : le nom de famille sort, seule son empreinte entre.
+        familles = config.pop("familles_exclues", [])
+        attendu = config | {"familles_exclues_empreintes": [empreinte(n, CLE_EMPREINTE) for n in familles]}
         version, origine, validee, contenu = par_tete[tete]
         assert (version, origine, validee) == (1, "depart", True), fichier
         assert contenu == attendu, fichier
@@ -492,3 +499,31 @@ def test_le_seed_charge_les_reglages_de_depart_valides(conn: Connexion) -> None:
         "where r.organisation_id = %s and r.version = 1",
         (youno,),
     )
+
+
+def test_un_nom_de_famille_en_clair_est_refuse(conn: Connexion, monde: Monde) -> None:
+    """Garde-fou 6 : la base refuse `familles_exclues` en clair dans un réglage."""
+    a = monde.org_a
+    with pytest.raises(psycopg.errors.CheckViolation):
+        conn.execute(
+            "insert into public.reglages (groupe_id, organisation_id, version, contenu) "
+            "values (%s, %s, 99, %s)",
+            (monde.groupes[a], a, Jsonb({"familles_exclues": ["NOM FICTIF"]})),
+        )
+
+
+def test_aucun_nom_de_famille_des_configs_en_base(conn: Connexion) -> None:
+    """Garde-fou 6 : après le seed, aucun nom de `familles_exclues` n'apparaît dans reglages."""
+    conn.execute("select set_config('cartofr.cle_empreinte', %s, true)", (CLE_EMPREINTE,))
+    conn.execute(SEED.read_text(encoding="utf-8").encode())
+    noms = {
+        str(n).strip().upper()
+        for fichier in CONFIGS_DEPART
+        for n in json.loads((RACINE / "config" / f"{fichier}.json").read_text(encoding="utf-8")).get(
+            "familles_exclues", []
+        )
+    }
+    assert noms, "les configs de départ doivent contenir au moins une famille exclue"
+    contenus = [r[0] for r in conn.execute("select upper(contenu::text) from public.reglages")]
+    for nom in noms:
+        assert not any(nom in c for c in contenus)

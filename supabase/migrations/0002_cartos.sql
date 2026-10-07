@@ -59,6 +59,10 @@ create table public.reglages (
   valide_par uuid references auth.users (id) on delete set null,
   -- Pas de validateur sans date de validation.
   check (valide_par is null or valide_le is not null),
+  -- Garde-fou 6 : les noms de famille exclus ne sont jamais en clair. Seules
+  -- leurs empreintes HMAC (`familles_exclues_empreintes`, voir
+  -- worker/cartofr/empreinte.py) entrent dans le contenu.
+  constraint reglages_sans_famille_en_clair check (not (contenu ? 'familles_exclues')),
   unique (groupe_id, version),
   -- Cible de la clé étrangère composée de cartos.
   unique (id, groupe_id, organisation_id),

@@ -38,6 +38,13 @@ ENTETE = f"""\
 -- l'app : origine 'depart', valide_le posé, valide_par nul (voir le
 -- commentaire de public.reglages dans 0002_cartos.sql).
 --
+-- Familles exclues (garde-fou 6) : `familles_exclues` (noms de famille) ne
+-- passe jamais en clair dans la base. Le seed stocke à la place
+-- `familles_exclues_empreintes`, HMAC-SHA256 de upper(btrim(nom)) calculé avec
+-- la clé du serveur, lue dans le réglage de session `cartofr.cle_empreinte`
+-- (psql : PGOPTIONS="-c cartofr.cle_empreinte=$CARTOFR_CLE_EMPREINTE").
+-- Sans ce réglage, le seed échoue au lieu d'écrire un nom ou une empreinte vide.
+--
 -- Idempotent : rejouer ce fichier ne change rien. Il crée l'organisation
 -- {ORGANISATION} si aucune n'existe, et sinon prend la plus ancienne de ce nom.
 -- À jouer après les migrations, en une transaction : psql -v ON_ERROR_STOP=1 -1 -f
@@ -47,6 +54,19 @@ ENTETE = f"""\
 def _litteral(texte: str) -> str:
     """Chaîne SQL entre apostrophes, apostrophes doublées."""
     return "'" + texte.replace("'", "''") + "'"
+
+
+def _empreintes_sql(familles: list[str]) -> str:
+    """Tableau jsonb des empreintes des familles exclues, calculées par Postgres."""
+    if not familles:
+        return "'[]'::jsonb"
+    elements = ",\n    ".join(
+        "encode(extensions.hmac(upper(btrim("
+        + _litteral(nom)
+        + ")), current_setting('cartofr.cle_empreinte'), 'sha256'), 'hex')"
+        for nom in familles
+    )
+    return f"jsonb_build_array(\n    {elements}\n  )"
 
 
 def _dollar(texte: str) -> str:
@@ -86,7 +106,12 @@ where not exists (select 1 from public.organisations where nom = {org});
     for fichier, contenu in configs:
         tete = _litteral(str(contenu["tete"]))
         nom = _litteral(str(contenu["groupe"]))
-        json_texte = json.dumps(contenu, ensure_ascii=False, indent=2)
+        # Les noms de famille sortent du contenu : seules leurs empreintes entrent en base.
+        sans_familles = {k: v for k, v in contenu.items() if k != "familles_exclues"}
+        brut = contenu.get("familles_exclues") or []
+        familles = [str(n) for n in brut] if isinstance(brut, list) else []
+        json_texte = json.dumps(sans_familles, ensure_ascii=False, indent=2)
+        empreintes = _empreintes_sql(familles)
         blocs.append(
             f"""-- {fichier} : config/{fichier}.json
 with org as (
@@ -105,7 +130,11 @@ with g as (
     )
 )
 insert into public.reglages (groupe_id, organisation_id, version, contenu, origine, valide_le)
-select g.id, g.organisation_id, 1, {_dollar(json_texte)}::jsonb, 'depart', now() from g
+select g.id, g.organisation_id, 1,
+  {_dollar(json_texte)}::jsonb
+  || jsonb_build_object('familles_exclues_empreintes', {empreintes}),
+  'depart', now()
+from g
 on conflict (groupe_id, version) do nothing;
 """
         )
