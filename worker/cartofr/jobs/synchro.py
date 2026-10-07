@@ -57,6 +57,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, timedelta
@@ -126,6 +127,30 @@ def decalage() -> int:
     except ValueError:
         valeur = 1
     return max(valeur, 1)
+
+
+ESSAIS_OUVERTURE = 12
+PAUSE_OUVERTURE_S = 10.0
+
+
+def ouvrir_en_ecriture(
+    chemin: Path, essais: int = ESSAIS_OUVERTURE, pause: float = PAUSE_OUVERTURE_S
+) -> duckdb.DuckDBPyConnection:
+    """Ouvre le registre en écriture, en réessayant tant qu'un lecteur le tient.
+
+    Le service de recherche (T019) ouvre le registre en lecture 1 à 3 s par
+    requête ; DuckDB refuse alors l'écriture. On réessaie (2 min par défaut)
+    avant de déclarer la nuit en échec.
+    """
+    for essai in range(1, essais + 1):
+        try:
+            return duckdb.connect(str(chemin))
+        except duckdb.Error:
+            if essai == essais:
+                raise
+            log.info("registre occupé, nouvel essai %s/%s dans %s s", essai + 1, essais, pause)
+            time.sleep(pause)
+    raise AssertionError("inatteignable")
 
 
 def veille_a_paris(maintenant: datetime) -> date:
@@ -405,7 +430,7 @@ def travail_synchro(ctx: Contexte) -> None:
         _publier_echec(conn, passage, MESSAGE_REGISTRE_ABSENT)
         raise SynchroEnEchec(MESSAGE_REGISTRE_ABSENT)
     try:
-        registre = duckdb.connect(str(chemin))
+        registre = ouvrir_en_ecriture(chemin)
     except duckdb.Error as exc:
         _publier_echec(conn, passage, MESSAGE_REGISTRE_OCCUPE)
         raise SynchroEnEchec(MESSAGE_REGISTRE_OCCUPE) from exc

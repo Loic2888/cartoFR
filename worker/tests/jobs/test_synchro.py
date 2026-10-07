@@ -605,3 +605,32 @@ def test_decalage_reglable(monkeypatch: pytest.MonkeyPatch, brut: str, attendu: 
     monkeypatch.setenv(synchro.VARIABLE_DECALAGE, brut)
     midi = datetime(2026, 10, 7, 12, 0, tzinfo=synchro.FUSEAU)
     assert synchro.veille_a_paris(midi) == date(2026, 10, 7) - timedelta(days=attendu)
+
+
+def test_ouverture_reessaie_tant_qu_un_lecteur_tient_le_registre(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Un lecteur bref (recherche T019) ne fait pas échouer la synchro : on réessaie."""
+    import duckdb
+
+    from cartofr.jobs import synchro
+
+    chemin = tmp_path / "registre.duckdb"
+    duckdb.connect(str(chemin)).close()
+    vrai = duckdb.connect
+    appels = {"n": 0}
+
+    def connect_occupe(*args: object, **kwargs: object) -> duckdb.DuckDBPyConnection:
+        appels["n"] += 1
+        if appels["n"] < 3:
+            raise duckdb.IOException("Could not set lock on file")
+        return vrai(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(synchro.duckdb, "connect", connect_occupe)
+    con = synchro.ouvrir_en_ecriture(chemin, essais=5, pause=0)
+    con.close()
+    assert appels["n"] == 3
+
+    appels["n"] = -100
+    with pytest.raises(duckdb.IOException):
+        synchro.ouvrir_en_ecriture(chemin, essais=3, pause=0)
