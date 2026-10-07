@@ -54,8 +54,8 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 - [x] `T019` [P] — Chercher et choisir la tête d'un groupe
 - [x] `T020` [P] — Saisir, versionner et valider les réglages
 - [x] `T021` — Lancer une carto et enregistrer le résultat
-- [ ] `T022` [P] — Afficher l'arbre du groupe avec ses preuves
-- [ ] `T023` [P] — Exporter la carto en CSV, sans aucun nom de personne
+- [x] `T022` [P] — Afficher l'arbre du groupe avec ses preuves
+- [x] `T023` [P] — Exporter la carto en CSV, sans aucun nom de personne
 - [ ] `T024` — Faire la recette du MVP
 
 **Point de contrôle** : un consultant se connecte, cherche « LVMH », valide ses réglages, lance la carto, parcourt l'arbre au clavier et sur mobile, puis exporte un CSV sans aucun nom de personne. Le tout en moins de 30 minutes, avec au moins les scores du prototype.
@@ -83,6 +83,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 - [ ] `T033` — Faire entrer une marque sûre même avec un mandat « Autre »
 - [ ] `T034` — Exclure les comités même avec un nom accentué
 - [ ] `T035` — Atteindre le point fixe au-delà de 8 niveaux, ou le signaler
+- [ ] `T036` — Garder un niveau cohérent avec la maison mère après une boucle coupée
 
 ## Phase 9 : Finitions
 
