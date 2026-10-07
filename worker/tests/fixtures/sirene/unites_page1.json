@@ -1,0 +1,31 @@
+{
+  "header": {"statut": 200, "message": "OK", "total": 6, "debut": 0, "nombre": 3, "curseur": "*", "curseurSuivant": "CURSEUR-2"},
+  "unitesLegales": [
+    {
+      "siren": "000000001",
+      "statutDiffusionUniteLegale": "O",
+      "dateCreationUniteLegale": "2001-02-03",
+      "periodesUniteLegale": [
+        {"dateFin": null, "dateDebut": "2020-01-01", "etatAdministratifUniteLegale": "A", "denominationUniteLegale": "SOCIETE ALPHA", "categorieJuridiqueUniteLegale": "5710"},
+        {"dateFin": "2019-12-31", "dateDebut": "2001-02-03", "etatAdministratifUniteLegale": "A", "denominationUniteLegale": "ALPHA ANCIEN", "categorieJuridiqueUniteLegale": "5499"}
+      ]
+    },
+    {
+      "siren": "000000002",
+      "statutDiffusionUniteLegale": "O",
+      "dateCreationUniteLegale": "2010-05-06",
+      "periodesUniteLegale": [
+        {"dateFin": null, "dateDebut": "2026-09-30", "etatAdministratifUniteLegale": "C", "denominationUniteLegale": "SOCIETE BETA", "categorieJuridiqueUniteLegale": "5499"},
+        {"dateFin": "2026-09-29", "dateDebut": "2010-05-06", "etatAdministratifUniteLegale": "A", "denominationUniteLegale": "SOCIETE BETA", "categorieJuridiqueUniteLegale": "5499"}
+      ]
+    },
+    {
+      "siren": "000000003",
+      "statutDiffusionUniteLegale": "P",
+      "dateCreationUniteLegale": "2015-07-08",
+      "periodesUniteLegale": [
+        {"dateFin": null, "dateDebut": "2015-07-08", "etatAdministratifUniteLegale": "A", "denominationUniteLegale": "[ND]", "categorieJuridiqueUniteLegale": "5710"}
+      ]
+    }
+  ]
+}
