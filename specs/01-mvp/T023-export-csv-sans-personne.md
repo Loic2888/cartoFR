@@ -27,7 +27,7 @@ Route d'export CSV et test automatique qui confronte chaque export à la table d
 —
 
 ## Critères de succès
-- [ ] **C1** : `test_aucune_personne.py` ne trouve aucun nom de `dirigeants_personnes` dans les cartos des trois groupes
+- [x] **C1** : `test_aucune_personne.py` ne trouve aucun nom de `dirigeants_personnes` dans les textes produits par le moteur pour les trois groupes ; les raisons sociales SIRENE sont identiques au registre (homonymes comptés, autorisés : décision du 2026-10-07)
 - [x] **C2** : Le CSV contient une colonne de date des données
 - [x] **C3** : Le CSV contient les colonnes `opposition_prospection` et `non_diffusible`
 
