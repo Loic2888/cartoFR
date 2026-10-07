@@ -324,8 +324,10 @@ class _Moteur:
             if (people_ok and directs) or brand or addr:
                 return "mandat au registre et indice indépendant"
             return None  # participation sans contrôle
-        if weak:
-            return "mandat 'Autre' et deux indices" if others >= 2 else None
+        # Un mandat « Autre » est une règle de plus, pas un veto : sans deux indices, la société reste
+        # jugée par les règles suivantes, comme si ce mandat n'existait pas (T033).
+        if weak and others >= 2:
+            return "mandat 'Autre' et deux indices"
         sure_brands = [d for k, d in ev if k == "marque_sure"]
 
         def bare(b: str) -> bool:

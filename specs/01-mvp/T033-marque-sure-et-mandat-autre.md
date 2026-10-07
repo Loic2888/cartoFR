@@ -28,9 +28,9 @@ Corriger l'ordre des règles pour qu'un mandat faible n'empêche pas une autre r
 Pas de régression silencieuse (principe 5) : un score qui baisse ou des « en plus » qui montent nettement ne se rendent pas sans le dire.
 
 ## Critères de succès
-- [ ] **C1** : `test_marque_sure_et_mandat_autre` passe sans `xfail`
-- [ ] **C2** : `rapport.md` donne, datés, les scores LVMH, VINCI et CMAF avant et après la correction, et explique tout écart
-- [ ] **C3** : Aucun score ne baisse sous ceux du 2026-10-06 (154/172, 813/1 007, 43/52)
+- [x] **C1** : `test_marque_sure_et_mandat_autre` passe sans `xfail`
+- [x] **C2** : `rapport.md` donne, datés, les scores LVMH, VINCI et CMAF avant et après la correction, et explique tout écart
+- [x] **C3** : Aucun score ne baisse sous ceux du 2026-10-06 (154/172, 813/1 007, 43/52)
 
 ## Tests et validation
 
