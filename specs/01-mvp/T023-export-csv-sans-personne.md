@@ -28,8 +28,8 @@ Route d'export CSV et test automatique qui confronte chaque export à la table d
 
 ## Critères de succès
 - [ ] **C1** : `test_aucune_personne.py` ne trouve aucun nom de `dirigeants_personnes` dans les cartos des trois groupes
-- [ ] **C2** : Le CSV contient une colonne de date des données
-- [ ] **C3** : Le CSV contient les colonnes `opposition_prospection` et `non_diffusible`
+- [x] **C2** : Le CSV contient une colonne de date des données
+- [x] **C3** : Le CSV contient les colonnes `opposition_prospection` et `non_diffusible`
 
 ## Tests et validation
 
