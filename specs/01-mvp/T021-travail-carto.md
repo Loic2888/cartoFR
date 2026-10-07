@@ -19,6 +19,7 @@ Un bouton « Lancer la carto », un type de travail `carto`, l'écriture du rés
 - `worker/tests/jobs/test_carto.py`
 
 ### Fonctionnement attendu
+- Familles exclues : les réglages lus en base portent `familles_exclues_empreintes` ; le moteur compare l'empreinte (`cartofr.empreinte`, clé `CARTOFR_CLE_EMPREINTE`) du nom de chaque dirigeant à cette liste, au lieu de noms en clair. Une carto LVMH lancée depuis l'app doit garder les scores de la non-régression
 - Refus si la version de réglages n'est pas validée
 - `organisation_id` copié du travail
 - Date des données et durée enregistrées

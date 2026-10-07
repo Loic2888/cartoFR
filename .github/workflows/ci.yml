@@ -73,8 +73,23 @@ jobs:
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -1 -f "$f"
           done
 
+      # Données de départ (T018) : réglages historiques des groupes. Le seed doit
+      # être à jour de config/*.json, et passer sur une base migrée.
+      # La clé d'empreinte des familles exclues (garde-fou 6) est factice : base éphémère.
+      - name: Appliquer les données de départ
+        env:
+          PGOPTIONS: -c cartofr.cle_empreinte=cle-ci-seulement
+        run: |
+          .venv/bin/python worker/scripts/generer_seed_reglages.py --check
+          for f in supabase/seed/*.sql; do
+            echo "seed : $f"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -1 -f "$f"
+          done
+
       # CI est défini par GitHub : sans base, le test RLS échoue au lieu d'être ignoré.
       - name: Tests (pytest)
+        env:
+          CARTOFR_CLE_EMPREINTE: cle-ci-seulement
         run: .venv/bin/pytest worker -rs
 
   web:

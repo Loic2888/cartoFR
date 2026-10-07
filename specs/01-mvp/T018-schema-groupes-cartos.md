@@ -28,10 +28,10 @@ Tables `groupes`, `reglages` (versionnés), `cartos`, `carto_societes`, `carto_l
 Pas d'ORM, aucune colonne de personne (principe 6).
 
 ## Critères de succès
-- [ ] **C1** : `0002_cartos.sql` active RLS sur les cinq tables
-- [ ] **C2** : `test_rls.py` vérifie A ne voit pas B sur `cartos` et `reglages`
-- [ ] **C3** : Aucune colonne de nom de personne dans `0002_cartos.sql`
-- [ ] **C4** : Le seed charge les réglages LVMH, VINCI et CMAF comme versions validées
+- [x] **C1** : `0002_cartos.sql` active RLS sur les cinq tables
+- [x] **C2** : `test_rls.py` vérifie A ne voit pas B sur `cartos` et `reglages`
+- [x] **C3** : Aucune colonne de nom de personne dans `0002_cartos.sql`
+- [x] **C4** : Le seed charge les réglages LVMH, VINCI et CMAF comme versions validées
 
 ## Tests et validation
 

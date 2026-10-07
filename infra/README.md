@@ -46,6 +46,15 @@ Chaque fichier passe dans une seule transaction : une erreur n'applique rien
 de ce fichier. Il n'y a pas de suivi des migrations jouées : rejouer une
 migration échoue (« already exists ») sans rien changer.
 
+Puis les données de départ (`supabase/seed/`) : les réglages historiques de
+LVMH, VINCI et CMAF, en version 1 validée de l'organisation Youno. Le seed se
+rejoue sans effet. Il est généré depuis `config/*.json` : après un changement
+de config, relancer `.venv/bin/python worker/scripts/generer_seed_reglages.py`.
+
+```bash
+bash infra/appliquer-migrations.sh supabase/seed/reglages_depart.sql
+```
+
 Tester le cloisonnement RLS (`worker/tests/test_rls.py`) demande une URL vers
 cette base avec le rôle `postgres`. Le port de `db` n'est pas publié : le plus
 simple est une base jetable, comme en CI.
@@ -53,7 +62,7 @@ simple est une base jetable, comme en CI.
 ```bash
 docker run -d --name cartofr-test-db -e POSTGRES_PASSWORD=test-local \
   -p 127.0.0.1:55432:5432 supabase/postgres:15.8.1.060
-for f in supabase/migrations/*.sql; do
+for f in supabase/migrations/*.sql supabase/seed/*.sql; do
   docker exec -i cartofr-test-db psql -U postgres -v ON_ERROR_STOP=1 -q -1 -f - < "$f"
 done
 DATABASE_URL=postgresql://postgres:test-local@127.0.0.1:55432/postgres .venv/bin/pytest worker -rs
