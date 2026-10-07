@@ -153,6 +153,23 @@ export default async function Groupe({ params }: PageProps<"/groupes/[id]">) {
                       {c.avertissement}
                     </p>
                   ) : null}
+                  {c.statut === "terminee" ? (
+                    <p className="mt-2 flex flex-wrap gap-x-6">
+                      <Link href={`/groupes/${groupe.id as string}/cartos/${c.id}`} className={LIEN}>
+                        Voir l&apos;arbre
+                      </Link>
+                      {/* Fichier rendu par une route (T023) : un lien ordinaire. */}
+                      <a href={`/groupes/${groupe.id as string}/cartos/${c.id}/export`} className={LIEN}>
+                        Exporter (CSV)
+                      </a>
+                    </p>
+                  ) : c.statut !== "echec" ? (
+                    <p className="mt-2">
+                      <Link href={`/groupes/${groupe.id as string}/cartos/${c.id}`} className={LIEN}>
+                        Suivre le calcul
+                      </Link>
+                    </p>
+                  ) : null}
                 </li>
               );
             })}

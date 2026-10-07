@@ -29,10 +29,10 @@ Page de carto : arbre dépliable (liste indentée sous 640 px), preuve de chaque
 Affichage seulement : aucune règle du moteur dans `web/` (principe 7).
 
 ## Critères de succès
-- [ ] **C1** : `arbre.test.tsx` vérifie la navigation au clavier (flèches, Entrée)
-- [ ] **C2** : `arbre.tsx` porte `role="tree"`, et chaque nœud `role="treeitem"` et `aria-expanded`
-- [ ] **C3** : Chaque nœud affiche confiance, ciblable et opposition en texte
-- [ ] **C4** : La page affiche la date des données de la carto
+- [x] **C1** : `arbre.test.tsx` vérifie la navigation au clavier (flèches, Entrée)
+- [x] **C2** : `arbre.tsx` porte `role="tree"`, et chaque nœud `role="treeitem"` et `aria-expanded`
+- [x] **C3** : Chaque nœud affiche confiance, ciblable et opposition en texte
+- [x] **C4** : La page affiche la date des données de la carto
 
 ## Tests et validation
 

@@ -41,7 +41,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 - [x] `T011` [P] — Appliquer les changements du RNE au registre *(après T010)*
 - [x] `T012` [P] — Appliquer les changements de SIRENE au registre
 - [x] `T013` — Planifier la synchro nocturne et publier l'état du registre
-- [ ] `T014` — Afficher l'état du registre aux admins
+- [x] `T014` — Afficher l'état du registre aux admins
 - [ ] `T015` — Rattraper le registre et contrôler la fraîcheur
 
 **Point de contrôle** : le registre se met à jour seul chaque nuit. Un admin voit dans l'app la date des données et tout échec, avec sa cause. Le contrôle de fraîcheur trouve 10 changements sur 10 publiés dans les 7 derniers jours.
@@ -53,7 +53,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 - [x] `T018` [P] — Créer les tables des groupes, réglages et cartos
 - [x] `T019` [P] — Chercher et choisir la tête d'un groupe
 - [x] `T020` [P] — Saisir, versionner et valider les réglages
-- [ ] `T021` — Lancer une carto et enregistrer le résultat
+- [x] `T021` — Lancer une carto et enregistrer le résultat
 - [ ] `T022` [P] — Afficher l'arbre du groupe avec ses preuves
 - [ ] `T023` [P] — Exporter la carto en CSV, sans aucun nom de personne
 - [ ] `T024` — Faire la recette du MVP
