@@ -1,0 +1,80 @@
+{
+  "_note": "Noms fictifs, cl\u00e9s de test. Calcul\u00e9 par cartofr.empreinte.empreinte.",
+  "vecteurs": [
+    {
+      "nom": "Dupont",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "5f99130216b04083ffddd01075f3166e4228afad49da698a263033d99053b4e1"
+    },
+    {
+      "nom": "  dupont  ",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "5f99130216b04083ffddd01075f3166e4228afad49da698a263033d99053b4e1"
+    },
+    {
+      "nom": "DUPONT",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "5f99130216b04083ffddd01075f3166e4228afad49da698a263033d99053b4e1"
+    },
+    {
+      "nom": "Lef\u00e8vre",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "53da23e2790dd19d2243964d583c6d905ef81d4d9434cdd674e4ddaf7f0a6457"
+    },
+    {
+      "nom": "lef\u00e8vre",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "53da23e2790dd19d2243964d583c6d905ef81d4d9434cdd674e4ddaf7f0a6457"
+    },
+    {
+      "nom": "\u00d1\u00fa\u00f1ez",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "1f44a10b0a3019260a9b67544fb694bcd460483fa8d9d03f8692d1aa458270f6"
+    },
+    {
+      "nom": "stra\u00dfe",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "48916a6b7e283f779164fbd9bac3d52b1e5239550e321467b47f12599935d861"
+    },
+    {
+      "nom": "NOM FICTIF",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "1417226b0829644d683d6cac20f53652e2a75a6cb6f0e2b440cacd9d9414f71c"
+    },
+    {
+      "nom": "de la Tour-Fictive",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "dc3af8570b5dea395efa5ab17ab9ff054693d5cb6497484b18370e8d4aabced6"
+    },
+    {
+      "nom": "\u0152uvre",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "274b99b73ccb4d4b5189c089aae3ce2cc67baa44de29663537aaeddf51ccf2b5"
+    },
+    {
+      "nom": "\u00a0Dupont\u00a0",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "5f99130216b04083ffddd01075f3166e4228afad49da698a263033d99053b4e1"
+    },
+    {
+      "nom": "\u01c5emal",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "2a65a59601d0508b7b915baaf6b83a3cc0c349b1912eddc7fb26a0ce76d594c9"
+    },
+    {
+      "nom": "\u001c\u0085Dupont\ufeff",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "46cb991c9f321dc68f891965d363d089bd4ff39c5fb6578d444acdaaf9359e8f"
+    },
+    {
+      "nom": "\t\u3000Dupont\u2009\n",
+      "cle": "cle-de-test-FAKE",
+      "empreinte": "5f99130216b04083ffddd01075f3166e4228afad49da698a263033d99053b4e1"
+    },
+    {
+      "nom": "Dupont",
+      "cle": "autre-cle-FAKE",
+      "empreinte": "7eeaf75e48a86418a6fc34bf0caab002c7e816ea3d9a069a62882ada6d89551c"
+    }
+  ]
+}

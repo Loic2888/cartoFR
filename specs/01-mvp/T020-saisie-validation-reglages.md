@@ -32,10 +32,10 @@ Les réglages font la qualité (Equans : 150 fausses sociétés). Ils sont valid
 Le même schéma est vérifié des deux côtés.
 
 ## Critères de succès
-- [ ] **C1** : Les deux schémas acceptent et refusent les mêmes fixtures de `worker/tests/fixtures/reglages/`
-- [ ] **C2** : Une validation qui ne part pas de la dernière version est refusée (test de `actions.ts`)
-- [ ] **C3** : Chaque champ de la page a un `<label>`
-- [ ] **C4** : Chaque version enregistre son auteur et sa date de validation
+- [x] **C1** : Les deux schémas acceptent et refusent les mêmes fixtures de `worker/tests/fixtures/reglages/`
+- [x] **C2** : Une validation qui ne part pas de la dernière version est refusée (test de `actions.ts`)
+- [x] **C3** : Chaque champ de la page a un `<label>`
+- [x] **C4** : Chaque version enregistre son auteur et sa date de validation
 
 ## Tests et validation
 

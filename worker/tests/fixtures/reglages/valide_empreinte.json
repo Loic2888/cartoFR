@@ -1,0 +1,8 @@
+{
+  "groupe": "Groupe Fictif",
+  "tete": "123456789",
+  "familles_exclues_empreintes": [
+    "0000000000000000000000000000000000000000000000000000000000000000",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ]
+}
