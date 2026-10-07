@@ -32,6 +32,36 @@ Le premier build télécharge les polices de l'interface : il faut le réseau.
 Studio et mailpit n'écoutent que sur `127.0.0.1`. Sur le serveur, on passe par
 un tunnel SSH : `ssh -L 3001:127.0.0.1:3001 <serveur>`.
 
+## Appliquer les migrations
+
+Le schéma de l'app est dans `supabase/migrations/`, un fichier SQL par étape,
+joué dans l'ordre des noms. La stack lancée, depuis la racine :
+
+```bash
+bash infra/appliquer-migrations.sh                                  # toutes (base neuve)
+bash infra/appliquer-migrations.sh supabase/migrations/0002_x.sql   # seulement les nouvelles
+```
+
+Chaque fichier passe dans une seule transaction : une erreur n'applique rien
+de ce fichier. Il n'y a pas de suivi des migrations jouées : rejouer une
+migration échoue (« already exists ») sans rien changer.
+
+Tester le cloisonnement RLS (`worker/tests/test_rls.py`) demande une URL vers
+cette base avec le rôle `postgres`. Le port de `db` n'est pas publié : le plus
+simple est une base jetable, comme en CI.
+
+```bash
+docker run -d --name cartofr-test-db -e POSTGRES_PASSWORD=test-local \
+  -p 127.0.0.1:55432:5432 supabase/postgres:15.8.1.060
+for f in supabase/migrations/*.sql; do
+  docker exec -i cartofr-test-db psql -U postgres -v ON_ERROR_STOP=1 -q -1 -f - < "$f"
+done
+DATABASE_URL=postgresql://postgres:test-local@127.0.0.1:55432/postgres .venv/bin/pytest worker -rs
+docker rm -f cartofr-test-db
+```
+
+Sans `DATABASE_URL`, le test est ignoré en local et échoue en CI.
+
 ## Envoyer un lien magique de test
 
 L'inscription est fermée : un lien magique vers une adresse inconnue est
