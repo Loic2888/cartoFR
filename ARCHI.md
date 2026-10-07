@@ -62,9 +62,10 @@ Deux magasins, chacun pour ce qu'il fait bien. C'est la décision centrale (ADR-
 | `liens` | dirigeante → dirigée (SIREN), rôle, source, `debut`, `fin`, `fin_inconnue`. Sans nom du parent (peut être une personne pour un entrepreneur individuel) ni clé primaire (8 148 doublons du stock gardés) | 1,6 M |
 | `dirigeants_personnes` | usage interne au calcul, jamais exporté | 13,1 M |
 | `sieges` | SIRENE : siège, adresse, nom, forme juridique, activité, tranche d'effectif (les `etablissements` ne sont pas encore chargés) | 7,8 M |
+| `unites_legales` | SIRENE, personnes morales seulement (cj 1000 refusée) : dénominations, sigle, forme juridique, activité, effectif, état. Aucune colonne de personne. Lue par la recherche des marques (T016) | 13,1 M |
 | `mises_a_jour` | date, source, volumes ajoutés et fermés, statut | — |
 
-Un lien ou une société qui disparaît reçoit une date `fin`. Il n'y a jamais de `DELETE` (principe 4). Construit par `python -m cartofr.registre.construire` (T007) : 1,4 Go, 27 s, 3 Go de mémoire au plus, le 2026-10-06.
+Un lien ou une société qui disparaît reçoit une date `fin`. Il n'y a jamais de `DELETE` (principe 4). Construit par `python -m cartofr.registre.construire` (T007) : 1,4 Go, 27 s, 3 Go de mémoire au plus, le 2026-10-06 ; 2,4 Go, 1 min 12 s, 3,4 Go de mémoire au plus avec `unites_legales` (T016, 2026-10-07).
 
 **2. La base de l'app — Postgres (Supabase), cloisonnée par RLS**
 | Table | Contenu |

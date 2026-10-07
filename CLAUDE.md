@@ -82,7 +82,7 @@ Les scripts lisent des chemins relatifs : les lancer depuis la racine.
 |---|---|
 | Installer | `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` |
 | Cartographier un groupe | `.venv/bin/python brand_scan.py config/<g>.json && .venv/bin/python engine.py config/<g>.json` |
-| Non-régression | `.venv/bin/python compare.py <g>` pour `lvmh`, `vinci` et `cmaf` (scores ci-dessous) |
+| Non-régression | `CARTOFR_DATA=data CARTOFR_REFERENCES=basile .venv/bin/python worker/scripts/non_regression.py` : moteur du paquet sur `data/registre.duckdb`, `lvmh`, `vinci` et `cmaf` (scores ci-dessous). L'ancien `compare.py <g>` reste pour le prototype |
 | Export skill | `.venv/bin/python to_skill_tables.py config/<g>.json` |
 | Reconstruire les tables | `.venv/bin/python build_sieges.py` puis `.venv/bin/python build_links.py data/rne_stock/<stock>.zip` (~15 min) |
 | Lint / Typecheck / Tests | `.venv/bin/ruff check worker` · `.venv/bin/pyright -p worker` · `.venv/bin/pytest worker` · `npm --prefix web run lint` · `npm --prefix web run typecheck` · `npm --prefix web test` · `npm --prefix web run build` (détail dans `AGENTS.md`) |
