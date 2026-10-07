@@ -48,12 +48,19 @@ services:
       context: ../web
       dockerfile: ../infra/web.Dockerfile
     restart: unless-stopped
+    # Lues à l'exécution, pas au build (T009) : aucune NEXT_PUBLIC_, la même
+    # image sert en local et en production (web/lib/supabase/env.ts).
     environment:
-      # Adresses internes, utilisées côté serveur par T005 (client Supabase).
+      # Adresse interne de Supabase, pour le serveur Next.
       SUPABASE_URL: http://kong:8000
+      # Adresse publique, passée au navigateur s'il lui faut un client Supabase.
+      SUPABASE_PUBLIC_URL: ${API_EXTERNAL_URL}
       SUPABASE_ANON_KEY: ${ANON_KEY}
+      # Invitations (API admin de GoTrue). Serveur seulement, jamais au navigateur.
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      # /connexion : la seule page servie sans session.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/connexion').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -136,8 +143,12 @@ services:
       GOTRUE_SMTP_USER: ${SMTP_USER:-}
       GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
       GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME}
-      # Objets des e-mails en français (règle produit 1). Le corps des
-      # modèles reste celui de GoTrue : à traduire avec l'écran de connexion.
+      # E-mails en français (règle produit 1) : objets ici, corps dans les
+      # modèles servis par web (web/public/modeles-email/, T009). GoTrue les
+      # télécharge à l'envoi ; si web ne répond pas, il retombe sur ses modèles
+      # anglais par défaut. Le lien des modèles mène à /auth/callback de l'app.
+      GOTRUE_MAILER_TEMPLATES_MAGIC_LINK: http://web:3000/modeles-email/lien-magique.html
+      GOTRUE_MAILER_TEMPLATES_INVITE: http://web:3000/modeles-email/invitation.html
       GOTRUE_MAILER_SUBJECTS_MAGIC_LINK: Votre lien de connexion à cartoFR
       GOTRUE_MAILER_SUBJECTS_INVITE: Votre invitation à cartoFR
       GOTRUE_MAILER_SUBJECTS_CONFIRMATION: Confirmez votre adresse pour cartoFR
@@ -250,7 +261,7 @@ services:
     profiles: ["dev"]
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
     healthcheck:
       test: ["CMD", "/mailpit", "readyz"]
       interval: 10s

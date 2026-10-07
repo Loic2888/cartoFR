@@ -33,10 +33,10 @@ Page de connexion, retour du lien, protection des pages, gabarit mobile, invitat
 Server Actions pour les écritures.
 
 ## Critères de succès
-- [ ] **C1** : `web/proxy.ts` redirige vers `/connexion` toute page sans session
-- [ ] **C2** : Les inscriptions libres sont désactivées dans la configuration GoTrue de `infra/`
-- [ ] **C3** : `web/lib/erreurs.ts` traduit les codes d'erreur d'auth, testé par Vitest
-- [ ] **C4** : Le champ e-mail de `web/app/connexion/page.tsx` a un `<label>` associé
+- [x] **C1** : `web/proxy.ts` redirige vers `/connexion` toute page sans session
+- [x] **C2** : Les inscriptions libres sont désactivées dans la configuration GoTrue de `infra/`
+- [x] **C3** : `web/lib/erreurs.ts` traduit les codes d'erreur d'auth, testé par Vitest
+- [x] **C4** : Le champ e-mail de `web/app/connexion/page.tsx` a un `<label>` associé
 
 ## Tests et validation
 

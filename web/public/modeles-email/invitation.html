@@ -1,0 +1,25 @@
+<!-- Modèle GoTrue : invitation d'un membre (T009). Lu par le service auth (infra/docker-compose.yml). -->
+<!doctype html>
+<html lang="fr">
+  <body style="margin:0;padding:24px;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;background:#ffffff;">
+    <h1 style="font-size:20px;margin:0 0 16px;">Invitation à cartoFR</h1>
+    <p style="font-size:16px;line-height:1.5;margin:0 0 16px;">Bonjour,</p>
+    <p style="font-size:16px;line-height:1.5;margin:0 0 24px;">
+      Vous êtes invité à rejoindre cartoFR, l'outil de cartographie des groupes d'entreprises
+      françaises. Ouvrez ce lien pour accepter l'invitation et vous connecter :
+    </p>
+    <p style="margin:0 0 24px;">
+      <a href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&amp;type=invite"
+         style="display:inline-block;padding:12px 20px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:16px;">
+        Accepter l'invitation
+      </a>
+    </p>
+    <p style="font-size:14px;line-height:1.5;color:#4a4a4a;margin:0 0 8px;">
+      Ensuite, vous vous connecterez avec votre adresse e-mail : un nouveau lien vous sera envoyé
+      à chaque fois, sans mot de passe.
+    </p>
+    <p style="font-size:14px;line-height:1.5;color:#4a4a4a;margin:0;">
+      Vous ne vous attendiez pas à cette invitation ? Ignorez cet e-mail.
+    </p>
+  </body>
+</html>
