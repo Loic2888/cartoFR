@@ -32,15 +32,15 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 
 - [x] `T006` [P] — Créer le schéma de base et le cloisonnement RLS
 - [x] `T007` [P] — Construire `registre.duckdb` avec dates de début et de fin
-- [ ] `T008` — Écrire la file de travaux du worker *(après T006)*
-- [ ] `T009` [P] — Mettre en place la connexion par lien magique et le gabarit *(après T006)*
+- [x] `T008` — Écrire la file de travaux du worker *(après T006)*
+- [x] `T009` [P] — Mettre en place la connexion par lien magique et le gabarit *(après T006)*
 
 ## Phase 3 : US1 — La base se met à jour toute seule (P1) 🎯 MVP
 
 - [x] `T010` [P] — Mesurer le quota réel de l'API diff de l'INPI *(peut commencer dès T001)*
-- [ ] `T011` [P] — Appliquer les changements du RNE au registre *(après T010)*
-- [ ] `T012` [P] — Appliquer les changements de SIRENE au registre
-- [ ] `T013` — Planifier la synchro nocturne et publier l'état du registre
+- [x] `T011` [P] — Appliquer les changements du RNE au registre *(après T010)*
+- [x] `T012` [P] — Appliquer les changements de SIRENE au registre
+- [x] `T013` — Planifier la synchro nocturne et publier l'état du registre
 - [ ] `T014` — Afficher l'état du registre aux admins
 - [ ] `T015` — Rattraper le registre et contrôler la fraîcheur
 
@@ -48,11 +48,11 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 
 ## Phase 4 : US2 — Cartographier un groupe (P1) 🎯 MVP
 
-- [ ] `T016` [P] — Ranger le moteur dans le paquet et le brancher sur `registre.duckdb` *(peut commencer dès T007)*
-- [ ] `T017` — Tester chaque règle qui décide *(après T016)*
-- [ ] `T018` [P] — Créer les tables des groupes, réglages et cartos
-- [ ] `T019` [P] — Chercher et choisir la tête d'un groupe
-- [ ] `T020` [P] — Saisir, versionner et valider les réglages
+- [x] `T016` [P] — Ranger le moteur dans le paquet et le brancher sur `registre.duckdb` *(peut commencer dès T007)*
+- [x] `T017` — Tester chaque règle qui décide *(après T016)*
+- [x] `T018` [P] — Créer les tables des groupes, réglages et cartos
+- [x] `T019` [P] — Chercher et choisir la tête d'un groupe
+- [x] `T020` [P] — Saisir, versionner et valider les réglages
 - [ ] `T021` — Lancer une carto et enregistrer le résultat
 - [ ] `T022` [P] — Afficher l'arbre du groupe avec ses preuves
 - [ ] `T023` [P] — Exporter la carto en CSV, sans aucun nom de personne
@@ -77,6 +77,12 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 ## Phase 8 : US6 — Site web et page LinkedIn (P3)
 
 - [ ] `T030` [P] — Ajouter le domaine et la page LinkedIn des sociétés *(`needs-spec` : source à choisir)*
+
+## Phase 8b : Moteur — défauts trouvés par T017 (P1, jamais en parallèle : même fichier)
+
+- [ ] `T033` — Faire entrer une marque sûre même avec un mandat « Autre »
+- [ ] `T034` — Exclure les comités même avec un nom accentué
+- [ ] `T035` — Atteindre le point fixe au-delà de 8 niveaux, ou le signaler
 
 ## Phase 9 : Finitions
 
