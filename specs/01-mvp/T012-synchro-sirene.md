@@ -28,9 +28,9 @@ Lecture de l'API Sirene par date de dernier traitement, mise à jour de `societe
 Mêmes règles que la synchro RNE : transaction, fermeture.
 
 ## Critères de succès
-- [ ] **C1** : `test_synchro_sirene.py` vérifie création, modification et cessation d'une société
-- [ ] **C2** : `test_synchro_sirene.py` vérifie le passage d'une société en non diffusible
-- [ ] **C3** : Le client respecte 30 requêtes par minute (test avec horloge simulée)
+- [x] **C1** : `test_synchro_sirene.py` vérifie création, modification et cessation d'une société
+- [x] **C2** : `test_synchro_sirene.py` vérifie le passage d'une société en non diffusible
+- [x] **C3** : Le client respecte 30 requêtes par minute (test avec horloge simulée)
 
 ## Tests et validation
 

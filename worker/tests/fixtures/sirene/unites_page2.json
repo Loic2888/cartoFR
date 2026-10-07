@@ -1,0 +1,29 @@
+{
+  "header": {"statut": 200, "message": "OK", "total": 6, "debut": 3, "nombre": 3, "curseur": "CURSEUR-2", "curseurSuivant": "CURSEUR-2"},
+  "unitesLegales": [
+    {
+      "siren": "000000004",
+      "statutDiffusionUniteLegale": "O",
+      "dateCreationUniteLegale": "2026-10-01",
+      "periodesUniteLegale": [
+        {"dateFin": null, "dateDebut": "2026-10-01", "etatAdministratifUniteLegale": "A", "denominationUniteLegale": "SOCIETE DELTA NOUVELLE", "categorieJuridiqueUniteLegale": "5710"}
+      ]
+    },
+    {
+      "siren": "000000005",
+      "statutDiffusionUniteLegale": "O",
+      "dateCreationUniteLegale": "2026-10-01",
+      "periodesUniteLegale": [
+        {"dateFin": null, "dateDebut": "2026-10-01", "etatAdministratifUniteLegale": "A", "denominationUniteLegale": null, "categorieJuridiqueUniteLegale": "1000"}
+      ]
+    },
+    {
+      "siren": "000000006",
+      "statutDiffusionUniteLegale": "O",
+      "dateCreationUniteLegale": "1999-01-01",
+      "periodesUniteLegale": [
+        {"dateFin": null, "dateDebut": "2005-01-01", "etatAdministratifUniteLegale": "C", "denominationUniteLegale": "SOCIETE EPSILON DISPARUE", "categorieJuridiqueUniteLegale": "5499"}
+      ]
+    }
+  ]
+}

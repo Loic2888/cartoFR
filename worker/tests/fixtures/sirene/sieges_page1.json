@@ -1,0 +1,41 @@
+{
+  "header": {"statut": 200, "message": "OK", "total": 4, "debut": 0, "nombre": 4, "curseur": "*", "curseurSuivant": "*"},
+  "etablissements": [
+    {
+      "siren": "000000001",
+      "siret": "00000000100021",
+      "etablissementSiege": true,
+      "statutDiffusionEtablissement": "O",
+      "uniteLegale": {"etatAdministratifUniteLegale": "A", "categorieJuridiqueUniteLegale": "5710", "denominationUniteLegale": "SOCIETE ALPHA", "activitePrincipaleUniteLegale": "70.10Z", "trancheEffectifsUniteLegale": "21"},
+      "adresseEtablissement": {"numeroVoieEtablissement": "12", "indiceRepetitionDernierNumeroVoieEtablissement": "b", "typeVoieEtablissement": "RUE", "libelleVoieEtablissement": "des Exemples", "codePostalEtablissement": "75001", "libelleCommuneEtablissement": "PARIS 1"},
+      "periodesEtablissement": [{"dateFin": null, "dateDebut": "2026-10-05", "etatAdministratifEtablissement": "A"}]
+    },
+    {
+      "siren": "000000004",
+      "siret": "00000000400011",
+      "etablissementSiege": true,
+      "statutDiffusionEtablissement": "O",
+      "uniteLegale": {"etatAdministratifUniteLegale": "A", "categorieJuridiqueUniteLegale": "5710", "denominationUniteLegale": "SOCIETE DELTA NOUVELLE", "activitePrincipaleUniteLegale": "62.01Z", "trancheEffectifsUniteLegale": null},
+      "adresseEtablissement": {"numeroVoieEtablissement": null, "indiceRepetitionDernierNumeroVoieEtablissement": null, "typeVoieEtablissement": "ZI", "libelleVoieEtablissement": "DE LA FORET FICTIVE", "codePostalEtablissement": "69001", "libelleCommuneEtablissement": "LYON 1"},
+      "periodesEtablissement": [{"dateFin": null, "dateDebut": "2026-10-01", "etatAdministratifEtablissement": "A"}]
+    },
+    {
+      "siren": "000000002",
+      "siret": "00000000200015",
+      "etablissementSiege": true,
+      "statutDiffusionEtablissement": "O",
+      "uniteLegale": {"etatAdministratifUniteLegale": "C", "categorieJuridiqueUniteLegale": "5499", "denominationUniteLegale": "SOCIETE BETA", "activitePrincipaleUniteLegale": "46.90Z", "trancheEffectifsUniteLegale": "NN"},
+      "adresseEtablissement": {"numeroVoieEtablissement": "1", "indiceRepetitionDernierNumeroVoieEtablissement": null, "typeVoieEtablissement": "AVENUE", "libelleVoieEtablissement": "DU TEST", "codePostalEtablissement": "33000", "libelleCommuneEtablissement": "BORDEAUX"},
+      "periodesEtablissement": [{"dateFin": null, "dateDebut": "2026-09-30", "etatAdministratifEtablissement": "F"}]
+    },
+    {
+      "siren": "000000003",
+      "siret": "00000000300019",
+      "etablissementSiege": true,
+      "statutDiffusionEtablissement": "P",
+      "uniteLegale": {"etatAdministratifUniteLegale": "A", "categorieJuridiqueUniteLegale": "5710", "denominationUniteLegale": "[ND]", "activitePrincipaleUniteLegale": "68.20B", "trancheEffectifsUniteLegale": "NN"},
+      "adresseEtablissement": {"numeroVoieEtablissement": "[ND]", "indiceRepetitionDernierNumeroVoieEtablissement": "[ND]", "typeVoieEtablissement": "[ND]", "libelleVoieEtablissement": "[ND]", "codePostalEtablissement": "13001", "libelleCommuneEtablissement": "MARSEILLE 1"},
+      "periodesEtablissement": [{"dateFin": null, "dateDebut": "2015-07-08", "etatAdministratifEtablissement": "A"}]
+    }
+  ]
+}
