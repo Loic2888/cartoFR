@@ -17,4 +17,7 @@ out/
 CLAUDE.local.md
 .claude/settings.local.json
 
+# Worktrees des agents lancés en parallèle (apex, isolation worktree)
+.claude/worktrees/
+
 .DS_Store
