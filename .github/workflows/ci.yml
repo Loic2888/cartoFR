@@ -73,6 +73,16 @@ jobs:
             psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -1 -f "$f"
           done
 
+      # Données de départ (T018) : réglages historiques des groupes. Le seed doit
+      # être à jour de config/*.json, et passer sur une base migrée.
+      - name: Appliquer les données de départ
+        run: |
+          .venv/bin/python worker/scripts/generer_seed_reglages.py --check
+          for f in supabase/seed/*.sql; do
+            echo "seed : $f"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -1 -f "$f"
+          done
+
       # CI est défini par GitHub : sans base, le test RLS échoue au lieu d'être ignoré.
       - name: Tests (pytest)
         run: .venv/bin/pytest worker -rs

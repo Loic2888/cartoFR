@@ -4,6 +4,7 @@
 # Usage, depuis la racine du dépôt, la stack lancée (voir infra/README.md) :
 #   bash infra/appliquer-migrations.sh                                   # toutes, dans l'ordre
 #   bash infra/appliquer-migrations.sh supabase/migrations/0002_x.sql    # seulement celles-ci
+#   bash infra/appliquer-migrations.sh supabase/seed/reglages_depart.sql # données de départ (rejouables)
 #
 # Chaque fichier passe dans une seule transaction : une erreur annule ce
 # fichier entier et arrête le script. Aucun suivi des migrations déjà jouées :
