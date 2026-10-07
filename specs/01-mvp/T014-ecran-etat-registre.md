@@ -27,9 +27,9 @@ Une page admin avec la date des données, le dernier passage, son statut, ses vo
 Lecture seule.
 
 ## Critères de succès
-- [ ] **C1** : `web/app/(app)/admin/registre/page.tsx` n'est accessible qu'au rôle admin
-- [ ] **C2** : Un échec affiche sa date et sa cause (test Vitest de `etat-registre.tsx`)
-- [ ] **C3** : Le statut est porté par un texte, pas seulement par une couleur
+- [x] **C1** : `web/app/(app)/admin/registre/page.tsx` n'est accessible qu'au rôle admin
+- [x] **C2** : Un échec affiche sa date et sa cause (test Vitest de `etat-registre.tsx`)
+- [x] **C3** : Le statut est porté par un texte, pas seulement par une couleur
 
 ## Tests et validation
 
