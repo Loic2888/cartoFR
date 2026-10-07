@@ -30,10 +30,10 @@ Route interne `/recherche` du worker, page « Nouveau groupe », création du gr
 Seul pont entre l'interface et le registre (ARCHI, Recherche de la tête).
 
 ## Critères de succès
-- [ ] **C1** : `test_api_recherche.py` vérifie la recherche par nom et par SIREN
-- [ ] **C2** : `test_api_recherche.py` vérifie que la réponse ne contient aucun champ de personne
-- [ ] **C3** : `infra/docker-compose.yml` ne publie aucun port pour le worker
-- [ ] **C4** : La page affiche « Aucune société trouvée » et propose la saisie d'un SIREN quand rien ne correspond
+- [x] **C1** : `test_api_recherche.py` vérifie la recherche par nom et par SIREN
+- [x] **C2** : `test_api_recherche.py` vérifie que la réponse ne contient aucun champ de personne
+- [x] **C3** : `infra/docker-compose.yml` ne publie aucun port pour le worker
+- [x] **C4** : La page affiche « Aucune société trouvée » et propose la saisie d'un SIREN quand rien ne correspond
 
 ## Tests et validation
 

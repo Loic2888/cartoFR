@@ -58,6 +58,10 @@ services:
       SUPABASE_ANON_KEY: ${ANON_KEY}
       # Invitations (API admin de GoTrue). Serveur seulement, jamais au navigateur.
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      # Recherche de la tête dans le registre (T019) : réseau Docker seulement.
+      RECHERCHE_URL: http://recherche:8080
+      # Empreinte HMAC des familles exclues, calculée côté serveur (T020).
+      CARTOFR_CLE_EMPREINTE: ${CARTOFR_CLE_EMPREINTE}
     healthcheck:
       # /connexion : la seule page servie sans session.
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/connexion').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
@@ -71,16 +75,53 @@ services:
       context: ../worker
       dockerfile: ../infra/worker.Dockerfile
     restart: unless-stopped
-    # Attente passive : remplacé par `python -m cartofr` en T008.
-    command: ["python", "-c", "import cartofr, signal; print('worker cartofr prêt', flush=True); signal.pause()"]
+    # File de travaux (T008) : un travail à la fois, arrêt propre sur SIGTERM.
+    command: ["python", "-m", "cartofr"]
     env_file:
       # Identifiants INPI et INSEE, à la racine du dépôt (hors git).
       - path: ../.env
         required: false
+    environment:
+      # Connexion directe à Postgres, rôle postgres (contourne RLS) : la file de
+      # travaux et les verrous consultatifs ne passent pas par un pooler. Prime
+      # sur un DATABASE_URL du .env de la racine (fait pour le dev hors Docker).
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+      CARTOFR_DATA: /app/data
+      # Empreinte HMAC des familles exclues (moteur, T021).
+      CARTOFR_CLE_EMPREINTE: ${CARTOFR_CLE_EMPREINTE}
+      # Synchro de nuit (T013) : sans CARTOFR_SYNCHRO_HEURE, aucune synchro ne part.
+      CARTOFR_SYNCHRO_HEURE: "02:00"
+      # Jours de retard rattrapés au plus en une nuit (SC-003 : 7 jours).
+      CARTOFR_SYNCHRO_JOURS_MAX: "7"
+      # Lit jusqu'à J-2 : les publications tardives INPI et INSEE ne sont pas manquées.
+      CARTOFR_SYNCHRO_DECALAGE: "2"
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       # Registre et stocks (19 Go) : montés, jamais copiés dans l'image.
       - ../data:/app/data
     # Aucun port publié : joignable seulement depuis le réseau Docker.
+    logging: *logging
+
+  # Recherche de la tête d'un groupe (T019) : GET /recherche?q=, appelée par
+  # web seulement. Même image que le worker, registre en lecture seule. Aucun
+  # port publié : joignable seulement depuis le réseau Docker (ARCHI).
+  recherche:
+    build:
+      context: ../worker
+      dockerfile: ../infra/worker.Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "cartofr.api_recherche", "--port", "8080"]
+    environment:
+      CARTOFR_DATA: /app/data
+    volumes:
+      - ../data:/app/data:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/sante', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     logging: *logging
 
   db:
