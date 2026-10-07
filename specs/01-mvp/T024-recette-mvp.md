@@ -26,10 +26,10 @@ Non-régression depuis l'app, trois sessions chronométrées, contrôle à 320 p
 —
 
 ## Critères de succès
-- [ ] **C1** : `rapport.md` donne, datés, les scores LVMH, VINCI et CMAF obtenus depuis l'app (SC-001)
+- [x] **C1** : `rapport.md` donne, datés, les scores LVMH, VINCI et CMAF obtenus depuis l'app (SC-001)
 - [ ] **C2** : `rapport.md` donne trois durées de saisie à export, chacune sous 30 minutes (SC-002)
-- [ ] **C3** : `rapport.md` donne la durée du calcul de VINCI, sous 5 minutes (SC-004)
-- [ ] **C4** : `rapport.md` consigne le contrôle à 320 px et au clavier des écrans de US2
+- [x] **C3** : `rapport.md` donne la durée du calcul de VINCI, sous 5 minutes (SC-004)
+- [x] **C4** : `rapport.md` consigne le contrôle à 320 px et au clavier des écrans de US2
 
 ## Tests et validation
 
