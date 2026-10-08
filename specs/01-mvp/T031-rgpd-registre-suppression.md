@@ -27,9 +27,9 @@ Registre des traitements, suppression de son compte par un membre, test qui vér
 —
 
 ## Critères de succès
-- [ ] **C1** : `docs/registre-traitements.md` couvre les dirigeants stockés et les comptes, avec une durée de conservation pour chacun
-- [ ] **C2** : Un membre peut supprimer son compte depuis `web/app/(app)/compte/page.tsx`
-- [ ] **C3** : `test_journaux.py` vérifie qu'aucun e-mail ni nom de personne n'apparaît dans les journaux du worker
+- [x] **C1** : `docs/registre-traitements.md` couvre les dirigeants stockés et les comptes, avec une durée de conservation pour chacun (les durées non tranchées sont écrites « à décider » et listées à la fin, 2026-10-08)
+- [x] **C2** : Un membre peut supprimer son compte depuis `web/app/(app)/compte/page.tsx`
+- [x] **C3** : `test_journaux.py` vérifie qu'aucun e-mail ni nom de personne n'apparaît dans les journaux du worker
 
 ## Tests et validation
 
@@ -37,7 +37,10 @@ Registre des traitements, suppression de son compte par un membre, test qui vér
 1. Supprimer un compte de test et vérifier les tables
 
 ### Cas limites
-- Aucun propre à cette tâche
+- Seul administrateur d'une organisation qui a d'autres membres : le membre le plus ancien est promu (déclencheur de `supabase/migrations/0005_suppression_compte.sql`, testé par `worker/tests/test_suppression_compte.py`). La suppression n'est jamais bloquée.
+- Dernier membre : l'organisation, ses groupes et ses cartos sont gardés, sans membre.
+- Double clic : bouton désactivé pendant l'envoi ; un compte déjà supprimé côté GoTrue compte comme un succès.
+- Session expirée : rien n'est supprimé, message et lien pour se reconnecter (`web/lib/compte/suppression.test.ts`).
 
 ## Dépendances
 
