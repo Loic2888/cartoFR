@@ -83,7 +83,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 - [x] `T033` — Faire entrer une marque sûre même avec un mandat « Autre »
 - [x] `T034` — Exclure les comités même avec un nom accentué
 - [x] `T035` — Atteindre le point fixe au-delà de 8 niveaux, ou le signaler
-- [ ] `T036` — Garder un niveau cohérent avec la maison mère après une boucle coupée
+- [x] `T036` — Garder un niveau cohérent avec la maison mère après une boucle coupée
 
 ## Phase 9 : Finitions
 

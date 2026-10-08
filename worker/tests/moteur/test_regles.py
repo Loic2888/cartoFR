@@ -524,6 +524,64 @@ def test_descente_par_les_mandats_sur_trois_niveaux(mini: MiniRegistre, tmp_path
     assert s[F3].preuve == "Mandat au registre : Associé commandité"
 
 
+# ---------------------------------------------------------------- niveaux cohérents (T036)
+
+BOUCLE = "Déduit : boucle de mandats coupée"
+
+
+def niveaux_incoherents(carto: Carto) -> list[str]:
+    """Les sociétés dont le niveau n'est pas celui de leur maison mère + 1 (la tête, sans mère, à 0)."""
+    s = societes(carto)
+    return [
+        x.siren
+        for x in carto.societes
+        if x.niveau != (0 if x.maison_mere_siren is None else s[x.maison_mere_siren].niveau + 1)
+    ]
+
+
+def _boucle_sous_la_marque(mini: MiniRegistre) -> None:
+    """F1 et F2 entrent par la marque et se président l'une l'autre (A → B → A) ; F3 est présidée par F1."""
+    mini.societe(F1, "ALPHAMARK UN")
+    mini.societe(F2, "ALPHAMARK DEUX")
+    mini.lien(F1, F2, PRESIDENT)
+    mini.lien(F2, F1, PRESIDENT)
+    filiale(mini, F3, "SOUS FILIALE INVENTEE", parent=F1)
+
+
+def test_boucle_de_mandats_coupee_niveau_coherent(mini: MiniRegistre, tmp_path: Path) -> None:
+    """Une boucle A → B → A est coupée en rattachant A à la tête : A est au niveau 1, B au niveau 2, et le
+    niveau de chaque société suit celui de sa maison mère (T036)."""
+    _boucle_sous_la_marque(mini)
+    carto = lancer(mini, tmp_path)
+    s = societes(carto)
+    coupee = [x for x in (F1, F2) if s[x].preuve == BOUCLE]
+    assert len(coupee) == 1
+    a = coupee[0]
+    b = F2 if a == F1 else F1
+    assert (s[a].maison_mere_siren, s[a].confiance, s[a].niveau) == (TETE, "C", 1)
+    assert (s[b].maison_mere_siren, s[b].niveau) == (a, 2)
+    assert (s[F3].maison_mere_siren, s[F3].niveau) == (F1, s[F1].niveau + 1)
+    assert s[TETE].niveau == 0
+    assert niveaux_incoherents(carto) == []
+
+
+def test_niveau_egal_niveau_de_la_maison_mere_plus_un(mini: MiniRegistre, tmp_path: Path) -> None:
+    """Sur une carto complète (mandats sur trois niveaux, tête de maison d'une marque, boucle coupée et sa
+    descendance), toute société a le niveau de sa maison mère + 1, et la tête 0 (T036)."""
+    _boucle_sous_la_marque(mini)
+    filiale(mini, F4, "FILIALE INVENTEE QUATRE")
+    filiale(mini, F5, "SOUS FILIALE INVENTEE CINQ", parent=F4, role=GERANT)
+    filiale(mini, F6, "SOUS SOUS FILIALE INVENTEE SIX", parent=F5, role=COMMANDITE)
+    filiale(mini, F7, "ARRIERE FILIALE INVENTEE SEPT", parent=F3)
+    mini.societe(F8, "ALPHAMARK FRANCE", salaries=200)
+    mini.societe(X, "ALPHAMARK SERVICES", salaries=12)
+    carto = lancer(mini, tmp_path)
+    s = societes(carto)
+    assert {F1, F2, F3, F4, F5, F6, F7, F8, X} <= s.keys()
+    assert s[TETE].niveau == 0 and s[TETE].maison_mere_siren is None
+    assert niveaux_incoherents(carto) == []
+
+
 def test_gie_dont_tous_les_membres_sont_du_groupe(mini: MiniRegistre, tmp_path: Path) -> None:
     """Un GIE dont tous les membres sont du groupe entre ; il est non ciblable (rapport.md 2026-10-06, règle
     Basile)."""

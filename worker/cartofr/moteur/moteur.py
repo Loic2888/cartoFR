@@ -431,20 +431,29 @@ class _Moteur:
                 if k.startswith("marque") and (brand not in self.heads or size(x) > size(self.heads[brand])):
                     self.heads[brand] = x
         parent = {s: self.parent_of(s) for s in self.retained if s != tete}
-        level = {tete: 0}
-
-        def lvl(s: str, seen: tuple[str, ...] = ()) -> int:
-            if s in level:
-                return level[s]
-            if s in seen:  # boucle de mandats croisés : on la coupe en rattachant à la tête
-                parent[s] = (tete, "Déduit : boucle de mandats coupée", "C")
-                level[s] = 1
-                return 1
-            level[s] = lvl(parent[s][0], seen + (s,)) + 1
-            return level[s]
-
+        # 1. Les rattachements d'abord : une boucle de mandats croisés (A → B → A) est coupée en
+        # rattachant à la tête la première société de la boucle atteinte en remontant.
+        vus = {tete}
         for s in self.retained:
-            lvl(s)
+            chemin: list[str] = []
+            x = s
+            while x not in vus and x not in chemin:
+                chemin.append(x)
+                x = parent[x][0]
+            if x in chemin:
+                parent[x] = (tete, "Déduit : boucle de mandats coupée", "C")
+            vus.update(chemin)
+        # 2. Puis les niveaux, sur des rattachements fixés : niveau = niveau de la maison mère + 1 (T036).
+        level = {tete: 0}
+        for s in self.retained:
+            chemin = []
+            x = s
+            while x not in level:
+                chemin.append(x)
+                x = parent[x][0]
+            for y in reversed(chemin):
+                level[y] = level[x] + 1
+                x = y
         ciblable = {s: self.targetable(s, self.info.get(s) or {}, self.rne.get(s)) for s in self.retained}
 
         # Compte de rattachement : la société ciblable la plus proche au-dessus.
