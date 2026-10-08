@@ -162,7 +162,11 @@ Les points 1 et 3 sont en plus **bloqués en dur** par
      même si elle contient le nom de son fondateur (« Jean Dupont SAS »), est
      une donnée de société, pas un dirigeant tiré du registre : elle s'affiche
      et s'exporte. Ce qui est interdit, c'est de faire sortir une personne de
-     `dirigeants_personnes`.
+     `dirigeants_personnes`. *Étendu le 2026-10-08 (T029, décision de Loïc)*
+     aux marques des réglages validés d'un groupe (marques, maisons de
+     l'organigramme), même au nom d'un fondateur : ce sont des données de
+     société, saisies et validées par un humain ; elles s'affichent et
+     s'exportent, y compris dans les preuves.
    - Les sociétés avec `diffusionCommerciale = false` sont marquées
      (`opposition_prospection`), jamais cachées ni présentées comme démarchables.
 
