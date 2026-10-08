@@ -16,15 +16,22 @@ deux cartos des mêmes réglages sur le même registre sont identiques. Le proto
 triait pas : sur le même registre, il rend le même ensemble de sociétés, mais quelques
 rattachements dans l'arbre peuvent différer (mesuré le 2026-10-07, voir non_regression.py).
 
+Cas douteux (T027, FR-009) : la carto range aussi les cas que le consultant doit trancher
+(confiance C, co-entreprise, participation sans contrôle, société étrangère), chacun avec la
+règle qui l'a placé là et ses indices pour et contre (`ranger_cas`). Les décisions du consultant
+(`decisions`) s'appliquent au calcul suivant : « écarter » fait sortir une société que les règles
+retiennent, « retenir » fait entrer une société que le moteur voit encore liée au groupe
+(`appliquer_decision`). Les règles ne changent pas : la carto dit laquelle aurait joué.
+
 Règle de licence INPI : les dirigeants personnes physiques servent seulement de preuve pendant le
 calcul. Aucun nom de personne n'est rendu : la `Carto` n'a aucun champ qui puisse en porter.
 """
 
 import collections
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -34,13 +41,16 @@ from cartofr.empreinte import cle_depuis_env, empreinte
 from cartofr.moteur.marques import Candidate, chercher_candidates, norm
 from cartofr.moteur.modele import (
     Carto,
+    Cas,
     Confiance,
+    Decision,
     Etrangere,
     Lien,
     Mandat,
     Participation,
     Societe,
     Tour,
+    TypeCas,
 )
 
 # Codes de rôle RNE, reconstitués en croisant 195 fiches avec les rôles lus par Basile (role_codes.py).
@@ -73,6 +83,9 @@ GARDE_ATTEINTE = (
     "niveaux les plus profonds peuvent manquer. Prévenez l'administrateur."
 )
 
+# Raison d'entrée d'une société qu'aucune règle ne retient, mais que le consultant a retenue (T027).
+RETENUE_PAR_DECISION = "retenue par décision du consultant"
+
 # Un indice : (type, détail). Types : marque_sure, marque_ambigue, registre, adresse, organigramme.
 Indice = tuple[str, Any]
 
@@ -102,7 +115,11 @@ _COLONNES_SIEGE = ("siren", "siret_siege", "adresse_cle", "nom", "cj", "naf", "t
 
 class _Moteur:
     def __init__(
-        self, cfg: dict[str, Any], con: duckdb.DuckDBPyConnection, cle_empreinte: str | None = None
+        self,
+        cfg: dict[str, Any],
+        con: duckdb.DuckDBPyConnection,
+        cle_empreinte: str | None = None,
+        decisions: Mapping[str, Decision] | None = None,
     ) -> None:
         self.cfg = cfg
         self.db = con
@@ -121,6 +138,10 @@ class _Moteur:
             self.cle_empreinte = cle_depuis_env()  # CleManquante : jamais de comparaison sans clé
         self._famille_vue: dict[str, bool] = {}
         self.excluded = set(cfg.get("exclus", []))
+        # Décisions du consultant sur les cas douteux (T027). La tête n'en reçoit pas : elle est
+        # le groupe. Une décision s'applique dans `run`, la règle qui aurait joué reste écrite.
+        self.decisions: dict[str, Decision] = {s: d for s, d in (decisions or {}).items() if s != cfg["tete"]}
+        self.ecartees: dict[str, str] = {}  # siren -> règle qui l'aurait fait entrer
         self.local_done: set[str] = set()
         self.heads: dict[str, str] = {}
         self.tours: list[Tour] = []
@@ -226,7 +247,7 @@ class _Moteur:
         def group_like(s: str) -> bool:
             if s in self.retained:
                 return True
-            if s in self.excluded or self.name_excluded(s):
+            if s in self.excluded or self.decisions.get(s) == "ecarter" or self.name_excluded(s):
                 return False
             kinds = {k for k, _ in self.ev[s]}
             fiche = self.rne.get(s)
@@ -360,6 +381,26 @@ class _Moteur:
             return "adresse du groupe et second indice"
         return None
 
+    def appliquer_decision(self, s: str, why: str | None) -> str | None:
+        """La décision du consultant sur `s`, appliquée à ce que les règles ont décidé (T027).
+
+        - « écarter » : la société n'entre pas, même si une règle la retient ; la règle qui
+          l'aurait fait entrer est gardée (`ecartees`) pour le dire dans le cas.
+        - « retenir » : la société entre, même si aucune règle ne la retient. Elle n'est appelée
+          ici que si le moteur la voit encore : active au registre et liée au groupe par au
+          moins un indice (elle est dans la liste des candidates du tour). Une société disparue
+          ou qui n'a plus aucun lien avec le groupe n'entre pas : la décision est sans objet.
+        Sans décision, la règle décide seule.
+        """
+        decision = self.decisions.get(s)
+        if decision == "ecarter":
+            if why:
+                self.ecartees[s] = why
+            return None
+        if decision == "retenir" and not why:
+            return RETENUE_PAR_DECISION
+        return why
+
     # ---------- boucle ----------
     def run(self, candidates: Iterable[Candidate], max_rounds: int | None = None) -> "_Moteur":
         """Boucle jusqu'au point fixe, `max_rounds` tours au plus (MAX_TOURS par défaut, lu à l'appel).
@@ -382,7 +423,7 @@ class _Moteur:
             pidx = self.persons_index()
             addrs = self.group_addresses(pidx)
             for s in pool:
-                why = self.decide(s, pidx)
+                why = self.appliquer_decision(s, self.decide(s, pidx))
                 if why:
                     self.retained[s] = why
             self.tours.append(Tour(rnd, len(self.retained), len(pool), len(addrs)))
@@ -524,13 +565,137 @@ class _Moteur:
             societes=tuple(societes),
             liens=tuple(liens),
             participations=tuple(participations),
-            etrangeres=tuple(Etrangere(k, v) for k, v in self.foreign.items()),
+            # Une société étrangère retenue par le consultant est dans `societes`, plus ici.
+            etrangeres=tuple(Etrangere(k, v) for k, v in self.foreign.items() if k not in self.retained),
             tours=tuple(self.tours),
+            cas=self.ranger_cas(parent, {p.siren for p in participations}),
         )
 
     def _parents(self, s: str) -> list[tuple[str, str]]:
         v = self.rne.get(s)
         return v.parents if v else []
+
+    # ---------- cas douteux (T027) ----------
+    def _exterieurs(self, s: str) -> list[tuple[str, str]]:
+        """Les mandats forts ou moyens tenus sur `s` par une société hors du groupe."""
+        return [
+            (p, c)
+            for p, c in self._parents(s)
+            if p != s and p not in self.retained and (c in STRONG or c in MEDIUM)
+        ]
+
+    def _designation(self, p: str) -> str:
+        """Une société hors du groupe, désignée par son SIREN seulement si c'est une personne morale
+        connue de SIRENE. Un entrepreneur individuel (catégorie 1…) ou une entité inconnue reste
+        anonyme : son SIREN désignerait une personne (garde-fou 6)."""
+        cj = str((self.info.get(p) or {}).get("cj") or "")
+        return f"la société {p}" if cj and not cj.startswith("1") else "une entité"
+
+    def _indices_pour(self, s: str, pidx: dict[str, set[str]]) -> list[str]:
+        """Ce qui rattache `s` au groupe, en textes du moteur : jamais un nom de personne."""
+        # La marque et la maison ne sont pas recopiées : une marque peut être le nom complet d'un
+        # dirigeant (maison de couture au nom de son fondateur ; LVMH, 2026-10-08). Le nom de la
+        # société, affiché à côté, montre déjà la marque qu'elle porte.
+        pour = []
+        for kind, d in self.ev[s]:
+            if kind == "marque_sure":
+                pour.append("Porte une marque sûre du groupe")
+            elif kind == "marque_ambigue":
+                pour.append("Porte une marque ambiguë du groupe")
+            elif kind == "registre" and d[0] in self.retained and d[1] in ROLE_LABEL:
+                pour.append(f"Mandat au registre : {ROLE_LABEL[d[1]]}, tenu par la société du groupe {d[0]}")
+            elif kind == "adresse":
+                pour.append(f"Siège à une adresse du groupe : {d[1]} sociétés du groupe sur {d[2]}")
+            elif kind == "organigramme":
+                pour.append("Tête d'une maison de l'organigramme public du groupe")
+        fiche = self.rne.get(s)
+        # Dirigeants personnes en commun avec une AUTRE société du groupe : un nombre, jamais un nom.
+        communs = sum(1 for k in (fiche.persons if fiche else {}) if pidx.get(k, set()) - {s})
+        if communs:
+            pour.append(f"Dirigeants en commun avec d'autres sociétés du groupe : {communs}")
+        return pour
+
+    def _indices_contre(self, s: str, types: list[TypeCas]) -> list[str]:
+        """Ce qui fait douter que `s` soit une filiale du groupe."""
+        contre = []
+        mandats = [p for p, c in self._parents(s) if p in self.retained and p != s and c in ROLE_LABEL]
+        if not any(c in STRONG for p, c in self._parents(s) if p in self.retained and p != s):
+            contre.append(
+                "Aucun mandat fort (président, gérant…) tenu par une société du groupe"
+                if mandats
+                else "Aucun mandat au registre tenu par une société du groupe"
+            )
+        if "confiance_c" in types:
+            contre.append("Un seul indice : rattachement déduit, pas lu au registre")
+        for p, c in self._exterieurs(s):
+            tenu = f"tenu par {self._designation(p)} hors du groupe"
+            contre.append(f"Mandat au registre : {ROLE_LABEL[c]}, {tenu}")
+        if "etrangere" in types:
+            cj = (self.info.get(s) or {}).get("cj")
+            contre.append(f"Société étrangère (catégorie juridique {cj}) : hors du périmètre France")
+        if self.decisions.get(s) == "ecarter":
+            contre.append("Écartée par le consultant")
+        return contre
+
+    def _regle(self, s: str, types: list[TypeCas], parent: dict[str, tuple[str, str, Confiance]]) -> str:
+        """La règle qui a placé `s` là où elle est : dans le groupe (et comment), ou hors du groupe."""
+        if s in self.retained:
+            texte = f"Entrée dans le groupe : {self.retained[s]}"
+            return f"{texte} · rattachement : {parent[s][1]}" if s in parent else texte
+        if s in self.ecartees:
+            return f"Écartée par le consultant ; règle du moteur qui l'aurait retenue : {self.ecartees[s]}"
+        if "participation" in types:
+            if any(c in STRONG for _, c in self._exterieurs(s)):
+                return "Non retenue : contrôle partagé avec une société hors du groupe (mandat fort)"
+            return "Non retenue : participation sans contrôle (mandat moyen sans indice indépendant)"
+        if "etrangere" in types:
+            return "Non retenue : société étrangère, jamais retenue par le moteur"
+        return "Non retenue"
+
+    def ranger_cas(
+        self, parent: dict[str, tuple[str, str, Confiance]], participations: set[str]
+    ) -> tuple[Cas, ...]:
+        """Les cas douteux du calcul, chacun avec sa règle et ses indices (T027, FR-009).
+
+        Le moteur range, il ne tranche pas (principe 1) : un cas retenu reste dans la carto, un
+        cas non retenu reste dehors, jusqu'à la décision du consultant. Une société qui a une
+        décision en vigueur est rangée aussi, même si elle n'est plus douteuse (type `decision`),
+        pour que le consultant puisse revenir dessus ; sauf si la décision est sans objet : la
+        société a disparu du registre ou n'a plus aucun indice qui la lie au groupe.
+        """
+        tete = self.cfg["tete"]
+        pidx = self.persons_index()
+        self.load_info({p for s in set(self.retained) | participations for p, _ in self._exterieurs(s)})
+        sirens = set(self.retained) | participations | set(self.foreign) | set(self.ecartees)
+        cas = []
+        for s in sorted(sirens - {tete}):
+            types: list[TypeCas] = []
+            if s in self.retained and s in parent and parent[s][2] == "C":
+                types.append("confiance_c")
+            if s in self.retained and self._exterieurs(s):
+                types.append("co_entreprise")
+            if s in participations:
+                types.append("participation")
+            if s in self.foreign:
+                types.append("etrangere")
+            decision = self.decisions.get(s)
+            if not types and (s in self.ecartees or (decision == "retenir" and s in self.retained)):
+                types.append("decision")
+            if not types:
+                continue
+            cas.append(
+                Cas(
+                    siren=s,
+                    nom=(self.info.get(s) or {}).get("nom"),
+                    types=tuple(types),
+                    regle=self._regle(s, types, parent),
+                    retenue=s in self.retained,
+                    indices_pour=tuple(self._indices_pour(s, pidx)),
+                    indices_contre=tuple(self._indices_contre(s, types)),
+                    decision=decision,
+                )
+            )
+        return tuple(cas)
 
     def targetable(self, s: str, i: dict[str, Any], v: _Fiche | None) -> tuple[bool, str]:
         """Oui : société opérationnelle, tête de maison ou société mère. Non : nœud purement structurel.
@@ -564,6 +729,28 @@ def date_des_donnees(con: duckdb.DuckDBPyConnection) -> date | None:
     return ligne[0] if ligne else None
 
 
+DECISIONS: dict[str, Decision] = {"retenir": "retenir", "ecarter": "ecarter"}
+
+
+def decisions_en_vigueur(lignes: Iterable[tuple[str, str, datetime, int]]) -> dict[str, Decision]:
+    """La décision en vigueur pour chaque SIREN, parmi toutes celles prises pour un groupe (T027).
+
+    `lignes` : (SIREN, décision, date, numéro d'ordre), dans n'importe quel ordre. Une décision
+    n'est jamais effacée : la plus récente l'emporte, et à date égale, la dernière enregistrée
+    (numéro d'ordre le plus grand). Une valeur inconnue est ignorée, sans masquer une décision
+    plus ancienne.
+    """
+    retenues: dict[str, tuple[datetime, int, Decision]] = {}
+    for siren, valeur, le, numero in lignes:
+        decision = DECISIONS.get(valeur)
+        if decision is None:
+            continue
+        actuelle = retenues.get(siren)
+        if actuelle is None or (le, numero) > actuelle[:2]:
+            retenues[siren] = (le, numero, decision)
+    return {s: d for s, (_, _, d) in retenues.items()}
+
+
 def ouvrir_registre(registre: Path) -> duckdb.DuckDBPyConnection:
     """Ouvre le registre en lecture seule : le moteur n'écrit jamais dedans."""
     if not registre.is_file():
@@ -578,17 +765,20 @@ def cartographier(
     registre: Path,
     candidates: Callable[[duckdb.DuckDBPyConnection, dict[str, Any]], list[Candidate]] = chercher_candidates,
     cle_empreinte: str | None = None,
+    decisions: Mapping[str, Decision] | None = None,
 ) -> Carto:
     """Calcule la carto du groupe décrit par `reglages` sur le registre local, sans appel réseau.
 
     `candidates` permet de fournir les sociétés de marque autrement (diagnostic, tests).
     `cle_empreinte` : la clé des empreintes de `familles_exclues_empreintes` ; sans elle,
     CARTOFR_CLE_EMPREINTE (CleManquante si elle manque alors que la liste n'est pas vide).
+    `decisions` : les décisions du consultant en vigueur pour ce groupe, SIREN -> « retenir » ou
+    « écarter » (`decisions_en_vigueur`). Sans elles, les règles décident seules.
     """
     con = ouvrir_registre(registre)
     try:
         trouvees = candidates(con, reglages)
-        moteur = _Moteur(reglages, con, cle_empreinte).run(trouvees)
+        moteur = _Moteur(reglages, con, cle_empreinte, decisions).run(trouvees)
         carto = moteur.build(date_des_donnees(con))
         return carto if moteur.point_fixe else replace(carto, avertissements=(GARDE_ATTEINTE,))
     finally:

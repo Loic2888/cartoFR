@@ -28,10 +28,10 @@ Le moteur range chaque cas douteux avec ses indices et la règle qui l'a placé 
 La décision humaine s'applique, la règle reste écrite.
 
 ## Critères de succès
-- [ ] **C1** : `test_cas_douteux.py` vérifie que chaque cas porte sa règle et ses indices
-- [ ] **C2** : `test_cas_douteux.py` vérifie qu'une décision « écarter » est reprise à la carto suivante
-- [ ] **C3** : `0003_cas_douteux.sql` active RLS sur `carto_cas` et `decisions`
-- [ ] **C4** : La non-régression reste aux scores de T016
+- [x] **C1** : `test_cas_douteux.py` vérifie que chaque cas porte sa règle et ses indices
+- [x] **C2** : `test_cas_douteux.py` vérifie qu'une décision « écarter » est reprise à la carto suivante
+- [x] **C3** : `0003_cas_douteux.sql` active RLS sur `carto_cas` et `decisions`
+- [x] **C4** : La non-régression reste aux scores de T016
 
 ## Tests et validation
 
@@ -39,7 +39,10 @@ La décision humaine s'applique, la règle reste écrite.
 1. Relancer VINCI et compter les cas
 
 ### Cas limites
-- Aucun propre à cette tâche
+- Aucun propre à cette tâche dans la spec. Traités et testés (2026-10-08) : décision sur une société disparue ou sans indice (sans objet), décision contradictoire plus récente, décision sur la tête (ignorée), entité extérieure absente de SIRENE (jamais désignée).
+
+### Résultat (2026-10-08)
+- Cas douteux : LVMH 80, VINCI 569, CMAF 353. Non-régression inchangée, cartos identiques champ par champ. Détail dans `rapport.md`.
 
 ## Dépendances
 

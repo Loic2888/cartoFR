@@ -80,6 +80,38 @@ class Etrangere:
     nom: str | None
 
 
+# Pourquoi un cas est douteux (T027, FR-009) :
+# - confiance_c : retenue sur un seul indice, rattachement déduit (pas de mandat au registre) ;
+# - co_entreprise : retenue, mais une société hors du groupe tient aussi un mandat fort ou moyen ;
+# - participation : non retenue, une société du groupe y tient un mandat sans contrôle ;
+# - etrangere : société étrangère immatriculée en France qui porte une marque sûre du groupe ;
+# - decision : tranchée par le consultant, et douteuse d'aucune autre façon dans ce calcul
+#   (une société écartée, par exemple), gardée dans la liste pour qu'il puisse revenir dessus.
+TypeCas = Literal["confiance_c", "co_entreprise", "participation", "etrangere", "decision"]
+# La décision du consultant sur un cas, reprise aux cartos suivantes du même groupe.
+Decision = Literal["retenir", "ecarter"]
+
+
+@dataclass(frozen=True)
+class Cas:
+    """Un cas douteux : une société que le moteur a rangée, avec ses indices, pour que le
+    consultant tranche. Le moteur ne décide pas à sa place (principe 1) ; il range et explique.
+
+    Les indices sont des textes du moteur : rôle, sorte d'indice, nombre de sociétés à une
+    adresse, nombre de dirigeants en commun, SIREN d'une personne morale. Jamais un nom de
+    personne, ni le SIREN d'un entrepreneur individuel, ni le texte d'une marque (une marque peut
+    être le nom complet d'un dirigeant)."""
+
+    siren: str
+    nom: str | None  # dénomination de la personne morale (SIRENE)
+    types: tuple[TypeCas, ...]
+    regle: str  # la règle qui a placé la société là : entrée dans le groupe, ou pas
+    retenue: bool  # dans la carto rendue
+    indices_pour: tuple[str, ...]  # ce qui la rattache au groupe
+    indices_contre: tuple[str, ...]  # ce qui fait douter
+    decision: Decision | None = None  # la décision du consultant appliquée à ce calcul
+
+
 @dataclass(frozen=True)
 class Tour:
     """Volumes d'un tour de la boucle, pour le suivi. Aucun nom."""
@@ -105,3 +137,5 @@ class Carto:
     # Ce que l'utilisateur doit savoir du calcul (français, sans donnée), ex. garde de la boucle
     # atteinte avant le point fixe (T035). Repris dans `cartos.avertissement` par jobs/carto.py.
     avertissements: tuple[str, ...] = ()
+    # Les cas douteux, rangés pour le consultant (T027), triés par SIREN.
+    cas: tuple[Cas, ...] = ()

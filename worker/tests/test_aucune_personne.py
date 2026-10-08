@@ -140,6 +140,7 @@ def valeurs_registre(carto: Carto) -> list[tuple[str, str, str]]:
             valeurs.append((s.maison_mere_siren, "nom", s.maison_mere_nom))
     valeurs += [(p.siren, "nom", p.nom) for p in carto.participations]
     valeurs += [(e.siren, "nom", e.nom) for e in carto.etrangeres]
+    valeurs += [(c.siren, "nom", c.nom) for c in carto.cas]
     return [(s, c, v) for s, c, v in valeurs if v is not None]
 
 

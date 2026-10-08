@@ -3,7 +3,8 @@
 Vérifie : refus d'une version de réglages non validée (C1) ; chaque ligne
 `carto_*` porte l'`organisation_id` du travail (C2) ; date des données et durée
 enregistrées (C3) ; tête sans lien réduite à la tête avec un avertissement
-(C4). Plus : familles exclues par empreinte lues en base, aucun nom de
+(C4). T027 : cas douteux écrits dans `carto_cas`, décisions du groupe lues
+en base et reprises à la carto suivante. Plus : familles exclues par empreinte lues en base, aucun nom de
 personne écrit (garde-fou 6), échecs avec un message français sûr et sans
 ligne à moitié écrite, carto d'une autre organisation introuvable.
 
@@ -53,6 +54,7 @@ Connexion = psycopg.Connection[tuple[Any, ...]]
 
 TETE = siren(1)
 F1, F2, X = siren(10), siren(11), siren(50)
+DOUTEUSE = siren(60)
 ADRESSE_GROUPE = "1 PLACE DU GROUPE INVENTE 75008"
 FAMILLE = "FAMILLEINVENTEE"
 CLE = "cle-de-test-FAKE"
@@ -233,6 +235,24 @@ def societes(m: Monde, carto_id: uuid.UUID) -> dict[str, dict[str, Any]]:
     lignes = {r[noms.index("siren")]: dict(zip(noms, r, strict=True)) for r in cur.fetchall()}
     m.conn.commit()
     return lignes
+
+
+def cas(m: Monde, carto_id: uuid.UUID) -> dict[str, dict[str, Any]]:
+    cur = m.conn.execute("select * from public.carto_cas where carto_id = %s", (carto_id,))
+    noms = [d.name for d in cur.description or []]
+    lignes = {r[noms.index("siren")]: dict(zip(noms, r, strict=True)) for r in cur.fetchall()}
+    m.conn.commit()
+    return lignes
+
+
+def decider(m: Monde, siren_: str, decision: str, le: str, groupe: uuid.UUID | None = None) -> None:
+    """Une décision du consultant, écrite comme la Server Action de T028 (service_role)."""
+    m.conn.execute(
+        "insert into public.decisions (organisation_id, groupe_id, siren, decision, decide_le)"
+        " values (%s, %s, %s, %s, %s)",
+        (m.org, groupe or m.groupe, siren_, decision, le),
+    )
+    m.conn.commit()
 
 
 def liens(m: Monde, carto_id: uuid.UUID) -> list[dict[str, Any]]:
@@ -464,13 +484,56 @@ def test_aucun_nom_de_personne_dans_le_resultat(monde: Monde, donnees: Path) -> 
     assert morceaux  # le registre a bien des dirigeants personnes
     textes = [
         str(v)
-        for ligne in [*societes(monde, carto_id).values(), *liens(monde, carto_id)]
+        for ligne in [
+            *societes(monde, carto_id).values(),
+            *liens(monde, carto_id),
+            *cas(monde, carto_id).values(),
+        ]
         for v in ligne.values()
         if isinstance(v, str)
     ]
     textes.append(lire_carto(monde, carto_id)["avertissement"] or "")
     assert textes
     assert not [m for m in morceaux for t in textes if m in t.upper()]
+
+
+# --- Cas douteux et décisions (T027) ------------------------------------------------------------
+
+
+def test_cas_ecrits_et_decision_reprise_a_la_carto_suivante(monde: Monde, donnees: Path) -> None:
+    """T027, C2 de bout en bout : la carto range le cas, le consultant l'écarte, la carto suivante
+    du même groupe le reprend. La décision d'un autre groupe ne s'applique pas."""
+    mini = registre_groupe()
+    mini.societe(DOUTEUSE, "ALPHAMARK CONSEIL")  # entre sur sa seule marque : confiance C
+    ecrire(mini, donnees)
+    reglages_id = creer_reglages(monde, CONTENU)
+
+    premiere = creer_carto(monde, reglages_id)
+    assert lancer(monde, premiere)[0] == "termine"
+    ligne = cas(monde, premiere)[DOUTEUSE]
+    assert ligne["organisation_id"] == monde.org
+    assert (ligne["types"], ligne["retenue"], ligne["decision"]) == (["confiance_c"], True, None)
+    assert ligne["regle"].startswith("Entrée dans le groupe : nom de marque propre au groupe")
+    assert ligne["indices_pour"] and ligne["indices_contre"]
+    assert DOUTEUSE in societes(monde, premiere)
+
+    # Retenue d'abord, puis écartée : la plus récente l'emporte. Une décision contraire prise
+    # dans un autre groupe de la même organisation ne compte pas.
+    decider(monde, DOUTEUSE, "retenir", "2026-10-01T09:00:00+00")
+    decider(monde, DOUTEUSE, "ecarter", "2026-10-02T09:00:00+00")
+    autre_groupe = _un(
+        monde.conn,
+        "insert into public.groupes (organisation_id, tete_siren, nom) values (%s, %s, 'AUTRE') returning id",
+        (monde.org, siren(2)),
+    )
+    decider(monde, DOUTEUSE, "retenir", "2026-10-03T09:00:00+00", groupe=autre_groupe)
+
+    seconde = creer_carto(monde, reglages_id)
+    assert lancer(monde, seconde)[0] == "termine"
+    assert DOUTEUSE not in societes(monde, seconde)
+    ligne = cas(monde, seconde)[DOUTEUSE]
+    assert (ligne["types"], ligne["retenue"], ligne["decision"]) == (["decision"], False, "ecarter")
+    assert ligne["regle"].startswith("Écartée par le consultant")
 
 
 # --- Échecs : message sûr, rien d'écrit à moitié -----------------------------------------------------------
