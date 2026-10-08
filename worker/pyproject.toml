@@ -17,6 +17,7 @@ dependencies = [
     "psycopg[binary]>=3.2", # base de l'app (file de travaux, cartos)
     "pydantic>=2.10",       # schéma des réglages, partagé avec Zod côté web
     "httpx>=0.28",          # API INPI et API Sirene
+    "anthropic>=1.12",      # IA : proposition des réglages (T025, P2)
 ]
 
 [project.optional-dependencies]
