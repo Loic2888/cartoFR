@@ -12,9 +12,16 @@ Routes :
         200 {"resultats": [{"siren", "nom", "sigle", "ville", "statut"}, ...]}
         400 {"erreur": "requete_trop_courte" | "requete_trop_longue"}
         503 {"erreur": "registre_occupe" | "registre_absent"}
+    GET /export/skill/<carto>?organisation=<uuid>   (T029)
+        200 application/zip : les 6 tables du skill account-mapping (cartofr.exports.skill)
+        400 {"erreur": "parametre_invalide"}
+        404 {"erreur": "carto_introuvable"}  (absente, ou d'une autre organisation)
+        409 {"erreur": "carto_non_terminee"}
+        503 {"erreur": "base_indisponible"}
     GET /sante  → 200 {"statut": "ok"}
 
-Entrées : `<CARTOFR_DATA>/registre.duckdb` (`data` par défaut), ou CARTOFR_REGISTRE.
+Entrées : `<CARTOFR_DATA>/registre.duckdb` (`data` par défaut), ou CARTOFR_REGISTRE ;
+pour l'export, la base de l'app (DATABASE_URL, rôle service, en lecture seule).
 Sortie : du JSON. `statut` vaut `active`, `cessee` (SIRENE : état C) ou
 `radiee` (fermée au registre : `fin` posée).
 
@@ -32,6 +39,12 @@ Règles tenues ici :
   erreur (règle produit 4). On ne journalise que le nombre de résultats, le
   statut et la durée ;
 - SQL paramétré : la saisie ne touche jamais le texte de la requête.
+
+Contrôle d'accès : aucune route n'est publiée hors du réseau Docker (ARCHI) ;
+seul web les appelle, après avoir vérifié la session. L'export lit la base en
+rôle service : il filtre la carto par l'organisation que web a lue avec la
+session de l'utilisateur (RLS), et rend 404 pour une carto d'une autre
+organisation, sans dire si elle existe.
 """
 
 import argparse
@@ -42,6 +55,8 @@ import re
 import signal
 import time
 import unicodedata
+import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -50,6 +65,10 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import duckdb
+import psycopg
+
+from cartofr.db import ConfigurationManquante, connecter
+from cartofr.exports.skill import CartoNonTerminee, exporter
 
 log = logging.getLogger("cartofr.recherche")
 
@@ -57,6 +76,9 @@ MAX_RESULTATS = 20
 LONGUEUR_MIN = 2
 LONGUEUR_MAX = 100
 SIREN = re.compile(r"^[0-9]{9}$")
+PREFIXE_EXPORT_SKILL = "/export/skill/"
+
+Connexion = psycopg.Connection[tuple[Any, ...]]
 
 
 class RegistreIndisponible(RuntimeError):
@@ -236,10 +258,54 @@ class Gestionnaire(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(donnees)
 
+    def _repondre_zip(self, contenu: bytes) -> None:
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/zip")
+        self.send_header("Content-Length", str(len(contenu)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(contenu)
+
+    def _export_skill(self, carto: str, query: str) -> None:
+        """Les 6 tables du skill d'une carto, pour l'organisation passée par web (T029)."""
+        organisation = parse_qs(query).get("organisation", [""])[0]
+        try:
+            carto_id, organisation_id = uuid.UUID(carto), uuid.UUID(organisation)
+        except ValueError:
+            self._repondre(HTTPStatus.BAD_REQUEST, {"erreur": "parametre_invalide"})
+            return
+        debut = time.monotonic()
+        try:
+            with self.server.connecter() as conn:  # type: ignore[attr-defined]
+                conn.read_only = True
+                contenu = exporter(conn, carto_id, organisation_id)
+        except CartoNonTerminee:
+            self._repondre(HTTPStatus.CONFLICT, {"erreur": "carto_non_terminee"})
+            return
+        except (ConfigurationManquante, psycopg.OperationalError) as exc:
+            # Jamais le message : il peut contenir l'adresse de la base.
+            log.warning("export skill : 503 %s", type(exc).__name__)
+            self._repondre(HTTPStatus.SERVICE_UNAVAILABLE, {"erreur": "base_indisponible"})
+            return
+        except Exception as exc:  # noqa: BLE001 : jamais de trace avec des données dans le journal
+            log.error("export skill : 500 %s", type(exc).__name__)
+            self._repondre(HTTPStatus.INTERNAL_SERVER_ERROR, {"erreur": "erreur_interne"})
+            return
+        if contenu is None:
+            log.info("export skill : 404")
+            self._repondre(HTTPStatus.NOT_FOUND, {"erreur": "carto_introuvable"})
+            return
+        duree = int((time.monotonic() - debut) * 1000)
+        log.info("export skill : 200, carto %s, %d octets en %d ms", carto_id, len(contenu), duree)
+        self._repondre_zip(contenu)
+
     def do_GET(self) -> None:  # noqa: N802 (nom imposé par http.server)
         url = urlsplit(self.path)
         if url.path == "/sante":
             self._repondre(HTTPStatus.OK, {"statut": "ok"})
+            return
+        if url.path.startswith(PREFIXE_EXPORT_SKILL):
+            self._export_skill(url.path.removeprefix(PREFIXE_EXPORT_SKILL), url.query)
             return
         if url.path != "/recherche":
             self._repondre(HTTPStatus.NOT_FOUND, {"erreur": "route_inconnue"})
@@ -273,13 +339,19 @@ class Gestionnaire(BaseHTTPRequestHandler):
 
 
 class Serveur(ThreadingHTTPServer):
-    """Serveur HTTP qui connaît l'emplacement du registre."""
+    """Serveur HTTP qui connaît l'emplacement du registre et sait joindre la base de l'app."""
 
     daemon_threads = True
 
-    def __init__(self, adresse: tuple[str, int], registre: Path | None = None) -> None:
+    def __init__(
+        self,
+        adresse: tuple[str, int],
+        registre: Path | None = None,
+        connecter: Callable[[], Connexion] = connecter,
+    ) -> None:
         super().__init__(adresse, Gestionnaire)
         self.registre = registre
+        self.connecter = connecter
 
 
 def main(argv: list[str] | None = None) -> int:

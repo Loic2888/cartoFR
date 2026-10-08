@@ -168,18 +168,31 @@ export default async function Carto({ params }: PageProps<"/groupes/[id]/cartos/
       ) : null}
 
       {terminee ? (
-        <div className="flex flex-col gap-3 sm:flex-row">
-          {/* Fichier rendu par une route (T023) : un lien ordinaire, pas une navigation client. */}
-          <a href={`/groupes/${id}/cartos/${cartoId}/export`} className={buttonVariants({ className: "w-full sm:w-auto" })}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          {/* Fichiers rendus par des routes (T023, T029) : des liens ordinaires, pas une navigation client. */}
+          <a
+            href={`/groupes/${id}/cartos/${cartoId}/export`}
+            className={buttonVariants({ className: "min-h-11 w-full sm:w-auto" })}
+          >
             Exporter (CSV)
+          </a>
+          <a
+            href={`/groupes/${id}/cartos/${cartoId}/export-skill`}
+            className={buttonVariants({ variant: "outline", className: "min-h-11 w-full sm:w-auto" })}
+            aria-describedby="aide-export-skill"
+          >
+            Exporter pour HubSpot ou Cargo (zip)
           </a>
           {/* Cas douteux à trancher (T028). */}
           <Link
             href={`/groupes/${id}/cartos/${cartoId}/cas`}
-            className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+            className={buttonVariants({ variant: "outline", className: "min-h-11 w-full sm:w-auto" })}
           >
             Cas douteux{nbCas === null ? "" : ` (${nombre(nbCas)})`}
           </Link>
+          <p id="aide-export-skill" className="text-sm text-muted-foreground sm:basis-full">
+            Six tables CSV à importer vous-même dans votre CRM : rien n&apos;est envoyé à un outil tiers.
+          </p>
         </div>
       ) : null}
 
