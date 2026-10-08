@@ -10,8 +10,10 @@ export const metadata: Metadata = { title: "Connexion · cartoFR" };
 export default async function Connexion({ searchParams }: PageProps<"/connexion">) {
   // `erreur` vient de /auth/callback (lien expiré, invalide…). Seul le message
   // traduit est affiché, jamais le paramètre lui-même.
-  const { erreur } = await searchParams;
+  const { erreur, compte } = await searchParams;
   const erreurDuLien = typeof erreur === "string" ? messageErreurAuth(erreur) : undefined;
+  // Retour de /compte après la suppression d'un compte (T031).
+  const compteSupprime = compte === "supprime";
 
   return (
     <main className="flex flex-1 flex-col justify-center px-4 py-8">
@@ -23,6 +25,12 @@ export default async function Connexion({ searchParams }: PageProps<"/connexion"
             passe. L&apos;accès se fait sur invitation.
           </p>
         </div>
+        {compteSupprime ? (
+          <p role="status" className="rounded-lg border px-3 py-2 text-sm">
+            Votre compte a été supprimé, et votre adresse e-mail effacée. Vos cartos restent à votre
+            organisation.
+          </p>
+        ) : null}
         <FormulaireConnexion erreurDuLien={erreurDuLien} />
       </div>
     </main>

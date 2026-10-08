@@ -48,6 +48,11 @@ export default async function GabaritApp({ children }: LayoutProps<"/">) {
                   </li>
                 </>
               ) : null}
+              <li>
+                <Link href="/compte" className={LIEN}>
+                  Mon compte
+                </Link>
+              </li>
             </ul>
           </nav>
           <form action={deconnecter} className="ml-auto">
