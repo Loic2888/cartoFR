@@ -189,8 +189,9 @@ def date_des_donnees(registre: Path) -> date:
 
 
 def avertissement(carto: Carto, date_donnees: date, aujourdhui: date) -> str | None:
-    """Ce que l'utilisateur doit savoir de cette carto : tête seule, données anciennes. None sinon."""
-    messages = []
+    """Ce que l'utilisateur doit savoir de cette carto : avertissements du moteur (garde de la
+    boucle atteinte), tête seule, données anciennes. None sinon."""
+    messages = list(carto.avertissements)
     if all(s.siren == carto.tete for s in carto.societes):
         messages.append(TETE_SEULE)
     if (aujourdhui - date_donnees).days > FRAICHEUR_JOURS:

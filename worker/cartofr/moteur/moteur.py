@@ -23,7 +23,7 @@ calcul. Aucun nom de personne n'est rendu : la `Carto` n'a aucun champ qui puiss
 import collections
 import re
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -65,7 +65,13 @@ ROLE_LABEL = {**STRONG, **MEDIUM, **WEAK}
 DIRECTING = {"73", "30", "28", "29", "51", "53"}
 HOLDING_NAF = {"64.20Z", "64.30Z", "66.30Z", "68.20A", "68.20B", "68.10Z", "68.32A", "64.99Z"}
 SMALL_TRANCHES = {None, "", "NN", "00", "01", "02", "03"}
-MAX_TOURS = 8
+# Garde haute de la boucle : le point fixe arrive bien avant (VINCI en 7 tours, 2026-10-08). Si elle est
+# atteinte, la carto le dit (GARDE_ATTEINTE) au lieu de perdre des niveaux en silence (T035).
+MAX_TOURS = 50
+GARDE_ATTEINTE = (
+    f"Le calcul s'est arrêté après {MAX_TOURS} tours sans se stabiliser : des sociétés des "
+    "niveaux les plus profonds peuvent manquer. Prévenez l'administrateur."
+)
 
 # Un indice : (type, détail). Types : marque_sure, marque_ambigue, registre, adresse, organigramme.
 Indice = tuple[str, Any]
@@ -118,6 +124,7 @@ class _Moteur:
         self.local_done: set[str] = set()
         self.heads: dict[str, str] = {}
         self.tours: list[Tour] = []
+        self.point_fixe = False
 
     # ---------- données ----------
     def load_info(self, sirens: Iterable[str]) -> None:
@@ -354,13 +361,16 @@ class _Moteur:
         return None
 
     # ---------- boucle ----------
-    def run(self, candidates: Iterable[Candidate], max_rounds: int = MAX_TOURS) -> "_Moteur":
+    def run(self, candidates: Iterable[Candidate], max_rounds: int | None = None) -> "_Moteur":
+        """Boucle jusqu'au point fixe, `max_rounds` tours au plus (MAX_TOURS par défaut, lu à l'appel).
+        `point_fixe` dit si la boucle s'est arrêtée parce que plus rien ne changeait."""
+        limite = MAX_TOURS if max_rounds is None else max_rounds
         tete = self.cfg["tete"]
         self.retained[tete] = "tête du groupe"
         for c in candidates:
             self.add(c.siren, "marque_" + c.type_marque, c.marque)
         self.add_organigramme()
-        for rnd in range(1, max_rounds + 1):
+        for rnd in range(1, limite + 1):
             before = len(self.retained)
             self.load_info(list(self.retained))
             self.discover_local()
@@ -377,6 +387,7 @@ class _Moteur:
                     self.retained[s] = why
             self.tours.append(Tour(rnd, len(self.retained), len(pool), len(addrs)))
             if len(self.retained) == before:
+                self.point_fixe = True
                 break
         return self
 
@@ -569,6 +580,7 @@ def cartographier(
     try:
         trouvees = candidates(con, reglages)
         moteur = _Moteur(reglages, con, cle_empreinte).run(trouvees)
-        return moteur.build(date_des_donnees(con))
+        carto = moteur.build(date_des_donnees(con))
+        return carto if moteur.point_fixe else replace(carto, avertissements=(GARDE_ATTEINTE,))
     finally:
         con.close()

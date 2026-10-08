@@ -102,3 +102,6 @@ class Carto:
     participations: tuple[Participation, ...]
     etrangeres: tuple[Etrangere, ...]
     tours: tuple[Tour, ...]
+    # Ce que l'utilisateur doit savoir du calcul (français, sans donnée), ex. garde de la boucle
+    # atteinte avant le point fixe (T035). Repris dans `cartos.avertissement` par jobs/carto.py.
+    avertissements: tuple[str, ...] = ()
