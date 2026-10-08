@@ -36,8 +36,8 @@ RACINE = Path(__file__).resolve().parents[2]
 SEED = RACINE / "supabase" / "seed" / "reglages_depart.sql"
 
 TABLES_SOCLE = ("organisations", "membres", "travaux", "etat_registre")
-# Tables de T018 : toutes portent organisation_id.
-TABLES_CARTOS = ("groupes", "reglages", "cartos", "carto_societes", "carto_liens")
+# Tables de T018, puis de T027 (cas douteux, décisions) : toutes portent organisation_id.
+TABLES_CARTOS = ("groupes", "reglages", "cartos", "carto_societes", "carto_liens", "carto_cas", "decisions")
 TABLES = TABLES_SOCLE + TABLES_CARTOS
 
 # Les réglages de départ : fichier de config → tête du groupe.
@@ -63,6 +63,7 @@ class Monde:
     reglages_brouillon: dict[uuid.UUID, uuid.UUID]
     cartos: dict[uuid.UUID, uuid.UUID]
     travaux: dict[uuid.UUID, int]
+    decisions: dict[uuid.UUID, int]
 
 
 @pytest.fixture
@@ -144,7 +145,27 @@ def _remplir_cartos(conn: Connexion, org: uuid.UUID, user: uuid.UUID, tete: str)
         "preuve, confiance) values (%s, %s, %s, %s, 'président', 'présidée par la tête', 'A')",
         (carto, org, tete, filiale),
     )
-    return {"groupe": groupe, "valide": valide, "brouillon": brouillon, "carto": carto, "travail": travail}
+    # T027 : un cas douteux de la carto, et la décision du membre sur ce cas.
+    conn.execute(
+        "insert into public.carto_cas (carto_id, organisation_id, siren, nom, types, regle, retenue, "
+        "indices_pour, indices_contre) values (%s, %s, %s, 'Filiale (test)', '{confiance_c}', "
+        "'nom de marque propre au groupe', true, '{marque}', '{un seul indice}')",
+        (carto, org, filiale),
+    )
+    decision = _un(
+        conn,
+        "insert into public.decisions (organisation_id, groupe_id, siren, decision, carto_id, decide_par) "
+        "values (%s, %s, %s, 'ecarter', %s, %s) returning id",
+        (org, groupe, filiale, carto, user),
+    )
+    return {
+        "groupe": groupe,
+        "valide": valide,
+        "brouillon": brouillon,
+        "carto": carto,
+        "travail": travail,
+        "decision": decision,
+    }
 
 
 @pytest.fixture
@@ -184,6 +205,7 @@ def monde(conn: Connexion) -> Monde:
         reglages_brouillon={o: r["brouillon"] for o, r in remplis.items()},
         cartos={o: r["carto"] for o, r in remplis.items()},
         travaux={o: r["travail"] for o, r in remplis.items()},
+        decisions={o: r["decision"] for o, r in remplis.items()},
     )
 
 
@@ -257,6 +279,35 @@ def test_un_membre_ne_voit_ni_les_cartos_ni_les_reglages_de_l_autre(
         assert conn.execute(requete, (valeur,)).fetchone() == (0,), requete
 
 
+@pytest.mark.parametrize("cote", ["a", "b"])
+def test_un_membre_ne_voit_ni_les_cas_ni_les_decisions_de_l_autre(
+    conn: Connexion, monde: Monde, cote: str
+) -> None:
+    """T027, C3 : les cas douteux et les décisions de l'autre organisation sont introuvables."""
+    moi, autre = (monde.org_a, monde.org_b) if cote == "a" else (monde.org_b, monde.org_a)
+    _en_tant_que(conn, monde.user_a if cote == "a" else monde.user_b)
+
+    assert _ids(conn, "select carto_id from public.carto_cas") == {monde.cartos[moi]}
+    assert _ids(conn, "select id from public.decisions") == {monde.decisions[moi]}
+    lectures: tuple[tuple[LiteralString, Any], ...] = (
+        ("select count(*) from public.carto_cas where carto_id = %s", monde.cartos[autre]),
+        ("select count(*) from public.decisions where id = %s", monde.decisions[autre]),
+        ("select count(*) from public.decisions where groupe_id = %s", monde.groupes[autre]),
+    )
+    for requete, valeur in lectures:
+        assert conn.execute(requete, (valeur,)).fetchone() == (0,), requete
+
+
+def test_une_decision_survit_a_l_effacement_de_son_auteur(conn: Connexion, monde: Monde) -> None:
+    """RGPD : effacer le compte du membre garde la décision, sans auteur (decide_par à nul)."""
+    conn.execute("delete from auth.users where id = %s", (monde.user_a,))
+    ligne = conn.execute(
+        "select decision, decide_le is not null, decide_par from public.decisions where id = %s",
+        (monde.decisions[monde.org_a],),
+    )
+    assert ligne.fetchone() == ("ecarter", True, None)
+
+
 def test_un_utilisateur_sans_organisation_ne_voit_rien(conn: Connexion, monde: Monde) -> None:
     _en_tant_que(conn, monde.user_sans_org)
     for table in ("organisations", "membres", "travaux", *TABLES_CARTOS):
@@ -289,6 +340,11 @@ ECRITURES_REFUSEES: tuple[LiteralString, ...] = (
     "values (%(org)s, %(groupe)s, %(valide)s)",
     "delete from public.carto_societes where carto_id = %(carto)s",
     "delete from public.carto_liens where carto_id = %(carto)s",
+    "delete from public.carto_cas where carto_id = %(carto)s",
+    # Une décision passe par la Server Action (service_role), jamais en direct.
+    "insert into public.decisions (organisation_id, groupe_id, siren, decision) "
+    "values (%(org)s, %(groupe)s, '900000003', 'retenir')",
+    "update public.decisions set decision = 'retenir' where organisation_id = %(org)s",
 )
 
 
@@ -317,7 +373,7 @@ def test_anon_ne_lit_rien(conn: Connexion, monde: Monde, table: str) -> None:
 
 
 def test_rls_active_sur_chaque_table(conn: Connexion) -> None:
-    """T006 et T018, C1 : RLS active sur chaque table, dont les cinq de 0002_cartos.sql."""
+    """T006, T018 C1 et T027 C3 : RLS active sur chaque table, dont celles de 0002 et de 0003."""
     lignes = conn.execute(
         "select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace "
         "where n.nspname = 'public' and c.relname = any(%s) and c.relrowsecurity",
@@ -342,6 +398,7 @@ COLONNES_AUTORISEES = {
     ("organisations", "nom"),  # organisation cliente (Youno)
     ("groupes", "nom"),  # nom du groupe ou de sa société de tête
     ("carto_societes", "nom"),  # dénomination de la société au registre
+    ("carto_cas", "nom"),  # dénomination de la société au registre (T027)
 }
 MOTS_PERSONNE = ("nom", "prenom", "email", "mail", "personne", "dirigeant", "telephone", "naissance")
 
@@ -437,6 +494,14 @@ LIENS_CROISES: tuple[LiteralString, ...] = (
     "values (%(carto_a)s, %(org_b)s, '900000003', 1, true, false, false)",
     "insert into public.carto_liens (carto_id, organisation_id, parent_siren, enfant_siren, preuve, "
     "confiance) values (%(carto_a)s, %(org_b)s, '900000001', '900000003', 'test', 'B')",
+    # Cas douteux rangé dans B pour la carto de A (T027).
+    "insert into public.carto_cas (carto_id, organisation_id, siren, types, regle, retenue) "
+    "values (%(carto_a)s, %(org_b)s, '900000003', '{confiance_c}', 'test', true)",
+    # Décision de B sur le groupe de A, puis décision de A prise sur une carto de B.
+    "insert into public.decisions (organisation_id, groupe_id, siren, decision) "
+    "values (%(org_b)s, %(groupe_a)s, '900000003', 'ecarter')",
+    "insert into public.decisions (organisation_id, groupe_id, siren, decision, carto_id) "
+    "values (%(org_a)s, %(groupe_a)s, '900000003', 'ecarter', %(carto_b)s)",
 )
 
 
@@ -452,6 +517,7 @@ def test_aucune_ligne_ne_pointe_vers_une_autre_organisation(
         "valide_a": monde.reglages_valides[a],
         "valide_b": monde.reglages_valides[b],
         "carto_a": monde.cartos[a],
+        "carto_b": monde.cartos[b],
         "travail_b": monde.travaux[b],
     }
     with pytest.raises(psycopg.errors.ForeignKeyViolation):

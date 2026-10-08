@@ -199,3 +199,28 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 
 - Niveaux corrigés : 28 sociétés dans LVMH (3 boucles coupées, dont `318571064`, et leur descendance), 19 dans VINCI (4 boucles), 10 dans CMAF (1 boucle). Chaque niveau baisse de 2. Avant, 6, 8 et 2 sociétés violaient la règle « niveau = niveau de la mère + 1 » ; après, aucune.
 - Mêmes sociétés, mêmes maisons mères, mêmes preuves, confiances, réponses « ciblable » et comptes de rattachement dans les trois groupes : seule la colonne niveau bouge.
+
+### 2026-10-08, cas douteux et décisions du consultant (T027)
+
+- Le moteur range maintenant les cas douteux (`Carto.cas`), au lieu de les laisser noyés dans l'arbre. Quatre sortes : confiance C (un seul indice, rattachement déduit), co-entreprise (retenue, mais une société hors du groupe y tient un mandat fort ou moyen), participation sans contrôle, société étrangère. Chaque cas porte la règle qui l'a placé là et ses indices pour et contre, en textes du moteur : rôle, marque, nombre de sociétés à une adresse, nombre de dirigeants en commun. Jamais un nom de personne ; une entité extérieure absente de SIRENE (entrepreneur individuel, société cessée) n'est pas désignée.
+- Les décisions du consultant (`decisions`, migration `0003_cas_douteux.sql`) sont reprises à la carto suivante du même groupe. La plus récente l'emporte (`decisions_en_vigueur`). « Écarter » fait sortir une société que les règles retiennent, et donc les sociétés qui n'entraient que par elle ; le cas garde la règle qui l'aurait fait entrer. « Retenir » fait entrer une société que le moteur voit encore liée au groupe ; une décision sur une société disparue, ou qui n'a plus aucun indice, est sans objet. Une société décidée reste dans la liste (type « décision ») pour qu'on puisse revenir dessus. Les règles du moteur ne changent pas (principe 1).
+- Non-régression, même registre, avant → après (sans décision, comme la non-régression) :
+
+| Groupe | Retrouvées | En plus | Même mère |
+|---|---|---|---|
+| LVMH | 155/172 → 155/172 | 15 → 15 | 71 % → 71 % |
+| VINCI | 813/1 007 → 813/1 007 | 176 → 176 | 63 % → 63 % |
+| CMAF | 43/52 → 43/52 | 529 → 529 (non mesuré) | — |
+
+- Aucun écart : sociétés, liens, participations, sociétés étrangères et tours identiques champ par champ dans les trois groupes. Le premier passage CMAF de la non-régression a échoué sur une erreur interne de DuckDB dans la recherche des marques (code non modifié, machine chargée) ; relancé seul, il passe.
+- Cas douteux par groupe :
+
+| Groupe | Cas | Dans la carto | Hors carto | Confiance C | Co-entreprise | Participation | Étrangère |
+|---|---|---|---|---|---|---|---|
+| LVMH | 80 | 27 | 53 | 14 | 13 | 35 | 18 |
+| VINCI | 569 | 484 | 85 | 173 | 314 | 56 | 29 |
+| CMAF | 353 | 207 | 146 | 19 | 190 | 129 | 17 |
+
+  Un cas peut avoir deux sortes. Chaque cas a au moins un indice pour et un indice contre.
+- Piège payé : une première version recopiait la marque dans l'indice (« marque sûre : … »). Le test SC-005 sur le registre réel a trouvé dans LVMH un nom complet de dirigeant dans ce texte : une marque de maison peut être le nom de son fondateur, porté aussi par un dirigeant. L'indice dit maintenant « Porte une marque sûre du groupe », sans la marque ; le nom de la société, affiché à côté, la montre déjà. Après correction, SC-005 : 0 personne trouvée dans le texte du moteur, pour les trois groupes.
+- Le PRD (US4) attendait les 176 sociétés « en plus » de VINCI dans la liste : 93 y sont. Les 83 autres sont retenues en confiance B (75) ou A (8), sans mandat extérieur : le moteur n'a pas de raison de douter d'elles. Les y mettre voudrait dire classer « douteuse » toute confiance B ; c'est une décision produit, pas prise ici.

@@ -66,7 +66,7 @@ L'app tient sa propre copie du registre français (SIRENE et RNE), avec tous les
 **En tant que** consultant, **je veux** une liste des cas douteux (confiance C, co-entreprises, participations, sociétés étrangères), chacun avec ses indices pour et contre, **pour** décider vite ce que je livre.
 
 **Pourquoi P2** : l'arbre marque déjà ces cas en confiance C. La liste rend seulement leur traitement plus rapide.
-**Testable seule** : sur VINCI, on vérifie que les 176 sociétés « en plus » apparaissent dans la liste, avec leurs indices.
+**Testable seule** : sur VINCI, on vérifie que les sociétés « en plus » qui sont des cas douteux (confiance C, co-entreprise, participation sans contrôle, société étrangère) apparaissent dans la liste, avec leurs indices. *Décidé le 2026-10-08, T027* : les sociétés « en plus » retenues en confiance A ou B, sans mandat extérieur, ne sont pas des cas : le moteur n'a pas de raison de douter d'elles, et les lister reviendrait à classer « douteuse » toute confiance B. Mesure du 2026-10-08 : 93 des 176 sociétés « en plus » de VINCI sont dans la liste ; les 83 autres sont en confiance B (75) ou A (8).
 
 **Scénarios d'acceptation**
 1. **Étant donné** une carto finie, **quand** il ouvre la liste, **alors** chaque cas montre ses indices et la règle qui l'a placé là.

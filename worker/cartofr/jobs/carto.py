@@ -18,7 +18,9 @@ Sorties :
       `fin_le`, `duree_ms` et `avertissement` (texte français, affiché tel quel) ;
     - une ligne `carto_societes` par société retenue, une ligne `carto_liens`
       par mandat au registre entre deux sociétés retenues, toutes avec
-      l'`organisation_id` du travail (C2).
+      l'`organisation_id` du travail (C2) ;
+    - une ligne `carto_cas` par cas douteux rangé par le moteur, avec sa règle,
+      ses indices et la décision appliquée (T027).
 
 Règles :
     - Refus d'une version de réglages non validée (FR-005, principe 2, C1),
@@ -40,6 +42,10 @@ Règles :
     - Échec : statut `echec` et un avertissement français sûr, jamais le texte
       d'une exception ; puis le travail échoue (T008 : la colonne `erreur` de
       `travaux` ne porte que le nom de la classe).
+    - Décisions du consultant (T027, FR-009) : toutes celles du groupe, dans
+      l'organisation du travail, sont lues ; la plus récente par SIREN est en
+      vigueur (`decisions_en_vigueur`) et passe au moteur. Une décision n'est
+      jamais effacée ni modifiée : une nouvelle décision la remplace.
     - Aucun nom de personne n'est écrit (garde-fou 6) : la `Carto` du moteur
       n'a aucun champ qui puisse en porter, et les preuves sont des textes du
       moteur (rôle, marque, règle). `non_diffusible` inconnu s'écrit `false`
@@ -63,7 +69,7 @@ import psycopg
 from cartofr.empreinte import CleManquante, cle_depuis_env
 from cartofr.jobs import Contexte, enregistrer
 from cartofr.jobs.synchro import FUSEAU, NOM_REGISTRE, RNE, SIRENE, Jours, dossier_donnees, empreinte_registre
-from cartofr.moteur import Carto, cartographier
+from cartofr.moteur import Carto, Decision, cartographier, decisions_en_vigueur
 from cartofr.reglages import Reglages, ReglagesInvalides, valider
 
 log = logging.getLogger(__name__)
@@ -107,6 +113,7 @@ class CartoLue:
 
     id: uuid.UUID
     organisation_id: uuid.UUID
+    groupe_id: uuid.UUID
     statut: str
     travail_id: int | None
     contenu: Any
@@ -114,7 +121,7 @@ class CartoLue:
 
 
 _LIRE: LiteralString = """
-select c.id, c.organisation_id, c.statut, c.travail_id, r.contenu, r.valide_le
+select c.id, c.organisation_id, c.groupe_id, c.statut, c.travail_id, r.contenu, r.valide_le
   from public.cartos c
   join public.reglages r
     on r.id = c.reglages_id and r.groupe_id = c.groupe_id and r.organisation_id = c.organisation_id
@@ -156,6 +163,19 @@ _LIEN: LiteralString = """
 insert into public.carto_liens (carto_id, organisation_id, parent_siren, enfant_siren, role, preuve,
   confiance)
 values (%s, %s, %s, %s, %s, %s, %s)
+"""
+
+_CAS: LiteralString = """
+insert into public.carto_cas (carto_id, organisation_id, siren, nom, types, regle, retenue,
+  indices_pour, indices_contre, decision)
+values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+"""
+
+# Toutes les décisions du groupe, dans l'organisation du travail : la règle de la plus récente
+# est en Python (`decisions_en_vigueur`, testée), pas en SQL.
+_DECISIONS: LiteralString = """
+select siren, decision, decide_le, id from public.decisions
+ where groupe_id = %s and organisation_id = %s
 """
 
 
@@ -242,6 +262,32 @@ def lignes_liens(carto: Carto, carto_id: uuid.UUID, organisation_id: uuid.UUID) 
 # --- Base -----------------------------------------------------------------------------------
 
 
+def lignes_cas(carto: Carto, carto_id: uuid.UUID, organisation_id: uuid.UUID) -> list[tuple[Any, ...]]:
+    """Les lignes `carto_cas` : chaque cas douteux, avec sa règle, ses indices et sa décision."""
+    return [
+        (
+            carto_id,
+            organisation_id,
+            c.siren,
+            c.nom,
+            list(c.types),
+            c.regle,
+            c.retenue,
+            list(c.indices_pour),
+            list(c.indices_contre),
+            c.decision,
+        )
+        for c in carto.cas
+    ]
+
+
+def lire_decisions(conn: Connexion, groupe_id: uuid.UUID, organisation_id: uuid.UUID) -> dict[str, Decision]:
+    """Les décisions en vigueur du groupe (la plus récente par SIREN), pour le moteur."""
+    lignes = conn.execute(_DECISIONS, (groupe_id, organisation_id)).fetchall()
+    conn.commit()
+    return decisions_en_vigueur(lignes)
+
+
 def lire(conn: Connexion, carto_id: uuid.UUID, organisation_id: uuid.UUID) -> CartoLue | None:
     ligne = conn.execute(_LIRE, (carto_id, organisation_id)).fetchone()
     conn.commit()
@@ -273,11 +319,12 @@ def enregistrer_resultat(
     duree_ms: int,
     message: str | None,
 ) -> None:
-    """Sociétés, liens et statut `terminee`, en une seule transaction."""
+    """Sociétés, liens, cas douteux et statut `terminee`, en une seule transaction."""
     try:
         with conn.cursor() as cur:
             cur.executemany(_SOCIETE, lignes_societes(carto, carto_id, organisation_id))
             cur.executemany(_LIEN, lignes_liens(carto, carto_id, organisation_id))
+            cur.executemany(_CAS, lignes_cas(carto, carto_id, organisation_id))
             cur.execute(_TERMINER, (date_donnees, duree_ms, message, carto_id, organisation_id))
             if cur.fetchone() is None:
                 raise CartoEnEchec(ECHEC)  # la carto n'est plus en cours : rien n'est écrit
@@ -341,7 +388,8 @@ def travail_carto(ctx: Contexte) -> None:
         donnees = date_des_donnees(registre)
         contenu = reglages.model_dump()
         cle = cle_depuis_env() if contenu["familles_exclues_empreintes"] else None
-        carto = cartographier(contenu, registre, cle_empreinte=cle)
+        decisions = lire_decisions(conn, lue.groupe_id, organisation_id)
+        carto = cartographier(contenu, registre, cle_empreinte=cle, decisions=decisions)
         duree_ms = round((time.monotonic() - debut) * 1000)
         message = avertissement(carto, donnees, datetime.now(FUSEAU).date())
         enregistrer_resultat(conn, carto, carto_id, organisation_id, donnees, duree_ms, message)
@@ -356,9 +404,10 @@ def travail_carto(ctx: Contexte) -> None:
             raise
         raise CartoEnEchec(_message(exc)) from exc
     log.info(
-        "carto %s terminée : %s sociétés, %s liens, %s ms",
+        "carto %s terminée : %s sociétés, %s liens, %s cas douteux, %s ms",
         carto_id,
         len(carto.societes),
         len(carto.liens),
+        len(carto.cas),
         duree_ms,
     )
