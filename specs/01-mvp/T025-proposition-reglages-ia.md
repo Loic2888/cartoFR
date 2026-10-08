@@ -30,14 +30,14 @@ Type de travail `proposition` : lecture du site et du rapport annuel, propositio
 L'IA ne décide jamais (principe 1).
 
 ## Critères de succès
-- [ ] **C1** : La proposition est enregistrée sans `valide_le` (test)
-- [ ] **C2** : `test_proposition.py` vérifie qu'aucun nom de `dirigeants_personnes` n'entre dans le prompt
-- [ ] **C3** : Une marque qui a des homonymes au registre est rangée en ambiguë (test)
+- [x] **C1** : La proposition est enregistrée sans `valide_le` (test)
+- [x] **C2** : `test_proposition.py` vérifie qu'aucun nom de `dirigeants_personnes` n'entre dans le prompt
+- [x] **C3** : Une marque qui a des homonymes au registre est rangée en ambiguë (test)
 
 ## Tests et validation
 
 ### Vérification manuelle
-1. Proposer les réglages d'un groupe connu et comparer à `config/`
+1. Proposer les réglages d'un groupe connu et comparer à `config/` — *ouvert le 2026-10-08 : demande l'API réelle (clé `ANTHROPIC_API_KEY`), non faite ; protocole avec la mesure SC-007 de T026 dans `rapport.md`*
 
 ### Cas limites
 - Aucun propre à cette tâche
