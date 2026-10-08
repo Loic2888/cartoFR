@@ -183,3 +183,19 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 | CMAF | 43/52 → 43/52 | 529 → 529 (non mesuré) | — | 6 → 6 |
 
 - Aucun écart : les trois groupes ont exactement les mêmes SIREN, maisons mères et niveaux avant et après. Les trois atteignaient déjà leur point fixe sous 8 tours (VINCI : 6 tours qui ajoutent des sociétés, puis 1 qui constate que rien ne change). La garde de 8 ne coupait donc rien sur nos groupes de référence ; elle aurait coupé un groupe plus profond, sans le dire.
+
+### 2026-10-08, niveau cohérent avec la maison mère après une boucle coupée (T036)
+
+- Défaut trouvé à l'essai de T022 : dans `build`, la fonction récursive `lvl` coupait une boucle de mandats croisés (A → B → A) en rattachant A à la tête avec le niveau 1, puis l'appel qui avait commencé par A reprenait la main et écrasait ce niveau par `niveau(B) + 1`, soit 3. La maison mère disait « tête », le niveau disait 3, et toute la descendance de A était décalée de 2.
+- Correction : deux passes. D'abord les rattachements : les boucles sont coupées, sur la même société qu'avant (la première de la boucle atteinte en remontant). Ensuite les niveaux, sur des rattachements fixés : niveau = niveau de la maison mère + 1, tête à 0. Rien d'autre ne change dans le moteur.
+- Tests : `test_boucle_de_mandats_coupee_niveau_coherent` (boucle A → B → A sous la marque, plus une filiale de A) et `test_niveau_egal_niveau_de_la_maison_mere_plus_un` (invariant sur une carto complète : mandats sur trois niveaux, tête de maison d'une marque, boucle coupée et sa descendance). Les deux échouaient avant la correction.
+- Non-régression, même registre, avant → après :
+
+| Groupe | Retrouvées | En plus | Même mère |
+|---|---|---|---|
+| LVMH | 155/172 → 155/172 | 15 → 15 | 71 % → 71 % |
+| VINCI | 813/1 007 → 813/1 007 | 176 → 176 | 63 % → 63 % |
+| CMAF | 43/52 → 43/52 | 529 → 529 (non mesuré) | — |
+
+- Niveaux corrigés : 28 sociétés dans LVMH (3 boucles coupées, dont `318571064`, et leur descendance), 19 dans VINCI (4 boucles), 10 dans CMAF (1 boucle). Chaque niveau baisse de 2. Avant, 6, 8 et 2 sociétés violaient la règle « niveau = niveau de la mère + 1 » ; après, aucune.
+- Mêmes sociétés, mêmes maisons mères, mêmes preuves, confiances, réponses « ciblable » et comptes de rattachement dans les trois groupes : seule la colonne niveau bouge.

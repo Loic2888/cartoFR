@@ -28,10 +28,10 @@ Calculer les niveaux une fois les rattachements fixés (coupure des boucles d'ab
 Pas de régression silencieuse (principe 5) : un score qui baisse ou des « en plus » qui montent nettement ne se rendent pas sans le dire.
 
 ## Critères de succès
-- [ ] **C1** : Un test de `test_regles.py` (boucle A → B → A) vérifie que chaque société a `niveau = niveau(maison mère) + 1` et la tête 0
-- [ ] **C2** : Un test vérifie cet invariant sur la carto complète des tests du moteur
-- [ ] **C3** : `rapport.md` donne, datés, les scores LVMH, VINCI et CMAF avant et après la correction, et le nombre de niveaux corrigés
-- [ ] **C4** : Aucun score ne baisse sous ceux du 2026-10-06 (154/172, 813/1 007, 43/52)
+- [x] **C1** : Un test de `test_regles.py` (boucle A → B → A) vérifie que chaque société a `niveau = niveau(maison mère) + 1` et la tête 0
+- [x] **C2** : Un test vérifie cet invariant sur la carto complète des tests du moteur
+- [x] **C3** : `rapport.md` donne, datés, les scores LVMH, VINCI et CMAF avant et après la correction, et le nombre de niveaux corrigés
+- [x] **C4** : Aucun score ne baisse sous ceux du 2026-10-06 (154/172, 813/1 007, 43/52)
 
 ## Tests et validation
 
