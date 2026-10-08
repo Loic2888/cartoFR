@@ -93,13 +93,15 @@ export default async function Carto({ params }: PageProps<"/groupes/[id]/cartos/
   ]);
   const orpheline = !terminee && statut !== "echec" && !active;
 
-  const [societes, { count: nbLiens, error: erreurLiens }] = terminee
+  const [societes, { count: nbLiens, error: erreurLiens }, { count: nbCas, error: erreurCas }] = terminee
     ? await Promise.all([
         lireSocietes(supabase, cartoId),
         supabase.from("carto_liens").select("id", { count: "exact", head: true }).eq("carto_id", cartoId),
+        supabase.from("carto_cas").select("siren", { count: "exact", head: true }).eq("carto_id", cartoId),
       ])
-    : [[] as SocieteCarto[], { count: null, error: null }];
+    : [[] as SocieteCarto[], { count: null, error: null }, { count: null, error: null }];
   if (erreurLiens) console.error("carto : comptage des liens impossible", { code: erreurLiens.code });
+  if (erreurCas) console.error("carto : comptage des cas douteux impossible", { code: erreurCas.code });
 
   const nomGroupe = groupe.nom as string;
   const lienGroupe = `/groupes/${id}`;
@@ -166,11 +168,18 @@ export default async function Carto({ params }: PageProps<"/groupes/[id]/cartos/
       ) : null}
 
       {terminee ? (
-        <div>
+        <div className="flex flex-col gap-3 sm:flex-row">
           {/* Fichier rendu par une route (T023) : un lien ordinaire, pas une navigation client. */}
           <a href={`/groupes/${id}/cartos/${cartoId}/export`} className={buttonVariants({ className: "w-full sm:w-auto" })}>
             Exporter (CSV)
           </a>
+          {/* Cas douteux à trancher (T028). */}
+          <Link
+            href={`/groupes/${id}/cartos/${cartoId}/cas`}
+            className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
+          >
+            Cas douteux{nbCas === null ? "" : ` (${nombre(nbCas)})`}
+          </Link>
         </div>
       ) : null}
 

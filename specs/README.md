@@ -68,7 +68,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 ## Phase 6 : US4 — Traiter les cas douteux (P2)
 
 - [x] `T027` — Sortir les cas douteux et réutiliser les décisions
-- [ ] `T028` — Lister les cas douteux et décider
+- [x] `T028` — Lister les cas douteux et décider
 
 ## Phase 7 : US5 — Export HubSpot et Cargo (P3)
 
