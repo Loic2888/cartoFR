@@ -6,8 +6,10 @@
 // Lu avec la session (RLS) : une carto d'une autre organisation, ou d'un autre
 // groupe que celui de l'adresse, n'existe pas pour l'utilisateur, d'où un 404.
 // Les textes viennent de `carto_cas`, écrits par le worker sans nom de personne
-// (garde-fou 6). L'auteur d'une décision se dit « vous » ou « un autre membre » :
-// ni nom ni e-mail (minimisation).
+// (garde-fou 6). L'auteur d'une décision se dit « vous », ou par son e-mail
+// s'il est membre de l'organisation de la carto (lu côté serveur, comme
+// l'écran des membres : lib/cartos/auteurs.ts), « un ancien membre » ou « un
+// compte supprimé ». Aucun e-mail dans les journaux.
 //
 // Mobile d'abord : une liste de cartes, une colonne, boutons pleine largeur.
 import { CircleCheck, CircleMinus, CirclePlus, CircleX } from "lucide-react";
@@ -25,7 +27,9 @@ import {
   estDecision,
   libelleType,
 } from "@/lib/cartos/cas";
+import { type DepotAuteurs, emailsDesAuteurs } from "@/lib/cartos/auteurs";
 import { utilisateurCourant } from "@/lib/session";
+import { creerClientAdmin } from "@/lib/supabase/admin";
 
 import { DecisionCas } from "./decision-cas";
 
@@ -83,6 +87,25 @@ function lireDecisions(supabase: Supabase, groupeId: string) {
   );
 }
 
+/** Membres lus avec la session (RLS), e-mails lus en service_role pour ces seuls membres. */
+function depotAuteurs(supabase: Supabase): DepotAuteurs {
+  return {
+    async membresDe(organisationId) {
+      const { data, error } = await supabase
+        .from("membres")
+        .select("user_id")
+        .eq("organisation_id", organisationId);
+      if (error) console.error("cas : lecture des membres impossible", { code: error.code });
+      return (data ?? []).map((m) => m.user_id as string);
+    },
+    async emailDe(userId) {
+      const { data, error } = await creerClientAdmin().auth.admin.getUserById(userId);
+      if (error) console.error("cas : lecture d'un auteur impossible", { code: error.code });
+      return data.user?.email ?? null;
+    },
+  };
+}
+
 const nombre = (n: number) => n.toLocaleString("fr-FR");
 
 function Indices({ titre, indices, pour }: { titre: string; indices: string[]; pour: boolean }) {
@@ -113,7 +136,12 @@ export default async function CasDouteux({ params }: PageProps<"/groupes/[id]/ca
   const { supabase, user } = await utilisateurCourant();
   const [{ data: groupe }, { data: carto }] = await Promise.all([
     supabase.from("groupes").select("id, nom").eq("id", id).maybeSingle(),
-    supabase.from("cartos").select("id, statut").eq("id", cartoId).eq("groupe_id", id).maybeSingle(),
+    supabase
+      .from("cartos")
+      .select("id, statut, organisation_id")
+      .eq("id", cartoId)
+      .eq("groupe_id", id)
+      .maybeSingle(),
   ]);
   if (!groupe || !carto) notFound();
 
@@ -123,6 +151,11 @@ export default async function CasDouteux({ params }: PageProps<"/groupes/[id]/ca
     : [[] as CasCarto[], [] as DecisionLue[]];
   const dernieres = dernieresDecisions(decisions ?? []);
   const tranches = (cas ?? []).filter((c) => dernieres.has(c.siren)).length;
+  const emails = await emailsDesAuteurs(
+    depotAuteurs(supabase),
+    carto.organisation_id as string,
+    [...dernieres.values()].map((d) => (d.decide_par === user.id ? null : d.decide_par)),
+  );
 
   const nomGroupe = groupe.nom as string;
   const lienCarto = `/groupes/${id}/cartos/${cartoId}`;
@@ -208,7 +241,7 @@ export default async function CasDouteux({ params }: PageProps<"/groupes/[id]/ca
                     <div className="flex flex-col gap-1">
                       <h4 className="text-sm font-medium">Décision</h4>
                       <p>
-                        {derniere ? decisionFr(derniere, user.id) : "Pas encore de décision."}
+                        {derniere ? decisionFr(derniere, user.id, emails) : "Pas encore de décision."}
                         {appliquee ? ` Appliquée à cette carto : ${LIBELLE_DECISION[appliquee].toLowerCase()}.` : ""}
                       </p>
                     </div>

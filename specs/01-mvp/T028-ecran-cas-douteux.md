@@ -42,7 +42,7 @@ Page de liste des cas, avec indices pour et contre, et boutons « Retenir » ou 
 ### État (2026-10-08)
 - C1 à C3 tenus dans le code et testés (`web/lib/cartos/cas.test.ts`, `cas/decision-cas.test.tsx`, `worker/tests/test_rls.py`).
 - La vérification manuelle (10 cas VINCI à 320 px) n'a pas été faite : elle demande l'app lancée avec Supabase et une carto VINCI calculée. À faire à la recette.
-- L'auteur s'affiche « par vous », « par un autre membre » ou « par un compte supprimé » : la base garde l'identifiant du membre, jamais son nom ni son e-mail (minimisation). Le PRD dit « avec son nom » : afficher l'e-mail des collègues est une décision à prendre.
+- Auteur (décidé le 2026-10-08 par Loïc, PRD « avec son nom ») : « par vous », sinon l'e-mail du membre, affiché aux seuls membres de l'organisation de la carto. L'e-mail est lu côté serveur, comme l'écran des membres (T009) : membres sous RLS, puis `auth.users` en service_role pour ces seuls membres (`web/lib/cartos/auteurs.ts`, testé : un membre de B ne lit jamais l'e-mail d'un membre de A). « Un ancien membre » si l'auteur a quitté l'organisation, « un compte supprimé » si son compte est effacé. Aucun e-mail dans les journaux.
 
 ## Dépendances
 

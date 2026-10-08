@@ -32,18 +32,20 @@ describe("libellés", () => {
     expect(libelleType("joint_venture")).toBe("Autre cas");
   });
 
-  it("l'auteur se dit sans nom ni e-mail", () => {
-    expect(auteurFr(MOI, MOI)).toBe("par vous");
-    expect(auteurFr("user-autre", MOI)).toBe("par un autre membre");
-    expect(auteurFr(null, MOI)).toBe("par un compte supprimé");
+  it("l'auteur se dit « vous », par son e-mail, ancien membre ou compte supprimé", () => {
+    const emails = new Map([["user-autre", "collegue@exemple.test"]]);
+    expect(auteurFr(MOI, MOI, emails)).toBe("par vous");
+    expect(auteurFr("user-autre", MOI, emails)).toBe("par collegue@exemple.test");
+    expect(auteurFr("user-parti", MOI, emails)).toBe("par un ancien membre");
+    expect(auteurFr(null, MOI, emails)).toBe("par un compte supprimé");
   });
 
   it("une décision se lit avec son état, sa date et son heure de Paris, et son auteur", () => {
     expect(
-      decisionFr({ decision: "ecarter", decide_le: "2026-10-08T08:12:00+00:00", decide_par: MOI }, MOI),
+      decisionFr({ decision: "ecarter", decide_le: "2026-10-08T08:12:00+00:00", decide_par: MOI }, MOI, new Map()),
     ).toBe("Écartée le 08/10/2026 à 10:12, par vous");
     expect(
-      decisionFr({ decision: "retenir", decide_le: "2026-12-31T23:30:00+00:00", decide_par: null }, MOI),
+      decisionFr({ decision: "retenir", decide_le: "2026-12-31T23:30:00+00:00", decide_par: null }, MOI, new Map()),
     ).toBe("Retenue le 01/01/2027 à 00:30, par un compte supprimé");
   });
 });

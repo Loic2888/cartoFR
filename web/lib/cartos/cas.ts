@@ -83,11 +83,13 @@ export function dernieresDecisions(decisions: DecisionLue[]): Map<string, Decisi
   return dernieres;
 }
 
-/** Qui a décidé, sans nom ni e-mail (minimisation) : l'utilisateur lui-même, un autre membre, ou
- * un compte effacé (decide_par à nul). */
-export function auteurFr(decidePar: string | null, moi: string): string {
+/** Qui a décidé : l'utilisateur lui-même, l'e-mail d'un membre de l'organisation (lu côté
+ * serveur, lib/cartos/auteurs.ts), un ancien membre, ou un compte effacé (decide_par à nul). */
+export function auteurFr(decidePar: string | null, moi: string, emails: ReadonlyMap<string, string>): string {
   if (decidePar === null) return "par un compte supprimé";
-  return decidePar === moi ? "par vous" : "par un autre membre";
+  if (decidePar === moi) return "par vous";
+  const email = emails.get(decidePar);
+  return email ? `par ${email}` : "par un ancien membre";
 }
 
 const dateFr = new Intl.DateTimeFormat("fr-FR", {
@@ -99,10 +101,14 @@ const dateFr = new Intl.DateTimeFormat("fr-FR", {
 const heureFr = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" });
 
 /** « Écartée le 08/10/2026 à 10:12, par vous ». */
-export function decisionFr(d: Pick<DecisionLue, "decision" | "decide_le" | "decide_par">, moi: string): string {
+export function decisionFr(
+  d: Pick<DecisionLue, "decision" | "decide_le" | "decide_par">,
+  moi: string,
+  emails: ReadonlyMap<string, string>,
+): string {
   const etat = estDecision(d.decision) ? LIBELLE_DECISION[d.decision] : "Décision inconnue";
   const le = new Date(d.decide_le);
-  return `${etat} le ${dateFr.format(le)} à ${heureFr.format(le)}, ${auteurFr(d.decide_par, moi)}`;
+  return `${etat} le ${dateFr.format(le)} à ${heureFr.format(le)}, ${auteurFr(d.decide_par, moi, emails)}`;
 }
 
 export const MESSAGES = {
