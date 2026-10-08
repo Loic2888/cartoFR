@@ -32,7 +32,7 @@ from fabrique import (
     siren,
 )
 
-from cartofr.moteur import Carto, cartographier
+from cartofr.moteur import Carto, cartographier, moteur
 from cartofr.moteur.modele import Mandat, Societe
 
 TETE = siren(1)
@@ -702,16 +702,46 @@ def test_point_fixe_societe_trouvee_au_troisieme_tour(mini: MiniRegistre, tmp_pa
     assert [(s[x].niveau, s[x].maison_mere_siren) for x in (F1, F2, F3)] == [(1, TETE), (2, F1), (3, F2)]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Écart : la boucle s'arrête après MAX_TOURS = 8 tours même si elle n'a pas atteint "
-    "le point fixe ; une chaîne de 9 mandats forts sous la tête perd son 9ᵉ niveau sans le signaler.",
-)
-def test_point_fixe_atteint_au_dela_de_huit_niveaux(mini: MiniRegistre, tmp_path: Path) -> None:
-    """Le point fixe ne dépend pas de la profondeur du groupe : le 9ᵉ niveau d'une chaîne de mandats est
-    trouvé."""
+def chaine_de_mandats(mini: MiniRegistre) -> None:
+    """TETE préside F1, qui préside F2… jusqu'à F9 : un niveau de plus à chaque tour."""
     chaine = [TETE, F1, F2, F3, F4, F5, F6, F7, F8, F9]
     for i, (parent, enfant) in enumerate(zip(chaine, chaine[1:], strict=False), start=1):
         filiale(mini, enfant, f"NIVEAU INVENTE {i}", parent=parent)
-    s = societes(lancer(mini, tmp_path))
-    assert s[F9].niveau == 9
+
+
+def test_point_fixe_atteint_au_dela_de_huit_niveaux(mini: MiniRegistre, tmp_path: Path) -> None:
+    """Le point fixe ne dépend pas de la profondeur du groupe : le 9ᵉ niveau d'une chaîne de mandats est
+    trouvé, et la carto ne porte aucun avertissement (T035)."""
+    chaine_de_mandats(mini)
+    carto = lancer(mini, tmp_path)
+    assert societes(carto)[F9].niveau == 9
+    assert len(carto.tours) == 10  # 9 tours qui trouvent un niveau, 1 qui constate le point fixe
+    assert carto.avertissements == ()
+
+
+def test_garde_haute_atteinte_signalee(
+    mini: MiniRegistre, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Si la garde haute arrête la boucle avant le point fixe, la carto le dit au lieu de perdre des
+    niveaux en silence (T035, C2)."""
+    monkeypatch.setattr(moteur, "MAX_TOURS", 3)
+    chaine_de_mandats(mini)
+    carto = lancer(mini, tmp_path)
+    assert len(carto.tours) == 3
+    assert F4 not in societes(carto)  # le 4ᵉ niveau manque…
+    assert carto.avertissements == (moteur.GARDE_ATTEINTE,)  # … et la carto le signale
+    assert "tours sans se stabiliser" in moteur.GARDE_ATTEINTE
+
+
+def test_garde_haute_juste_suffisante_sans_avertissement(
+    mini: MiniRegistre, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cas limite : le dernier tour permis ne trouve plus rien, le point fixe est atteint, sans
+    avertissement."""
+    monkeypatch.setattr(moteur, "MAX_TOURS", 4)
+    filiale(mini, F1, "NIVEAU INVENTE 1")
+    filiale(mini, F2, "NIVEAU INVENTE 2", parent=F1)
+    filiale(mini, F3, "NIVEAU INVENTE 3", parent=F2)
+    carto = lancer(mini, tmp_path)
+    assert [t.retenues for t in carto.tours] == [2, 3, 4, 4]
+    assert carto.avertissements == ()

@@ -28,10 +28,10 @@ Boucler jusqu'au point fixe avec une garde haute (ex. 50 tours) ; si la garde es
 Pas de régression silencieuse (principe 5) : un score qui baisse ou des « en plus » qui montent nettement ne se rendent pas sans le dire.
 
 ## Critères de succès
-- [ ] **C1** : `test_point_fixe_atteint_au_dela_de_huit_niveaux` passe sans `xfail`
-- [ ] **C2** : La carto porte un avertissement si la garde haute est atteinte (test)
-- [ ] **C3** : `rapport.md` donne, datés, les scores LVMH, VINCI et CMAF avant et après la correction, et explique tout écart
-- [ ] **C4** : Aucun score ne baisse sous ceux du 2026-10-06 (154/172, 813/1 007, 43/52)
+- [x] **C1** : `test_point_fixe_atteint_au_dela_de_huit_niveaux` passe sans `xfail`
+- [x] **C2** : La carto porte un avertissement si la garde haute est atteinte (test)
+- [x] **C3** : `rapport.md` donne, datés, les scores LVMH, VINCI et CMAF avant et après la correction, et explique tout écart
+- [x] **C4** : Aucun score ne baisse sous ceux du 2026-10-06 (154/172, 813/1 007, 43/52)
 
 ## Tests et validation
 

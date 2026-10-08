@@ -169,3 +169,17 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 | CMAF | 43/52 → 43/52 | 529 → 529 (non mesuré) | — |
 
 - Aucun écart : les trois cartos ont exactement les mêmes SIREN, maisons mères et réponses « ciblable » avant et après (170, 989 et 572 sociétés). La correction protège les groupes à venir, elle ne change pas les trois groupes de référence.
+
+### 2026-10-08, point fixe sans limite silencieuse (T035)
+
+- Défaut trouvé par T017 : la boucle du moteur s'arrêtait après `MAX_TOURS = 8` tours, même si le point fixe n'était pas atteint. Une chaîne de 9 mandats sous la tête perdait son 9ᵉ niveau, sans rien dire. Correction : la boucle va jusqu'au point fixe, avec une garde haute de 50 tours. Si la garde est atteinte avant le point fixe, la carto porte un avertissement en français (`Carto.avertissements`), repris par le travail `carto` dans `cartos.avertissement`, déjà affiché tel quel par l'app. Rien d'autre ne change dans le moteur.
+- Tests : `test_point_fixe_atteint_au_dela_de_huit_niveaux` passe sans `xfail` (9 niveaux, 10 tours, aucun avertissement). Ajoutés : garde ramenée à 3 tours sur la même chaîne (le 4ᵉ niveau manque et la carto le signale) ; garde de 4 tours pour un point fixe atteint au 4ᵉ tour (aucun avertissement) ; l'avertissement du moteur arrive dans le texte de `cartos.avertissement`.
+- Non-régression, même registre, avant → après :
+
+| Groupe | Retrouvées | En plus | Même mère | Tours |
+|---|---|---|---|---|
+| LVMH | 155/172 → 155/172 | 15 → 15 | 71 % → 71 % | 5 → 5 |
+| VINCI | 813/1 007 → 813/1 007 | 176 → 176 | 63 % → 63 % | 7 → 7 |
+| CMAF | 43/52 → 43/52 | 529 → 529 (non mesuré) | — | 6 → 6 |
+
+- Aucun écart : les trois groupes ont exactement les mêmes SIREN, maisons mères et niveaux avant et après. Les trois atteignaient déjà leur point fixe sous 8 tours (VINCI : 6 tours qui ajoutent des sociétés, puis 1 qui constate que rien ne change). La garde de 8 ne coupait donc rien sur nos groupes de référence ; elle aurait coupé un groupe plus profond, sans le dire.

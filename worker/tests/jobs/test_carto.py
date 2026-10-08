@@ -20,7 +20,7 @@ import os
 import sys
 import uuid
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -44,6 +44,7 @@ from cartofr.jobs import TRAVAUX  # noqa: E402
 from cartofr.jobs import carto as job  # noqa: E402
 from cartofr.jobs.synchro import RNE, SIRENE, Jours  # noqa: E402
 from cartofr.moteur import cartographier  # noqa: E402
+from cartofr.moteur.moteur import GARDE_ATTEINTE  # noqa: E402
 from cartofr.registre.construire import DATE_STOCK  # noqa: E402
 from cartofr.reglages import valider  # noqa: E402
 from cartofr.travaux import Travail  # noqa: E402
@@ -276,6 +277,14 @@ def test_avertissement_frais_et_complet_vide(tmp_path: Path) -> None:
     assert job.avertissement(carto, date(2026, 10, 1), date(2026, 10, 8)) is None  # 7 jours : à l'heure
     vieux = job.avertissement(carto, date(2026, 3, 4), date(2026, 10, 7))
     assert vieux is not None and "04/03/2026" in vieux and "7 jours" in vieux
+
+
+def test_avertissement_reprend_ceux_du_moteur(tmp_path: Path) -> None:
+    """Un avertissement du moteur (garde de la boucle atteinte, T035) arrive dans `cartos.avertissement`."""
+    mini = registre_groupe()
+    carto = cartographier(valider(CONTENU).model_dump(), mini.ecrire(tmp_path / "r.duckdb"))
+    carto = replace(carto, avertissements=(GARDE_ATTEINTE,))
+    assert job.avertissement(carto, date(2026, 10, 1), date(2026, 10, 8)) == GARDE_ATTEINTE
 
 
 # --- C1 : version non validée -----------------------------------------------------------------------
