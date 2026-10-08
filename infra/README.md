@@ -136,7 +136,7 @@ Deux services partent de la même image Python (`infra/worker.Dockerfile`) :
 | Service | Commande | Ce qu'il fait |
 |---|---|---|
 | `worker` | `python -m cartofr` | La file de travaux (cartos, synchro). Se connecte à `db` en direct, rôle `postgres` (`DATABASE_URL` construite depuis `POSTGRES_PASSWORD`). Monte `data/` en lecture et écriture. |
-| `recherche` | `python -m cartofr.api_recherche` | `GET /recherche?q=` : 20 sociétés au plus par nom, sigle ou SIREN (SIREN, nom, sigle, ville, statut ; jamais de personne). Monte `data/` en lecture seule. |
+| `recherche` | `python -m cartofr.api_recherche` | `GET /recherche?q=` : 20 sociétés au plus par nom, sigle ou SIREN (SIREN, nom, sigle, ville, statut ; jamais de personne). Monte `data/` en lecture seule. Sert aussi `GET /export/skill/<carto>?organisation=` (T029) : les 6 tables du skill account-mapping d'une carto terminée, en zip, lues dans `db` (`DATABASE_URL`, lecture seule, filtrées par organisation). |
 
 La synchro de nuit (T013) est réglée dans `worker` :
 `CARTOFR_SYNCHRO_HEURE` (`02:00`), **sans elle aucune synchro de nuit ne

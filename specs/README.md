@@ -72,7 +72,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 
 ## Phase 7 : US5 — Export HubSpot et Cargo (P3)
 
-- [ ] `T029` [P] — Exporter les 6 tables du skill account-mapping
+- [x] `T029` [P] — Exporter les 6 tables du skill account-mapping
 
 ## Phase 8 : US6 — Site web et page LinkedIn (P3)
 

@@ -120,13 +120,14 @@ function slug(nom: string, ascii: boolean): string {
   return sortie || "groupe";
 }
 
-/** En-tête Content-Disposition : `cartofr-<groupe>-<aaaa-mm-jj>.csv`, en ASCII
- * pour `filename` et en UTF-8 (RFC 5987) pour `filename*`. Le nom du groupe
- * est saisi par un utilisateur : seuls lettres, chiffres et tirets en sortent,
- * jamais un guillemet, un point-virgule ou un saut de ligne. */
-export function contentDisposition(nomGroupe: string, date: string | null): string {
+/** En-tête Content-Disposition : `cartofr-<groupe>-<aaaa-mm-jj><fin>` (`.csv`
+ * par défaut), en ASCII pour `filename` et en UTF-8 (RFC 5987) pour
+ * `filename*`. Le nom du groupe est saisi par un utilisateur : seuls lettres,
+ * chiffres et tirets en sortent, jamais un guillemet, un point-virgule ou un
+ * saut de ligne. `fin` est une constante du code, jamais une saisie. */
+export function contentDisposition(nomGroupe: string, date: string | null, fin = ".csv"): string {
   const jour = /^\d{4}-\d{2}-\d{2}$/.test(date ?? "") ? (date as string) : "sans-date";
-  const ascii = `cartofr-${slug(nomGroupe, true)}-${jour}.csv`;
-  const utf8 = `cartofr-${slug(nomGroupe, false)}-${jour}.csv`;
+  const ascii = `cartofr-${slug(nomGroupe, true)}-${jour}${fin}`;
+  const utf8 = `cartofr-${slug(nomGroupe, false)}-${jour}${fin}`;
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(utf8)}`;
 }

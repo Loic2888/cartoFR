@@ -104,8 +104,8 @@ services:
     # Aucun port publié : joignable seulement depuis le réseau Docker.
     logging: *logging
 
-  # Recherche de la tête d'un groupe (T019) : GET /recherche?q=, appelée par
-  # web seulement. Même image que le worker, registre en lecture seule. Aucun
+  # Recherche de la tête d'un groupe (T019) : GET /recherche?q=, et export du
+  # skill d'une carto (T029) : GET /export/skill/<carto>, appelés par web seulement. Même image que le worker, registre en lecture seule. Aucun
   # port publié : joignable seulement depuis le réseau Docker (ARCHI).
   recherche:
     build:
@@ -115,6 +115,12 @@ services:
     command: ["python", "-m", "cartofr.api_recherche", "--port", "8080"]
     environment:
       CARTOFR_DATA: /app/data
+      # Export du skill (T029) : lit une carto terminée dans la base de l'app,
+      # en lecture seule, filtrée par l'organisation que web a lue sous RLS.
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       - ../data:/app/data:ro
     healthcheck:
