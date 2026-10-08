@@ -417,20 +417,31 @@ def test_societe_civile_de_la_marque_entre_par_un_mandat(mini: MiniRegistre, tmp
     assert (x.ciblable, x.raison_ciblable) == (False, "Société civile ou SCI")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Écart à la règle écrite : un mandat « Autre » (99) d'une société du groupe fait passer "
-    "la société par la branche des mandats faibles (deux autres indices exigés) avant la règle 5 ; "
-    "une société à marque sûre, qui entrerait seule par son nom, est refusée dès qu'elle porte en plus "
-    "ce mandat faible.",
-)
 def test_marque_sure_et_mandat_autre(mini: MiniRegistre, tmp_path: Path) -> None:
     """Les règles d'entrée sont des « ou » : un mandat « Autre » en plus ne retire pas la règle de la marque
-    sûre (§4 règle 5, « Faibles »)."""
+    sûre (§4 règle 5, « Faibles » ; T033)."""
     mini.societe(X, "ALPHAMARK SERVICES")
     mini.lien(TETE, X, AUTRE)
     x = societes(lancer(mini, tmp_path)).get(X)
     assert x is not None and x.pourquoi_dans_le_groupe == "nom de marque propre au groupe"
+
+
+def test_adresse_dirigeant_commun_et_mandat_autre(mini: MiniRegistre, tmp_path: Path) -> None:
+    """Un mandat « Autre » en plus ne retire pas non plus la règle « adresse du groupe et second indice » :
+    à une adresse du groupe, un seul dirigeant commun suffit encore (§4 règle 7, « Faibles » ; T033)."""
+    _adresse_du_groupe_a_87_pourcent(mini)
+    mini.dirigeants_communs(TETE, X, n=1)
+    mini.lien(TETE, X, AUTRE)
+    x = societes(lancer(mini, tmp_path)).get(X)
+    assert x is not None and x.pourquoi_dans_le_groupe == "adresse du groupe et second indice"
+
+
+def test_mandat_autre_et_un_seul_indice_refuse(mini: MiniRegistre, tmp_path: Path) -> None:
+    """Témoin de T033 : un mandat « Autre » plus un seul indice qui ne fait rien entrer seul (une marque
+    ambiguë) reste refusé ; la correction n'ouvre aucune nouvelle voie d'entrée."""
+    mini.societe(X, "ZETA GESTION")
+    mini.lien(TETE, X, AUTRE)
+    assert X not in societes(lancer(mini, tmp_path))
 
 
 # ---------------------------------------------------------------- mandats, GIE, co-entreprises

@@ -139,3 +139,18 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 - Captures d'écran regardées (connexion, recherche, fiche, réglages, carto en cours, arbre déplié).
 
 **SC-002 : à mesurer par Loïc, guide dans `docs/recette-sc002.md`.** Trois groupes jamais réglés y sont proposés (Bigard, Fayat, Roullier ; 38 à 83 sociétés avec un brouillon minimal).
+
+### 2026-10-07, marque sûre et mandat « Autre » (T033)
+
+- Défaut trouvé par T017 : dans `decide`, la branche du mandat faible (« Autre », code 99) rendait `None` dès qu'il manquait le second indice, avant les règles de la marque sûre et de l'adresse. Un mandat « Autre » servait donc de veto. Correction : cette branche ne décide plus que l'entrée (« mandat 'Autre' et deux indices ») ; sinon la société passe aux règles suivantes, comme sans ce mandat. Rien d'autre ne change dans le moteur.
+- Tests : `test_marque_sure_et_mandat_autre` passe sans `xfail` ; ajoutés « adresse du groupe + un dirigeant commun + Autre » (entre par « adresse du groupe et second indice ») et « Autre + marque ambiguë seule » (reste refusée).
+- Non-régression, même registre, avant → après :
+
+| Groupe | Retrouvées | En plus | Même mère |
+|---|---|---|---|
+| LVMH | 154/172 → **155/172** | 15 → 15 | 70 % → 71 % |
+| VINCI | 813/1 007 → 813/1 007 | 176 → 176 | 63 % → 63 % |
+| CMAF | 43/52 → 43/52 | 529 → 529 (non mesuré) | — |
+
+- Un seul SIREN entre, dans LVMH : `444653489` (marque sûre, et mandat « Autre » d'une société du groupe). Il est dans la référence Basile : c'est la société retrouvée en plus. Aucun SIREN ne sort ; VINCI et CMAF ont exactement les mêmes sociétés, maisons mères et réponses « ciblable ».
+- Deux maisons mères changent dans LVMH. `444653489` devient la tête de sa maison (plus grand effectif), donc `514035633` se rattache à elle (« même maison »). `318571064`, qui porte le mandat « Autre » vers `444653489`, forme alors une boucle avec elle ; la boucle est coupée et `318571064` est rattachée à la tête (« boucle de mandats coupée », confiance C), avec un niveau incohérent, défaut déjà suivi par T036.
