@@ -252,7 +252,8 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 ### 2026-10-08, revue de la proposition de l'IA et comptage des corrections (T026)
 
 - Écran des réglages : un bouton « Proposer des réglages » met un travail `proposition` en file (un seul à la fois par groupe) et affiche son état. Quand la dernière version est une proposition, chaque élément montre sa liste, ses homonymes au registre et sa source (lien http(s) seulement), et se garde, se corrige (valeur, liste) ou se rejette. Le consultant peut ajouter ce qui manque.
-- « Valider ces réglages » crée une nouvelle version, validée d'un coup, avec `proposition_id` et `corrections`. Une correction : un élément rejeté, un élément corrigé dont la valeur ou la liste change, un ajout. La proposition elle-même reste non validée. L'historique affiche le nombre de corrections.
+- « Valider ces réglages » crée une nouvelle version, validée d'un coup, avec `proposition_id` et `corrections`. Une correction : un élément de l'IA rejeté, un élément de l'IA corrigé dont la valeur ou la liste change, un ajout. La proposition elle-même reste non validée. L'historique affiche le nombre de corrections.
+- Éléments déjà validés (principe 2) : ceux que l'IA n'a pas reproposés s'affichent marqués « déjà validé », gardés par défaut ; ceux qu'elle repropose s'affichent une fois, avec la liste où ils étaient validés. Décision du 2026-10-08 : rejeter ou modifier un élément déjà validé **n'est pas** une correction. SC-007 mesure les erreurs de l'IA, pas un changement d'avis sur un réglage validé par un humain.
 - Next ne décide rien sur le groupe : il compte les choix du consultant (principe 7). Tests : `web/lib/reglages/proposition.test.ts`.
 - Limite : si le consultant passe par l'éditeur classique au lieu de la revue, la version enregistrée ne porte pas de compte de corrections. Elle ne compte pas dans SC-007.
 

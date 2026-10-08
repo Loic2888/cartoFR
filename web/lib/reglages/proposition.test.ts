@@ -24,12 +24,13 @@ import type { Reglages } from "./schema";
 const MOI = "00000000-0000-4000-8000-000000000001";
 const SOURCE = "https://groupe-fictif.example/marques";
 
+const IA = { origine: "ia", deja_valide_en: null } as const;
 const ELEMENTS: Element[] = [
-  { liste: "marques_sures", valeur: "Marque Fictive", source: SOURCE, homonymes: 0 },
-  { liste: "marques_ambigues", valeur: "Soleil", source: SOURCE, homonymes: 12 },
-  { liste: "marques_sigles", valeur: "GFX", source: SOURCE, homonymes: null },
-  { liste: "organigramme", valeur: "Maison Fictive SAS", source: SOURCE },
-  { liste: "exclus_noms", valeur: "Fictif Holding", source: SOURCE },
+  { ...IA, liste: "marques_sures", valeur: "Marque Fictive", source: SOURCE, homonymes: 0 },
+  { ...IA, liste: "marques_ambigues", valeur: "Soleil", source: SOURCE, homonymes: 12 },
+  { ...IA, liste: "marques_sigles", valeur: "GFX", source: SOURCE, homonymes: null },
+  { ...IA, liste: "organigramme", valeur: "Maison Fictive SAS", source: SOURCE },
+  { ...IA, liste: "exclus_noms", valeur: "Fictif Holding", source: SOURCE },
 ];
 
 const CONTENU: Reglages = {
@@ -94,6 +95,54 @@ describe("appliquerRevue", () => {
   });
 });
 
+describe("éléments déjà validés (principe 2)", () => {
+  // La proposition reprend une marque validée que l'IA n'a pas reproposée, et
+  // une autre que l'IA repropose dans une autre liste (rangement : worker).
+  const VALIDEE: Element = {
+    liste: "marques_sures",
+    valeur: "Marque Validée",
+    source: null,
+    origine: "validee",
+    deja_valide_en: "marques_sures",
+  };
+  const REPROPOSEE: Element = { ...ELEMENTS[1], deja_valide_en: "marques_sures" };
+  const elements = [ELEMENTS[0], REPROPOSEE, VALIDEE];
+  const contenu = { ...CONTENU, marques_sures: ["Marque Fictive", "Marque Validée"], marques_ambigues: ["Soleil"] };
+  const garder: Decision[] = elements.map(() => ({ choix: "accepter" }));
+
+  it("gardé par défaut : rien n'est perdu, aucune correction", () => {
+    const r = appliquerRevue(contenu, elements, garder, []);
+    expect(r.ok && r.corrections).toBe(0);
+    expect(r.ok && r.contenu.marques_sures).toEqual(["Marque Fictive", "Marque Validée"]);
+    expect(r.ok && r.contenu.marques_ambigues).toEqual(["Soleil"]);
+  });
+
+  it("rejeter ou modifier un élément déjà validé n'est pas une correction de l'IA", () => {
+    const rejet = appliquerRevue(contenu, elements, [garder[0], garder[1], { choix: "rejeter" }], []);
+    expect(rejet.ok && rejet.corrections).toBe(0);
+    expect(rejet.ok && rejet.contenu.marques_sures).toEqual(["Marque Fictive"]);
+    const modif = appliquerRevue(
+      contenu,
+      elements,
+      [garder[0], garder[1], { choix: "corriger", valeur: "Autre", liste: "marques_ambigues" }],
+      [],
+    );
+    expect(modif.ok && modif.corrections).toBe(0);
+    expect(modif.ok && modif.contenu.marques_ambigues).toEqual(["Soleil", "Autre"]);
+  });
+
+  it("un élément de l'IA reproposé d'une valeur validée compte comme les autres", () => {
+    const r = appliquerRevue(contenu, elements, [garder[0], { choix: "rejeter" }, garder[2]], []);
+    expect(r.ok && r.corrections).toBe(1);
+  });
+
+  it("lit une proposition sans origine (ancienne forme) comme venant de l'IA", () => {
+    const lus = lireElements({ modele: "m", elements: [{ liste: "marques_sures", valeur: "X", source: SOURCE }] });
+    expect(lus?.[0]).toMatchObject({ origine: "ia", deja_valide_en: null });
+    expect(lireElements({ modele: "m", elements: [VALIDEE] })).toEqual([VALIDEE]);
+  });
+});
+
 describe("lecture et affichage", () => {
   it("lit les éléments d'une proposition, refuse une forme inattendue", () => {
     expect(lireElements({ modele: "m", elements: ELEMENTS })).toEqual(ELEMENTS);
@@ -105,6 +154,7 @@ describe("lecture et affichage", () => {
     expect(sourceSure(SOURCE)).toBe(SOURCE);
     expect(sourceSure("javascript:alert(1)")).toBeNull();
     expect(sourceSure("pas une url")).toBeNull();
+    expect(sourceSure(null)).toBeNull();
   });
 
   it("traduit l'état du dernier travail", () => {

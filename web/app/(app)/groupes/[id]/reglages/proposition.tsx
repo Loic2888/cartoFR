@@ -156,7 +156,8 @@ export function RevueProposition({
         <p className="text-sm text-muted-foreground">
           Pour chaque élément, ouvrez sa source, puis gardez-le, corrigez-le ou rejetez-le. Une
           marque qui a des homonymes au registre est rangée en marque ambiguë : le moteur exigera une
-          deuxième preuve.
+          deuxième preuve. Les éléments déjà validés que l&apos;IA n&apos;a pas reproposés sont
+          gardés ; les rejeter ne compte pas comme une correction de l&apos;IA.
         </p>
       </div>
 
@@ -172,14 +173,25 @@ export function RevueProposition({
               <li key={id}>
                 <fieldset className="flex flex-col gap-3 rounded-lg border px-4 py-3">
                   <legend className="px-1 font-medium break-words">{e.valeur}</legend>
+                  {e.origine === "validee" ? (
+                    <p className="text-sm font-medium">
+                      Déjà validé, non reproposé par l&apos;IA : gardé si vous ne le rejetez pas.
+                    </p>
+                  ) : e.deja_valide_en ? (
+                    <p className="text-sm font-medium">
+                      Déjà validé en {LIBELLES_LISTES[e.deja_valide_en]}
+                      {e.deja_valide_en !== e.liste ? " : l'IA le range dans une autre liste." : "."}
+                    </p>
+                  ) : null}
                   <p className="text-sm text-muted-foreground">
-                    Proposé en : {LIBELLES_LISTES[e.liste]}
+                    {e.origine === "validee" ? "Liste" : "Proposé en"} : {LIBELLES_LISTES[e.liste]}
                     {e.homonymes != null && e.liste.startsWith("marques_")
                       ? e.homonymes === 0
                         ? " · aucun homonyme au registre"
                         : ` · ${e.homonymes} homonyme${e.homonymes > 1 ? "s" : ""} au registre`
                       : null}
                   </p>
+                  {e.origine === "validee" ? null : (
                   <p className="text-sm break-all">
                     Source :{" "}
                     {url ? (
@@ -193,9 +205,10 @@ export function RevueProposition({
                         <span className="sr-only"> (s&apos;ouvre dans un nouvel onglet)</span>
                       </a>
                     ) : (
-                      <span>{e.source} (adresse non sûre, non cliquable)</span>
+                      <span>{e.source ?? "aucune"} (adresse non sûre, non cliquable)</span>
                     )}
                   </p>
+                  )}
                   <div role="radiogroup" aria-label={`Décision pour ${e.valeur}`} className="flex flex-col gap-1 sm:flex-row sm:gap-4">
                     {CHOIX.map((c) => (
                       <label key={c.valeur} className="flex min-h-11 items-center gap-3 text-sm">

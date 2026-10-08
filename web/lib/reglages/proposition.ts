@@ -8,9 +8,16 @@
 // d'un coup, avec son nombre de corrections (SC-007) ; la proposition, elle,
 // n'est jamais validée telle quelle (migration 0004, principe 1).
 //
-// Une correction, c'est : un élément rejeté, un élément corrigé dont la
-// valeur ou la liste change, ou un élément ajouté. Accepter, ou « corriger »
-// sans rien changer, n'en est pas une.
+// Une correction, c'est : un élément de l'IA rejeté, un élément de l'IA
+// corrigé dont la valeur ou la liste change, ou un élément ajouté. Accepter,
+// ou « corriger » sans rien changer, n'en est pas une.
+//
+// Éléments « déjà validés » (origine `validee`, principe 2) : la proposition
+// reprend ce que la dernière version validée contenait et que l'IA n'a pas
+// reproposé (worker, `garder_validees`). Ils sont gardés par défaut. Les
+// rejeter ou les modifier n'est pas une correction de l'IA (décision du
+// 2026-10-08) : SC-007 mesure les erreurs de l'IA, pas les changements d'avis
+// sur un réglage déjà validé.
 //
 // Logique testée sans base ni session (proposition.test.ts) ; le dépôt
 // Supabase est dans depot-proposition.ts.
@@ -39,8 +46,12 @@ export const LIBELLES_LISTES: Record<ListeProposee, string> = Object.fromEntries
 const schemaElement = z.object({
   liste: z.enum(LISTES_PROPOSEES),
   valeur: z.string(),
-  source: z.string(),
+  // Nulle pour un élément déjà validé que l'IA n'a pas reproposé.
+  source: z.string().nullable(),
   homonymes: z.number().int().min(0).nullable().optional(),
+  origine: z.enum(["ia", "validee"]).default("ia"),
+  // La liste où la valeur était déjà validée, s'il y en a une.
+  deja_valide_en: z.enum(LISTES_PROPOSEES).nullable().default(null),
 });
 export type Element = z.infer<typeof schemaElement>;
 
@@ -53,7 +64,8 @@ export function lireElements(proposition: unknown): Element[] | null {
 }
 
 /** Une source s'affiche comme lien seulement en http(s). */
-export function sourceSure(source: string): string | null {
+export function sourceSure(source: string | null): string | null {
+  if (source === null) return null;
   try {
     const url = new URL(source);
     return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
@@ -98,16 +110,17 @@ export function appliquerRevue(
   let corrections = 0;
   for (const [i, e] of elements.entries()) {
     const d = decisions[i];
+    const deLIa = e.origine === "ia";
     if (d.choix === "accepter") {
       ajouter(e.liste, e.valeur);
     } else if (d.choix === "rejeter") {
-      corrections += 1;
+      if (deLIa) corrections += 1;
     } else {
       const valeur = d.valeur.trim();
       if (!valeur) {
         return { ok: false, message: `Élément n° ${i + 1} : la valeur corrigée est vide.` };
       }
-      if (valeur !== e.valeur || d.liste !== e.liste) corrections += 1;
+      if (deLIa && (valeur !== e.valeur || d.liste !== e.liste)) corrections += 1;
       ajouter(d.liste, valeur);
     }
   }
