@@ -90,11 +90,11 @@ Les scripts lisent des chemins relatifs : les lancer depuis la racine.
 > Claude lance ces commandes pour se valider. Tant que lint et tests unitaires
 > n'existent pas, la seule validation réelle du moteur est la non-régression.
 
-### Scores de non-régression (2026-10-06)
+### Scores de non-régression (2026-10-07, après T033)
 
 | Groupe | Retrouvées | En plus |
 |---|---|---|
-| LVMH | 90 % (154/172) | 15 |
+| LVMH | 90 % (155/172) | 15 |
 | VINCI | 81 % (813/1 007) | 176 |
 | Crédit Mutuel Alliance Fédérale | 83 % (43/52) | |
 

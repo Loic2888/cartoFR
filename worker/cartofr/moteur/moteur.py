@@ -281,8 +281,9 @@ class _Moteur:
         info = self.info.get(s)
         if s in self.retained or s in self.excluded or not info or self.name_excluded(s):
             return None
+        # Le nom est normalisé (majuscules, accents retirés) : « COMITÉ » est un comité (T034).
         if str(info["cj"]).startswith("9") or re.match(
-            r"(CSE|COMITE|AMICALE|ASSOCIATION)\b", (info["nom"] or "").upper()
+            r"(CSE|COMITE|AMICALE|ASSOCIATION)\b", norm(info["nom"])
         ):
             return None  # associations, fondations, comités d'entreprise : jamais des filiales
         if str(info["cj"]).startswith("3"):

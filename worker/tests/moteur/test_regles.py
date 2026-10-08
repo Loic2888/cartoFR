@@ -620,16 +620,10 @@ def test_actionnaire_exclu_par_les_reglages(
         pytest.param("AMICALE DU PERSONNEL INVENTEE", 5710, id="amicale"),
         pytest.param("ASSOCIATION SPORTIVE INVENTEE", 5710, id="association_par_le_nom"),
         pytest.param("CLUB INVENTE", CJ_ASSOCIATION, id="association_par_la_forme"),
-        pytest.param(
-            "COMITÉ SOCIAL ET ÉCONOMIQUE INVENTÉ",
-            5710,
-            id="comite_accentue",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="Écart : le filtre des comités compare le nom brut à « COMITE » sans retirer "
-                "les accents ; un nom SIRENE écrit « COMITÉ » n'est pas reconnu et entre par son mandat.",
-            ),
-        ),
+        # T034 : le nom est normalisé (majuscules, accents retirés) avant le filtre.
+        pytest.param("COMITÉ SOCIAL ET ÉCONOMIQUE INVENTÉ", 5710, id="comite_accentue"),
+        pytest.param("Comité d'Établissement Inventé", 5710, id="comite_accentue_casse_mixte"),
+        pytest.param("comite-d-entreprise inventé", 5710, id="comite_minuscules_tirets"),
     ],
 )
 def test_comite_d_entreprise_et_association_jamais_filiales(
@@ -640,6 +634,21 @@ def test_comite_d_entreprise_et_association_jamais_filiales(
     filiale(mini, X, nom, cj=cj)
     carto = lancer(mini, tmp_path)
     assert X not in societes(carto)
+
+
+@pytest.mark.parametrize(
+    "nom",
+    [
+        pytest.param("COMITÉVA INVENTÉE", id="mot_qui_commence_par_comite"),
+        pytest.param("SOCIÉTÉ DES COMITÉS INVENTÉE", id="comite_hors_debut"),
+        pytest.param("Éditions Amicalement Inventées", id="amical_accentue_casse_mixte"),
+    ],
+)
+def test_nom_proche_d_un_comite_reste_filiale(mini: MiniRegistre, tmp_path: Path, nom: str) -> None:
+    """Le filtre des comités ne retient qu'un mot entier en tête du nom normalisé : une société commerciale
+    dont le nom ressemble à « COMITÉ » ou « AMICALE » entre par son mandat comme les autres (T034)."""
+    filiale(mini, X, nom)
+    assert X in societes(lancer(mini, tmp_path))
 
 
 def test_societe_etrangere_rangee_a_part(mini: MiniRegistre, tmp_path: Path) -> None:
