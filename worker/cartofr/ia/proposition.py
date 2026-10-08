@@ -25,7 +25,9 @@ Règles tenues ici :
   sociale, le sigle et le SIREN de la tête et de ses filiales directes. Que des
   données de sociétés publiques : la table des dirigeants personnes physiques
   n'est jamais lue ici (garde-fou 6, principe 6 ; test_proposition.py, C2) ;
-- chaque élément garde porte une source http(s) : un élément sans source est écarté ;
+- chaque élément gardé de l'IA porte une source http(s) : un élément sans source est écarté ;
+- rien de validé ne se perd en silence (principe 2) : les éléments de la dernière version
+  validée que l'IA ne repropose pas sont ajoutés à la revue, gardés par défaut (`garder_validees`) ;
 - marque ambiguë : au moins une société active au registre, hors de la tête et
   des sociétés qu'elle dirige directement ou non, dont la dénomination, le sigle
   ou l'enseigne commence par la marque. Même normalisation (casse, accents,
@@ -40,7 +42,7 @@ import logging
 import os
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 import duckdb
@@ -122,12 +124,19 @@ class ElementBrut:
 
 @dataclass(frozen=True)
 class ElementRange:
-    """Un élément après la règle : la liste des réglages où il va, et pourquoi."""
+    """Un élément de la revue : la liste des réglages où il va, et d'où il vient.
+
+    `origine` : « ia » (proposé par l'IA, avec sa source) ou « validee » (déjà dans la
+    dernière version validée, que l'IA n'a pas reproposé : pas de source).
+    `deja_valide_en` : la liste où la valeur était déjà validée, s'il y en a une.
+    """
 
     liste: str
     valeur: str
-    source: str
-    homonymes: int | None = None  # marques seulement : homonymes au registre
+    source: str | None
+    homonymes: int | None = None  # marques proposées seulement : homonymes au registre
+    origine: Literal["ia", "validee"] = "ia"
+    deja_valide_en: str | None = None
 
     def en_json(self) -> dict[str, Any]:
         return {
@@ -135,6 +144,8 @@ class ElementRange:
             "valeur": self.valeur,
             "source": self.source,
             "homonymes": self.homonymes,
+            "origine": self.origine,
+            "deja_valide_en": self.deja_valide_en,
         }
 
 
@@ -277,6 +288,42 @@ def ranger(elements: Iterable[ElementBrut], homonymes: dict[str, int]) -> list[E
 
 # Listes que la proposition remplit ; les autres clés viennent de la dernière version validée.
 LISTES_PROPOSEES = ("marques_sures", "marques_ambigues", "marques_sigles", "organigramme", "exclus_noms")
+
+
+def garder_validees(ranges: Iterable[ElementRange], base: dict[str, Any] | None) -> list[ElementRange]:
+    """Principe 2 : une proposition ne fait jamais perdre en silence un élément validé par un
+    humain. Chaque valeur des listes proposées de la dernière version validée (`base`) :
+    - reproposée par l'IA (même valeur normalisée : casse, accents, ponctuation ignorés, dans
+      n'importe quelle liste) : l'élément de l'IA reste seul, marqué `deja_valide_en` avec la
+      liste validée. Une liste différente se voit donc à la revue ;
+    - non reproposée : ajoutée à la fin, origine « validee », dans sa liste, sans source.
+      Elle entre dans le contenu proposé : gardée tant que le consultant ne la rejette pas.
+    Sans version validée, les éléments de l'IA sont rendus tels quels."""
+    ia = list(ranges)
+    validees: dict[str, str] = {}  # valeur normalisée → première liste validée
+    ordre: list[tuple[str, str]] = []  # chaque (liste, valeur) validée, une fois
+    vues: set[tuple[str, str]] = set()
+    for liste in LISTES_PROPOSEES:
+        valeurs = (base or {}).get(liste)
+        if not isinstance(valeurs, list):
+            continue
+        for v in valeurs:  # pyright: ignore[reportUnknownVariableType]
+            if not isinstance(v, str) or not norm(v) or (liste, norm(v)) in vues:
+                continue
+            vues.add((liste, norm(v)))
+            validees.setdefault(norm(v), liste)
+            ordre.append((liste, v))
+    reproposees = {norm(r.valeur) for r in ia}
+    sortie = [
+        replace(r, deja_valide_en=validees.get(norm(r.valeur))) if norm(r.valeur) in validees else r
+        for r in ia
+    ]
+    sortie.extend(
+        ElementRange(liste, valeur, None, origine="validee", deja_valide_en=liste)
+        for liste, valeur in ordre
+        if norm(valeur) not in reproposees
+    )
+    return sortie
 
 
 def contenu_propose(

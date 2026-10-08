@@ -265,6 +265,62 @@ def test_contenu_propose_garde_les_cles_de_la_derniere_version_validee() -> None
     valider(contenu)  # au schéma des réglages
 
 
+# --- Principe 2 : rien de validé ne se perd en silence ---------------------------------------
+
+
+IA_RANGES = [
+    ElementRange("marques_sures", "Zetamark", SOURCE, 0),
+    ElementRange("marques_ambigues", "Alphamark", SOURCE, 2),
+]
+
+
+def test_garder_validees_sans_version_validee() -> None:
+    assert ia.garder_validees(IA_RANGES, None) == IA_RANGES
+    assert ia.garder_validees(IA_RANGES, {"groupe": "G", "tete": TETE}) == IA_RANGES
+
+
+def test_garder_validees_repropose_a_l_identique_affiche_une_fois() -> None:
+    sortie = ia.garder_validees(IA_RANGES, {"marques_sures": ["ZÉTAMARK"]})  # casse et accent
+    assert [(r.liste, r.valeur, r.origine, r.deja_valide_en) for r in sortie] == [
+        ("marques_sures", "Zetamark", "ia", "marques_sures"),
+        ("marques_ambigues", "Alphamark", "ia", None),
+    ]
+
+
+def test_garder_validees_repropose_dans_une_autre_liste() -> None:
+    sortie = ia.garder_validees(IA_RANGES, {"marques_sures": ["Alphamark"]})
+    assert len(sortie) == 2
+    assert (sortie[1].liste, sortie[1].deja_valide_en, sortie[1].source) == (
+        "marques_ambigues",
+        "marques_sures",
+        SOURCE,
+    )
+
+
+def test_garder_validees_non_reproposees_sont_ajoutees_et_gardees() -> None:
+    base = {
+        "groupe": "G",
+        "tete": TETE,
+        "marques_sures": ["Ancienne", "Ancienne"],
+        "organigramme": ["Maison Validee"],
+        "exclus_noms": ["Maison Validee"],  # même valeur, autre liste : les deux restent
+        "marques_sures_homonymes": ["Hors revue"],  # liste non proposée : reprise telle quelle
+        "exclus": [siren(99)],
+    }
+    sortie = ia.garder_validees(IA_RANGES, base)
+    assert [(r.liste, r.valeur, r.origine, r.source) for r in sortie[2:]] == [
+        ("marques_sures", "Ancienne", "validee", None),
+        ("organigramme", "Maison Validee", "validee", None),
+        ("exclus_noms", "Maison Validee", "validee", None),
+    ]
+    contenu = ia.contenu_propose("G", TETE, sortie, base)
+    assert contenu["marques_sures"] == ["Zetamark", "Ancienne"]
+    assert contenu["organigramme"] == ["Maison Validee"]
+    assert contenu["exclus_noms"] == ["Maison Validee"]
+    assert contenu["marques_sures_homonymes"] == ["Hors revue"]
+    valider(contenu)
+
+
 def test_lire_reponse_ignore_ce_qui_n_a_pas_la_forme() -> None:
     bruts = ia.lire_reponse(
         {"marques": [element("A"), {"nom": "B"}, "C", {"nom": 1, "source": SOURCE}], "sigles": "X"}
@@ -371,7 +427,14 @@ def monde(conn: Connexion, chemin: Path, monkeypatch: pytest.MonkeyPatch) -> Ite
         (
             groupe,
             org,
-            Jsonb({"groupe": "ALPHAMARK", "tete": TETE, "familles_exclues_empreintes": ["b" * 64]}),
+            Jsonb(
+                {
+                    "groupe": "ALPHAMARK",
+                    "tete": TETE,
+                    "marques_sures": ["Ancienne Marque", "ALPHAMARK"],
+                    "familles_exclues_empreintes": ["b" * 64],
+                }
+            ),
         ),
     )
     conn.commit()
@@ -425,14 +488,29 @@ def test_c1_proposition_enregistree_sans_validation(
     reglages = valider(contenu)
     # C3 de bout en bout : Alphamark et Gammamark ont un homonyme, Béta Marque aussi.
     assert reglages.marques_ambigues == ["Alphamark", "Gammamark", "Béta Marque"]
-    assert reglages.marques_sures == []
+    # Principe 2 : la marque validée que l'IA ne repropose pas reste ; celle qu'elle repropose
+    # (dans une autre liste) n'apparaît qu'une fois, là où l'IA la range.
+    assert reglages.marques_sures == ["Ancienne Marque"]
     assert reglages.marques_sigles == ["AMH"]
     assert reglages.organigramme == ["Alphamark Services"]
     assert reglages.exclus_noms == ["Alphamark Conseil"]
     assert reglages.familles_exclues_empreintes == ["b" * 64]  # repris de la version validée
     assert proposition["modele"] == "modele-test"
-    assert len(proposition["elements"]) == 6
-    assert all(e["source"] == SOURCE for e in proposition["elements"])
+    assert len(proposition["elements"]) == 7
+    ia_seule = [e for e in proposition["elements"] if e["origine"] == "ia"]
+    assert len(ia_seule) == 6 and all(e["source"] == SOURCE for e in ia_seule)
+    assert [e for e in proposition["elements"] if e["origine"] == "validee"] == [
+        {
+            "liste": "marques_sures",
+            "valeur": "Ancienne Marque",
+            "source": None,
+            "homonymes": None,
+            "origine": "validee",
+            "deja_valide_en": "marques_sures",
+        }
+    ]
+    alpha = next(e for e in ia_seule if e["valeur"] == "Alphamark")
+    assert (alpha["liste"], alpha["deja_valide_en"]) == ("marques_ambigues", "marques_sures")
 
     # Principe 1 : la base refuse de valider une proposition telle quelle.
     with pytest.raises(psycopg.errors.CheckViolation):

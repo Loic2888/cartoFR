@@ -17,7 +17,9 @@ Entrées :
     - ANTHROPIC_API_KEY, CARTOFR_MODELE_IA (facultatif).
 Sortie : une ligne `reglages` (version suivante du groupe) : `contenu` au schéma des
 réglages (vérifié par cartofr.reglages.valider), `proposition` = modèle et éléments
-(liste, valeur, source, homonymes), `cree_par` = le consultant s'il existe encore.
+(liste, valeur, source, homonymes, origine, liste déjà validée), `cree_par` = le
+consultant s'il existe encore. Les éléments de la dernière version validée que l'IA ne
+repropose pas y sont gardés, origine « validee » (principe 2, `garder_validees`).
 
 Règles :
     - L'IA ne décide jamais (principe 1) : la version n'est pas validée, et la base
@@ -47,6 +49,7 @@ from cartofr.ia.proposition import (
     client_ia,
     compter_homonymes,
     contenu_propose,
+    garder_validees,
     lire_entree,
     modele,
     nettoyer,
@@ -182,15 +185,17 @@ def travail_proposition(ctx: Contexte) -> None:
     finally:
         con.close()
 
-    ranges = ranger(elements, homonymes)
+    ranges = garder_validees(ranger(elements, homonymes), base)
     contenu = valider(contenu_propose(nom_groupe, tete, ranges, base)).model_dump()
     _, version = enregistrer_proposition(
         conn, groupe_id, ctx.organisation_id, contenu, ranges, nom_modele, demande_par
     )
     log.info(
-        "travail %s : proposition enregistrée (version %s, %s éléments, %s marques ambiguës)",
+        "travail %s : proposition enregistrée (version %s, %s éléments dont %s déjà validés"
+        " non reproposés, %s marques ambiguës)",
         ctx.travail_id,
         version,
         len(ranges),
+        sum(1 for r in ranges if r.origine == "validee"),
         sum(1 for r in ranges if r.liste == "marques_ambigues"),
     )
