@@ -154,3 +154,18 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 
 - Un seul SIREN entre, dans LVMH : `444653489` (marque sûre, et mandat « Autre » d'une société du groupe). Il est dans la référence Basile : c'est la société retrouvée en plus. Aucun SIREN ne sort ; VINCI et CMAF ont exactement les mêmes sociétés, maisons mères et réponses « ciblable ».
 - Deux maisons mères changent dans LVMH. `444653489` devient la tête de sa maison (plus grand effectif), donc `514035633` se rattache à elle (« même maison »). `318571064`, qui porte le mandat « Autre » vers `444653489`, forme alors une boucle avec elle ; la boucle est coupée et `318571064` est rattachée à la tête (« boucle de mandats coupée », confiance C), avec un niveau incohérent, défaut déjà suivi par T036.
+
+### 2026-10-08, comités au nom accentué (T034)
+
+- Défaut trouvé par T017 : dans `decide`, le filtre des comités, amicales et associations comparait le nom SIRENE brut, mis en majuscules, à `CSE|COMITE|AMICALE|ASSOCIATION`. Un nom écrit « COMITÉ … » n'était pas reconnu et entrait par son mandat. Correction : le nom passe par `norm` (majuscules, accents retirés, ponctuation en espaces) avant le filtre. La règle reste la même : un mot entier, en tête du nom. Rien d'autre ne change dans le moteur.
+- Tests : le cas « COMITÉ SOCIAL ET ÉCONOMIQUE » passe sans `xfail` ; ajoutés « Comité d'Établissement » (casse mixte et accents) et « comite-d-entreprise » (minuscules et tirets), tous exclus. Nouveau test témoin : trois noms proches mais qui ne sont pas des comités (« COMITÉVA », « SOCIÉTÉ DES COMITÉS », « Éditions Amicalement ») entrent toujours par leur mandat.
+- Portée sur tout le registre : 11 sièges hors forme juridique 9 (associations, fondations) sont nouvellement filtrés par leur nom, sur 244 431 qui le sont en tout. Aucun n'est dans LVMH, VINCI ou CMAF.
+- Non-régression, même registre, avant → après :
+
+| Groupe | Retrouvées | En plus | Même mère |
+|---|---|---|---|
+| LVMH | 155/172 → 155/172 | 15 → 15 | 71 % → 71 % |
+| VINCI | 813/1 007 → 813/1 007 | 176 → 176 | 63 % → 63 % |
+| CMAF | 43/52 → 43/52 | 529 → 529 (non mesuré) | — |
+
+- Aucun écart : les trois cartos ont exactement les mêmes SIREN, maisons mères et réponses « ciblable » avant et après (170, 989 et 572 sociétés). La correction protège les groupes à venir, elle ne change pas les trois groupes de référence.
