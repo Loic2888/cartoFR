@@ -63,7 +63,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 ## Phase 5 : US3 — L'IA propose les réglages (P2)
 
 - [x] `T025` — Faire proposer les réglages par l'IA
-- [ ] `T026` — Afficher la proposition et mesurer les corrections
+- [ ] `T026` — Afficher la proposition et mesurer les corrections *(C1, C2 faits ; C3 ouvert : mesure SC-007 avec l'API réelle)*
 
 ## Phase 6 : US4 — Traiter les cas douteux (P2)
 

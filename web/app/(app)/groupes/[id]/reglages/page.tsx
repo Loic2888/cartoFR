@@ -1,5 +1,6 @@
 // Réglages d'un groupe : la dernière version, sa saisie, sa validation et
-// l'historique (T020, FR-005, US2 scénarios 2 et 5).
+// l'historique (T020, FR-005, US2 scénarios 2 et 5) ; la proposition de l'IA
+// et sa revue (T026, FR-008, SC-007).
 //
 // Tout est lu avec la session de l'utilisateur : RLS limite aux groupes de
 // ses organisations, un autre groupe rend une page introuvable. Les familles
@@ -10,10 +11,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
+import { lireDernierTravail } from "@/lib/reglages/depot-proposition";
+import { etatTravail, lireElements, propositionEnCours } from "@/lib/reglages/proposition";
 import { LISTES } from "@/lib/reglages/schema";
 import { utilisateurCourant } from "@/lib/session";
 
 import { EditeurReglages } from "./editeur-reglages";
+import { DemandeProposition, RevueProposition } from "./proposition";
 
 export const metadata: Metadata = { title: "Réglages · cartoFR" };
 
@@ -43,6 +47,8 @@ type LigneVersion = {
   cree_par: string | null;
   valide_le: string | null;
   valide_par: string | null;
+  proposition: unknown;
+  corrections: number | null;
 };
 
 export default async function PageReglages(props: PageProps<"/groupes/[id]/reglages">) {
@@ -50,13 +56,14 @@ export default async function PageReglages(props: PageProps<"/groupes/[id]/regla
   if (!z.uuid().safeParse(id).success) notFound();
 
   const { supabase, user } = await utilisateurCourant();
-  const [{ data: groupe }, { data: versions }] = await Promise.all([
+  const [{ data: groupe }, { data: versions }, travail] = await Promise.all([
     supabase.from("groupes").select("id, nom, tete_siren").eq("id", id).maybeSingle(),
     supabase
       .from("reglages")
-      .select("id, version, origine, contenu, cree_le, cree_par, valide_le, valide_par")
+      .select("id, version, origine, contenu, cree_le, cree_par, valide_le, valide_par, proposition, corrections")
       .eq("groupe_id", id)
       .order("version", { ascending: false }),
+    lireDernierTravail(supabase, id),
   ]);
   if (!groupe) notFound();
 
@@ -74,13 +81,22 @@ export default async function PageReglages(props: PageProps<"/groupes/[id]/regla
   ) as Record<(typeof LISTES)[number]["cle"], string>;
   const empreintes = derniere?.contenu.familles_exclues_empreintes;
   const nbFamilles = Array.isArray(empreintes) ? empreintes.length : 0;
+  // La dernière version est une proposition de l'IA : elle se revoit, elle ne
+  // se valide pas telle quelle (migration 0004, principe 1).
+  const aRevoir = derniere !== null && derniere.origine === "proposition" && !derniere.valide_le;
+  const elements = aRevoir ? lireElements(derniere.proposition) : null;
 
   function etat(v: LigneVersion): string {
     if (v.valide_le) {
       if (v.origine === "depart") return `Réglages de départ (repris du prototype), validés ${quand(v.valide_le)}`;
       const par = qui(v.valide_par);
-      return `Validée ${quand(v.valide_le)}${par ? ` par ${par}` : " (compte effacé)"}`;
+      const revue =
+        v.corrections === null
+          ? ""
+          : `, après revue d'une proposition de l'IA (${v.corrections === 0 ? "aucune correction" : v.corrections === 1 ? "1 correction" : `${v.corrections} corrections`})`;
+      return `Validée ${quand(v.valide_le)}${par ? ` par ${par}` : " (compte effacé)"}${revue}`;
     }
+    if (v.origine === "proposition") return "Proposition de l'IA : à revoir, jamais utilisée telle quelle";
     return "Brouillon : à valider avant de servir aux cartos";
   }
 
@@ -123,10 +139,32 @@ export default async function PageReglages(props: PageProps<"/groupes/[id]/regla
         )}
       </section>
 
+      <DemandeProposition
+        groupeId={groupe.id as string}
+        etat={etatTravail(travail, derniere?.cree_le ?? null)}
+        enCours={propositionEnCours(travail)}
+      />
+
+      {aRevoir ? (
+        elements ? (
+          <RevueProposition
+            key={derniere.id}
+            groupeId={groupe.id as string}
+            version={derniere.version}
+            elements={elements}
+            contenu={derniere.contenu}
+          />
+        ) : (
+          <p role="alert" className="rounded-lg border px-3 py-2 text-sm">
+            Cette proposition est illisible. Demandez-en une nouvelle.
+          </p>
+        )
+      ) : null}
+
       <EditeurReglages
         groupeId={groupe.id as string}
         baseVersion={derniere?.version ?? 0}
-        aValider={derniere !== null && !derniere.valide_le}
+        aValider={derniere !== null && !derniere.valide_le && !aRevoir}
         listes={listes}
         nbFamilles={nbFamilles}
       />
@@ -140,7 +178,8 @@ export default async function PageReglages(props: PageProps<"/groupes/[id]/regla
             {lignes.map((v) => (
               <li key={v.id} className="flex flex-col gap-1 rounded-lg border px-3 py-2">
                 <span className="font-medium">
-                  Version {v.version} · {v.valide_le ? "validée" : "brouillon"}
+                  Version {v.version} ·{" "}
+                  {v.valide_le ? "validée" : v.origine === "proposition" ? "proposition de l'IA" : "brouillon"}
                 </span>
                 <span className="text-sm text-muted-foreground">{etat(v)}</span>
                 <span className="text-sm text-muted-foreground">{creation(v)}</span>

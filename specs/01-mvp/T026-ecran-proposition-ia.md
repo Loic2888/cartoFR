@@ -27,14 +27,14 @@ Bouton « Proposer », affichage des sources, acceptation élément par élémen
 —
 
 ## Critères de succès
-- [ ] **C1** : Chaque élément proposé affiche sa source
-- [ ] **C2** : Le nombre de corrections est enregistré à la validation
-- [ ] **C3** : `rapport.md` donne la moyenne des corrections sur LVMH, VINCI et CMAF (SC-007)
+- [x] **C1** : Chaque élément proposé affiche sa source
+- [x] **C2** : Le nombre de corrections est enregistré à la validation
+- [ ] **C3** : `rapport.md` donne la moyenne des corrections sur LVMH, VINCI et CMAF (SC-007) — *ouvert le 2026-10-08 : demande l'API réelle ; protocole écrit dans `rapport.md`, mesure non faite*
 
 ## Tests et validation
 
 ### Vérification manuelle
-1. Proposer puis valider sur un groupe neuf, chronométré
+1. Proposer puis valider sur un groupe neuf, chronométré — *ouvert : demande l'API réelle*
 
 ### Cas limites
 - Aucun propre à cette tâche

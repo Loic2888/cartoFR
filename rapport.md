@@ -248,3 +248,18 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 - Tests : 24, API simulée, aucun appel réel. Le test C2 confronte tout ce qui part vers l'API aux dirigeants du mini-registre (clé brute, « NOM PRÉNOM », « PRÉNOM NOM ») ; un second vérifie qu'aucune requête des deux modules ne lit `dirigeants_personnes`.
 - Moteur inchangé : non-régression sans objet. Dépendance ajoutée au worker : `anthropic` (SDK officiel, 1.12).
 - Pas encore fait : un essai avec l'API réelle sur un groupe connu (voir T026, SC-007).
+
+### 2026-10-08, revue de la proposition de l'IA et comptage des corrections (T026)
+
+- Écran des réglages : un bouton « Proposer des réglages » met un travail `proposition` en file (un seul à la fois par groupe) et affiche son état. Quand la dernière version est une proposition, chaque élément montre sa liste, ses homonymes au registre et sa source (lien http(s) seulement), et se garde, se corrige (valeur, liste) ou se rejette. Le consultant peut ajouter ce qui manque.
+- « Valider ces réglages » crée une nouvelle version, validée d'un coup, avec `proposition_id` et `corrections`. Une correction : un élément rejeté, un élément corrigé dont la valeur ou la liste change, un ajout. La proposition elle-même reste non validée. L'historique affiche le nombre de corrections.
+- Next ne décide rien sur le groupe : il compte les choix du consultant (principe 7). Tests : `web/lib/reglages/proposition.test.ts`.
+- Limite : si le consultant passe par l'éditeur classique au lieu de la revue, la version enregistrée ne porte pas de compte de corrections. Elle ne compte pas dans SC-007.
+
+**SC-007 : non mesuré, critère ouvert.** La mesure demande de vraies propositions, donc l'API réelle (clé `ANTHROPIC_API_KEY`) ; aucune n'a été faite. Rien n'est inventé ici. Protocole :
+
+1. Sur une base de test, créer les groupes LVMH, VINCI et CMAF sans leurs réglages de départ (ou dans une organisation à part).
+2. Pour chacun, cliquer « Proposer des réglages » et chronométrer du clic à la validation.
+3. Revoir la proposition en prenant `config/<groupe>.json` comme référence : rejeter ce qui n'y est pas et qui est faux, corriger les listes, ajouter ce qui manque et compte (marques, sigles, maisons, exclusions par nom).
+4. Relever `corrections` de la version validée (`select version, corrections from reglages where proposition_id is not null`) et la durée.
+5. Critère tenu si la moyenne des trois est sous 5 corrections et chaque durée sous 30 minutes. Noter le coût de l'appel (jetons) et le modèle (`CARTOFR_MODELE_IA`).
