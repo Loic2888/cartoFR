@@ -15,7 +15,7 @@ Usage (le travail `proposition` de cartofr.jobs.proposition enchaîne ces étape
     ranges = ranger(elements, homonymes)
 
 Entrées : le registre DuckDB (`societes`, `unites_legales`, `liens`), OPENROUTER_API_KEY,
-CARTOFR_MODELE_IA (facultatif, nom OpenRouter, `anthropic/claude-sonnet-5.5` par défaut).
+CARTOFR_MODELE_IA (obligatoire, nom OpenRouter ; pas de modèle par défaut, T038).
 Sorties : des `ElementRange` (liste des réglages, valeur, source, homonymes).
 
 Règles tenues ici :
@@ -34,7 +34,8 @@ Règles tenues ici :
   ou l'enseigne commence par la marque. Même normalisation (casse, accents,
   ponctuation) et mêmes formes juridiques en tête que la recherche de candidates
   du moteur (cartofr.moteur.marques) ;
-- journaux : des nombres seulement, jamais une valeur proposée ni un texte de l'API.
+- journaux : des nombres seulement (éléments, requêtes, jetons, recherches, coût), jamais une
+  valeur proposée ni un texte de l'API.
 """
 
 from __future__ import annotations
@@ -56,7 +57,6 @@ log = logging.getLogger(__name__)
 
 VARIABLE_MODELE = "CARTOFR_MODELE_IA"
 VARIABLE_CLE_API = "OPENROUTER_API_KEY"
-MODELE_DEFAUT = "anthropic/claude-sonnet-5.5"
 URL_OPENROUTER = "https://openrouter.ai/api/v1/chat/completions"
 DELAI_S = 600.0  # recherche et lecture web côté serveur : la réponse peut prendre des minutes
 
@@ -93,6 +93,10 @@ _URL = re.compile(r"^https?://[^\s\x00-\x1f\x7f]+$")
 
 class PropositionImpossible(RuntimeError):
     """L'API n'a pas rendu de proposition utilisable. Le message est sûr : français, sans donnée."""
+
+
+class ModeleIaManquant(RuntimeError):
+    """CARTOFR_MODELE_IA n'est pas définie : aucun modèle par défaut (T038, choix de Loïc à venir)."""
 
 
 class CleIaManquante(RuntimeError):
@@ -356,8 +360,14 @@ def contenu_propose(
 SYSTEME = """Tu aides un consultant à écrire les réglages d'un moteur qui cartographie un groupe \
 de sociétés françaises à partir du registre du commerce. Tu proposes ; un humain relit et décide.
 
-Ce que tu proposes, à partir du site officiel du groupe et de son dernier rapport annuel ou \
-document d'enregistrement universel :
+Le moteur trouve lui-même les filiales au registre (mandats entre sociétés) : ne cherche pas \
+la liste des filiales, ni l'annexe des comptes consolidés. Ce qui lui manque, ce sont les noms \
+que le registre ne relie pas au groupe. Cherche-les sur les pages courtes du site officiel du \
+groupe qui listent ses marques, ses maisons ou ses activités (« nos marques », « nos maisons », \
+« nos métiers »). Ne lis pas un rapport annuel en entier ; ouvre-le seulement si le site ne \
+donne pas ces listes.
+
+Ce que tu proposes :
 - marques : les noms commerciaux sous lesquels les filiales françaises du groupe sont \
 immatriculées ou connues (une marque par élément, telle qu'elle s'écrit) ;
 - sigles : les sigles du groupe ou de ses maisons (ex. un acronyme du nom du groupe) ;
@@ -463,8 +473,15 @@ def construire_requete(entree: Entree, modele: str) -> dict[str, Any]:
 
 
 def modele() -> str:
-    """Le modèle (nom OpenRouter) : CARTOFR_MODELE_IA, sinon anthropic/claude-sonnet-5.5."""
-    return os.environ.get(VARIABLE_MODELE, "").strip() or MODELE_DEFAUT
+    """Le modèle (nom OpenRouter, ex. « fournisseur/modele ») : CARTOFR_MODELE_IA, obligatoire.
+    Pas de modèle par défaut : le choix se fait sur l'essai comparatif (T038 C4)."""
+    nom = os.environ.get(VARIABLE_MODELE, "").strip()
+    if not nom:
+        raise ModeleIaManquant(
+            f"La variable {VARIABLE_MODELE} n'est pas définie : choisissez le modèle de l'IA "
+            "(nom OpenRouter)."
+        )
+    return nom
 
 
 class ClientOpenRouter:
@@ -533,16 +550,68 @@ def _message(reponse: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     return message, fin if isinstance(fin, str) else None  # pyright: ignore[reportUnknownVariableType]
 
 
-def appeler(client: Any, requete: dict[str, Any], max_tours: int = MAX_TOURS) -> dict[str, Any]:
+@dataclass
+class Consommation:
+    """Ce qu'a coûté une proposition, additionné sur les requêtes (champ `usage` d'OpenRouter).
+    `cout` : en dollars, quand OpenRouter le donne. Des nombres seulement, jamais un texte."""
+
+    requetes: int = 0
+    jetons_entree: int = 0
+    jetons_sortie: int = 0
+    recherches_web: int = 0
+    cout: float | None = None
+
+    def ajouter(self, reponse: dict[str, Any]) -> None:
+        self.requetes += 1
+        usage = reponse.get("usage")
+        if not isinstance(usage, dict):
+            return
+        self.jetons_entree += _entier(usage.get("prompt_tokens"))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+        self.jetons_sortie += _entier(usage.get("completion_tokens"))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+        outils = usage.get("server_tool_use")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        if isinstance(outils, dict):
+            self.recherches_web += _entier(outils.get("web_search_requests"))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+        cout = usage.get("cost")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        if isinstance(cout, int | float) and not isinstance(cout, bool):
+            self.cout = (self.cout or 0.0) + float(cout)
+
+    def journaliser(self, modele: str) -> None:
+        cout = "inconnu" if self.cout is None else f"{self.cout:.4f} $"
+        log.info(
+            "proposition IA : modèle %s, %s requêtes, %s jetons en entrée, %s en sortie, "
+            "%s recherches web, coût %s",
+            modele,
+            self.requetes,
+            self.jetons_entree,
+            self.jetons_sortie,
+            self.recherches_web,
+            cout,
+        )
+
+
+def _entier(valeur: Any) -> int:
+    return valeur if isinstance(valeur, int) and not isinstance(valeur, bool) and valeur > 0 else 0
+
+
+def appeler(
+    client: Any,
+    requete: dict[str, Any],
+    max_tours: int = MAX_TOURS,
+    conso: Consommation | None = None,
+) -> dict[str, Any]:
     """Interroge l'IA jusqu'à l'appel de l'outil de proposition, et rend ses arguments.
 
     Fin sans appel de l'outil : le message est gardé et une relance est envoyée. Refus
     (`refusal` ou filtre de contenu), réponse tronquée, arguments illisibles ou trop de
-    tours : PropositionImpossible.
+    tours : PropositionImpossible. `conso`, s'il est donné, additionne les jetons de chaque
+    réponse, même quand l'appel finit en erreur.
     """
     messages = list(requete["messages"])
     for _ in range(max_tours):
-        message, fin = _message(client.envoyer({**requete, "messages": messages}))
+        reponse = client.envoyer({**requete, "messages": messages})
+        if conso is not None and isinstance(reponse, dict):
+            conso.ajouter(reponse)  # pyright: ignore[reportUnknownArgumentType]
+        message, fin = _message(reponse)  # pyright: ignore[reportUnknownArgumentType]
         if message.get("refusal") or fin == "content_filter":
             raise PropositionImpossible("L'IA a refusé de faire la proposition.")
         appels = message.get("tool_calls")
@@ -579,6 +648,10 @@ def lire_reponse(entree: dict[str, Any]) -> list[ElementBrut]:
 
 def proposer(entree: Entree, client: Any, nom_modele: str) -> list[ElementBrut]:
     """Demande la proposition à l'IA et rend ses éléments bruts (à passer à `nettoyer`)."""
-    bruts = lire_reponse(appeler(client, construire_requete(entree, nom_modele)))
+    conso = Consommation()
+    try:
+        bruts = lire_reponse(appeler(client, construire_requete(entree, nom_modele), conso=conso))
+    finally:
+        conso.journaliser(nom_modele)
     log.info("proposition IA : %s éléments reçus", len(bruts))
     return bruts
