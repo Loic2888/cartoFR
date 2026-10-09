@@ -14,7 +14,7 @@ Entrées :
     - `<CARTOFR_DATA>/registre.duckdb`, ouvert en lecture seule, deux fois : pour le
       contexte donné à l'IA, puis pour compter les homonymes. Il est refermé pendant
       l'appel à l'API, qui peut durer plusieurs minutes, pour ne pas bloquer la synchro ;
-    - ANTHROPIC_API_KEY, CARTOFR_MODELE_IA (facultatif).
+    - OPENROUTER_API_KEY, CARTOFR_MODELE_IA (facultatif, nom de modèle OpenRouter).
 Sortie : une ligne `reglages` (version suivante du groupe) : `contenu` au schéma des
 réglages (vérifié par cartofr.reglages.valider), `proposition` = modèle et éléments
 (liste, valeur, source, homonymes, origine, liste déjà validée), `cree_par` = le

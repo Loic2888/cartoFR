@@ -16,8 +16,7 @@ dependencies = [
     "pyarrow>=25",          # lecture des parquets du prototype
     "psycopg[binary]>=3.2", # base de l'app (file de travaux, cartos)
     "pydantic>=2.10",       # schéma des réglages, partagé avec Zod côté web
-    "httpx>=0.28",          # API INPI et API Sirene
-    "anthropic>=1.12",      # IA : proposition des réglages (T025, P2)
+    "httpx>=0.28",          # API INPI, API Sirene et OpenRouter (proposition IA, T037)
 ]
 
 [project.optional-dependencies]
