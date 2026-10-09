@@ -257,10 +257,21 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 - Next ne décide rien sur le groupe : il compte les choix du consultant (principe 7). Tests : `web/lib/reglages/proposition.test.ts`.
 - Limite : si le consultant passe par l'éditeur classique au lieu de la revue, la version enregistrée ne porte pas de compte de corrections. Elle ne compte pas dans SC-007.
 
-**SC-007 : non mesuré, critère ouvert.** La mesure demande de vraies propositions, donc l'API réelle (clé `ANTHROPIC_API_KEY`) ; aucune n'a été faite. Rien n'est inventé ici. Protocole :
+**SC-007 : non mesuré, critère ouvert.** La mesure demande de vraies propositions, donc l'API réelle (clé `OPENROUTER_API_KEY` depuis T037) ; aucune n'a été faite. Rien n'est inventé ici. Protocole :
 
 1. Sur une base de test, créer les groupes LVMH, VINCI et CMAF sans leurs réglages de départ (ou dans une organisation à part).
 2. Pour chacun, cliquer « Proposer des réglages » et chronométrer du clic à la validation.
 3. Revoir la proposition en prenant `config/<groupe>.json` comme référence : rejeter ce qui n'y est pas et qui est faux, corriger les listes, ajouter ce qui manque et compte (marques, sigles, maisons, exclusions par nom).
 4. Relever `corrections` de la version validée (`select version, corrections from reglages where proposition_id is not null`) et la durée.
 5. Critère tenu si la moyenne des trois est sous 5 corrections et chaque durée sous 30 minutes. Noter le coût de l'appel (jetons) et le modèle (`CARTOFR_MODELE_IA`).
+
+## 2026-10-09
+
+### L'IA passe par OpenRouter (T037)
+
+- Décision de Loïc : la proposition des réglages appelle OpenRouter (`POST /api/v1/chat/completions`, format OpenAI) au lieu de l'API Anthropic en direct. Modèle par défaut inchangé : Claude Sonnet 5.5 (`anthropic/claude-sonnet-5.5` chez OpenRouter), changeable par `CARTOFR_MODELE_IA`. Clé : `OPENROUTER_API_KEY`. Le paquet `anthropic` sort des dépendances du worker ; l'appel passe par `httpx`, déjà utilisé pour l'INPI et Sirene.
+- La recherche et la lecture web sont les outils serveur d'OpenRouter (`openrouter:web_search`, `openrouter:web_fetch`, 8 utilisations chacun au plus) : OpenRouter les exécute et ne rend au worker que l'appel de la fonction de proposition, à schéma strict. Le reste ne change pas : nettoyage, règle des homonymes, éléments déjà validés gardés, version non validée.
+- Confidentialité : chaque requête pose `provider: {zdr: true, data_collection: "deny"}`. Un sous-traitant de plus (OpenRouter, États-Unis) est ajouté au registre des traitements ; sa propre durée de conservation reste à décider. Le routage UE d'OpenRouter est réservé aux comptes entreprise.
+- Perdu : le repli automatique d'Anthropic après un refus (`fallbacks`), qui n'existe pas au format OpenAI. Un refus fait échouer le travail avec « L'IA a refusé de faire la proposition. »
+- Tests : la requête et le client HTTP sont simulés, aucun appel réel. Le test « aucun nom de dirigeant dans la requête » passe sur le nouveau format ; les erreurs HTTP (401, 402, 429, 5xx, réseau, réponse illisible) donnent un message français sans la clé ni le corps de la réponse dans le journal. Moteur inchangé : non-régression sans objet.
+- Ouvert : une proposition réelle (T037 C5, puis la mesure SC-007 de T026) demande une clé OpenRouter dans `.env`.

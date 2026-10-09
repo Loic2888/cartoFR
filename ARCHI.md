@@ -14,7 +14,7 @@ Date : 2026-10-06. Part de `PRD.md`. Le PRD dit le quoi, ce document dit le comm
 - Registre et moteur : worker Python 3.12, DuckDB sur fichiers locaux
 - Hébergement : un VPS Hetzner CX43 (Allemagne, UE), Docker Compose, Caddy pour le HTTPS
 - Connexion : lien magique par e-mail, e-mails envoyés par Brevo (France)
-- IA (P2) : API Claude, pour proposer les réglages seulement
+- IA (P2) : Claude par OpenRouter (décidé le 2026-10-09, T037), pour proposer les réglages seulement
 
 ```
                    ┌──────────────────── VPS Hetzner (UE) ─────────────────────┐
@@ -103,8 +103,10 @@ Décidé le 2026-10-07. Le réglage `familles_exclues` contient des noms de fami
 - **Limite** : `config/*.json` et le seed, publics dans git, contiennent encore le nom, comme avant.
 
 ### IA (P2, US3)
-- **SDK** : `anthropic` (Python), dans le worker. Modèle choisi au moment de US3.
-- **Usage** : lire le site et le rapport annuel du groupe (recherche web), proposer les marques, les maisons et les exclusions, chacune avec sa source.
+- **Passerelle** : OpenRouter (`POST /api/v1/chat/completions`, format OpenAI), appelé en `httpx` depuis le worker. Clé `OPENROUTER_API_KEY`. Modèle `anthropic/claude-sonnet-5.5` par défaut, changeable par `CARTOFR_MODELE_IA` sans toucher au code. *Décidé le 2026-10-09 (T037, décision de Loïc)* : remplace l'appel direct à l'API Anthropic choisi en T025.
+- **Usage** : lire le site et le rapport annuel du groupe (outils serveur `openrouter:web_search` et `openrouter:web_fetch`, exécutés par OpenRouter), proposer les marques, les maisons et les exclusions, chacune avec sa source.
+- **Confidentialité** : chaque requête pose `provider: {zdr: true, data_collection: "deny"}` : seuls les fournisseurs sans conservation ni collecte des données servent la requête.
+- **Compromis** : un sous-traitant de plus (OpenRouter, États-Unis) entre le worker et le fournisseur du modèle. Gagné : un seul compte et une seule facture pour changer de modèle. Perdu : le repli automatique d'Anthropic en cas de refus (`fallbacks`), absent du format OpenAI ; un refus fait échouer le travail avec un message clair. Le routage UE d'OpenRouter est réservé aux comptes entreprise : écarté pour l'instant.
 - **Ce qui part** : le nom du groupe et des noms de sociétés publics. Jamais un nom de personne. La proposition est enregistrée comme `reglages` non validés (principe 1).
 - US3 n'oriente aucun choix de cette architecture : elle s'ajoute comme un type de travail en plus.
 
@@ -138,7 +140,7 @@ Décidé le 2026-10-07. Le réglage `familles_exclues` contient des noms de fami
 | R2 Responsive | ⚠️ | **Contrainte** : l'arbre devient une liste indentée et dépliable sous 640 px, et l'écran de réglages est en une colonne. Vérification à 320 px dans les tâches de US2 |
 | R3 Accessibilité | ⚠️ | **Contrainte** : arbre maison au motif WAI-ARIA `treeview`, confiance A/B/C écrite en toutes lettres (pas seulement en couleur), shadcn/ui pour le reste |
 | R4 RGPD | ⚠️ | Dirigeants stockés pour le calcul seulement, sur le worker. **Contraintes** : registre des traitements à rédiger (tâche) ; aucune donnée personnelle dans les journaux ; comptes consultants limités à l'e-mail ; suppression d'un compte possible |
-| R5 Hébergement UE | ⚠️ | VPS, Postgres, journaux et sauvegardes chez Hetzner en Allemagne ✅. Brevo en France ✅. GitHub Actions ne voit que du code ✅. **Condition** : l'API Claude (P2, Anthropic, États-Unis) ne reçoit que des données de sociétés publiques, jamais un nom de personne |
+| R5 Hébergement UE | ⚠️ | VPS, Postgres, journaux et sauvegardes chez Hetzner en Allemagne ✅. Brevo en France ✅. GitHub Actions ne voit que du code ✅. **Condition** : l'IA (P2, par OpenRouter puis le fournisseur du modèle, États-Unis) ne reçoit que des données de sociétés publiques, jamais un nom de personne, et seulement par des fournisseurs sans conservation (`zdr`) ; T037 |
 | R6 Aucune donnée client réelle en dev | ⚠️ | **Contrainte** : les tests utilisent des extraits du registre public. Les références Basile servent seulement à la non-régression locale (`compare.py`), hors git et hors de l'app |
 | R7 Isolation multi-tenant | ✅ | `organisation_id` + RLS sur chaque table métier. Le worker écrit en rôle service, mais copie l'`organisation_id` du travail. Un test vérifie qu'un membre de A ne voit rien de B |
 | R8 Tests sur la logique métier | ✅ | Toute la logique (moteur, synchro, fermeture des liens) est dans le paquet Python, testée par `pytest`. Next.js ne décide rien |
@@ -220,7 +222,7 @@ Les scripts de la racine (`engine.py`, `build_links.py`…) restent en place tan
 - Supabase auto-hébergé : 0 €
 - Brevo : 0 € (moins de 300 e-mails par jour)
 - API INPI, API Sirene, data.gouv : 0 €
-- API Claude (P2) : quelques euros, selon le nombre de propositions
+- IA par OpenRouter (P2) : quelques euros, selon le nombre de propositions (jetons du modèle, plus la recherche web : environ 0,005 $ la recherche)
 - **Total : 19,69 € HT/mois** (environ 23,60 € TTC), plus l'IA à partir de P2
 
 ### Limites gratuites

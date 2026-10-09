@@ -4,8 +4,9 @@ Vérifie : la proposition est enregistrée sans `valide_le`, et la base refuse d
 (C1) ; aucun nom de `dirigeants_personnes` n'entre dans ce qui part vers l'API (C2) ; une
 marque qui a des homonymes au registre est rangée en ambiguë, cas limites compris : zéro
 homonyme, la tête elle-même, ses filiales directes ou non, casse et accents, mot entier
-(C3). Plus : chaque élément garde porte une source http(s), la boucle d'appel (reprise après
-`pause_turn`, relance, refus), et le contenu proposé reste au schéma des réglages.
+(C3). Plus : chaque élément garde porte une source http(s), la boucle d'appel à OpenRouter
+(relance, refus, réponse illisible), le client HTTP (erreurs sans fuite de la clé, T037), et
+le contenu proposé reste au schéma des réglages.
 
 Le registre est un mini-registre fabriqué (noms inventés, règle produit 6). Les tests base
 demandent DATABASE_URL (migrations appliquées) : ignorés en local sans elle, échec en CI.
@@ -19,7 +20,6 @@ import uuid
 from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import psycopg
@@ -93,25 +93,27 @@ def lecture(chemin: Path) -> Any:
 # --- API simulée -----------------------------------------------------------------------------
 
 
-def outil(entree: dict[str, Any]) -> SimpleNamespace:
-    return SimpleNamespace(type="tool_use", name=ia.OUTIL, id="toolu_test", input=entree)
+def outil(entree: dict[str, Any], nom: str = ia.OUTIL) -> dict[str, Any]:
+    """Un appel de fonction au format OpenAI (arguments en texte JSON)."""
+    return {"id": "call_test", "type": "function", "function": {"name": nom, "arguments": json.dumps(entree)}}
 
 
-def reponse(stop: str, *blocs: Any) -> SimpleNamespace:
-    return SimpleNamespace(stop_reason=stop, content=list(blocs))
+def reponse(fin: str, *appels: dict[str, Any], contenu: str | None = None, **message: Any) -> dict[str, Any]:
+    """Une réponse OpenRouter (/chat/completions) : un choix, sa raison de fin, son message."""
+    corps = {"role": "assistant", "content": contenu, "tool_calls": list(appels) or None, **message}
+    return {"id": "gen-test", "choices": [{"finish_reason": fin, "message": corps}]}
 
 
 class ClientSimule:
-    """Remplace anthropic.Anthropic : rend les réponses données, garde chaque requête."""
+    """Remplace ClientOpenRouter : rend les réponses données, garde chaque requête."""
 
-    def __init__(self, *reponses: SimpleNamespace) -> None:
+    def __init__(self, *reponses: dict[str, Any]) -> None:
         self.reponses = list(reponses)
         self.requetes: list[dict[str, Any]] = []
-        self.beta = SimpleNamespace(messages=SimpleNamespace(create=self._creer))
 
-    def _creer(self, **kwargs: Any) -> SimpleNamespace:
+    def envoyer(self, corps: dict[str, Any]) -> dict[str, Any]:
         # Copie des messages : la boucle les complète après coup.
-        self.requetes.append({**kwargs, "messages": list(kwargs["messages"])})
+        self.requetes.append({**corps, "messages": list(corps["messages"])})
         return self.reponses.pop(0)
 
 
@@ -138,7 +140,7 @@ def test_aucun_nom_de_dirigeant_dans_la_requete(chemin: Path) -> None:
         personnes = [p for (p,) in con.execute("select personne from dirigeants_personnes").fetchall()]
     finally:
         con.close()
-    client = ClientSimule(reponse("tool_use", outil(PROPOSITION)))
+    client = ClientSimule(reponse("tool_calls", outil(PROPOSITION)))
     ia.proposer(entree, client, "modele-test")
 
     envoye = json.dumps(client.requetes, ensure_ascii=False, default=str).upper()
@@ -335,46 +337,155 @@ def entree_test() -> ia.Entree:
     return ia.Entree("ALPHAMARK", ia.SocietePublique(TETE, "ALPHAMARK HOLDING"))
 
 
-def test_appel_reprend_apres_pause_et_relance_sans_outil() -> None:
-    pause = SimpleNamespace(type="server_tool_use", name="web_search", id="srv", input={"query": "x"})
+def test_appel_relance_sans_outil_et_requete_openrouter() -> None:
     client = ClientSimule(
-        reponse("pause_turn", pause),
-        reponse("end_turn", SimpleNamespace(type="text", text="Voici.")),
-        reponse("tool_use", outil(PROPOSITION)),
+        reponse("stop", contenu="Voici."),
+        reponse("tool_calls", outil(PROPOSITION)),
     )
     bruts = ia.proposer(entree_test(), client, "modele-test")
     assert len(bruts) == 6
-    assert len(client.requetes) == 3
-    # Après pause : la réponse renvoyée telle quelle, sans message en plus.
-    assert client.requetes[1]["messages"][-1] == {"role": "assistant", "content": [pause]}
-    # Après une fin sans outil : une relance.
-    assert client.requetes[2]["messages"][-1] == {"role": "user", "content": ia.RELANCE}
+    assert len(client.requetes) == 2
+    # Après une fin sans outil : la réponse gardée, puis une relance.
+    assert client.requetes[1]["messages"][-2:] == [
+        {"role": "assistant", "content": "Voici."},
+        {"role": "user", "content": ia.RELANCE},
+    ]
     premiere = client.requetes[0]
     assert premiere["model"] == "modele-test"
-    assert premiere["tool_choice"] == {"type": "auto"}
-    assert {t["name"] for t in premiere["tools"]} == {"web_search", "web_fetch", ia.OUTIL}
+    assert premiere["tool_choice"] == "auto"
+    assert premiere["messages"][0] == {"role": "system", "content": ia.SYSTEME}
+    types = [o["type"] for o in premiere["tools"]]
+    assert types == ["openrouter:web_search", "openrouter:web_fetch", "function"]
+    fonction = premiere["tools"][2]["function"]
+    assert fonction["name"] == ia.OUTIL and fonction["strict"] is True
+    assert fonction["parameters"]["required"] == list(ia.CLES_OUTIL)
+    # R5 : seulement des fournisseurs sans conservation ni collecte des données.
+    assert premiere["provider"] == {"data_collection": "deny", "zdr": True}
 
 
-@pytest.mark.parametrize("stop", ["refusal", "max_tokens"])
-def test_appel_refus_ou_tronque(stop: str) -> None:
+def test_appel_ignore_un_autre_outil_puis_lit_la_proposition() -> None:
+    client = ClientSimule(reponse("tool_calls", outil({"x": 1}, nom="autre"), outil(PROPOSITION)))
+    assert len(ia.proposer(entree_test(), client, "modele-test")) == 6
+
+
+@pytest.mark.parametrize(
+    "rendu",
+    [
+        reponse("stop", refusal="Je ne peux pas."),
+        reponse("content_filter"),
+        reponse("length", contenu="Début…"),
+        reponse(
+            "tool_calls",
+            {"id": "c", "type": "function", "function": {"name": ia.OUTIL, "arguments": "pas du json"}},
+        ),
+        reponse(
+            "tool_calls",
+            {"id": "c", "type": "function", "function": {"name": ia.OUTIL, "arguments": "[1, 2]"}},
+        ),
+        {"error": {"code": 502, "message": "Upstream error"}},
+        {"choices": []},
+        {"choices": [{"finish_reason": "stop"}]},
+    ],
+    ids=[
+        "refus",
+        "filtre",
+        "tronque",
+        "json-illisible",
+        "pas-un-objet",
+        "erreur",
+        "sans-choix",
+        "sans-message",
+    ],
+)
+def test_appel_refus_tronque_ou_illisible(rendu: dict[str, Any]) -> None:
     with pytest.raises(ia.PropositionImpossible):
-        ia.proposer(entree_test(), ClientSimule(reponse(stop)), "modele-test")
+        ia.proposer(entree_test(), ClientSimule(rendu), "modele-test")
 
 
 def test_appel_abandonne_apres_trop_de_tours() -> None:
-    client = ClientSimule(*(reponse("end_turn") for _ in range(ia.MAX_TOURS)))
+    client = ClientSimule(*(reponse("stop", contenu="Rien.") for _ in range(ia.MAX_TOURS)))
     with pytest.raises(ia.PropositionImpossible):
         ia.proposer(entree_test(), client, "modele-test")
+    assert len(client.requetes) == ia.MAX_TOURS
 
 
 def test_modele_et_cle(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(ia.VARIABLE_MODELE, raising=False)
-    assert ia.modele() == "claude-sonnet-5-5"
-    monkeypatch.setenv(ia.VARIABLE_MODELE, "autre-modele")
-    assert ia.modele() == "autre-modele"
+    assert ia.modele() == "anthropic/claude-sonnet-5.5"
+    monkeypatch.setenv(ia.VARIABLE_MODELE, "autre/modele")
+    assert ia.modele() == "autre/modele"
     monkeypatch.delenv(ia.VARIABLE_CLE_API, raising=False)
     with pytest.raises(ia.CleIaManquante):
         ia.client_ia()
+    monkeypatch.setenv(ia.VARIABLE_CLE_API, "  ")
+    with pytest.raises(ia.CleIaManquante):
+        ia.client_ia()
+    monkeypatch.setenv(ia.VARIABLE_CLE_API, "cle-factice")
+    assert isinstance(ia.client_ia(), ia.ClientOpenRouter)
+
+
+# --- Client OpenRouter (HTTP simulé, jamais d'appel réel) -----------------------------------------
+
+CLE_FACTICE = "sk-or-cle-factice-jamais-journalisee"
+
+
+def poser_http(monkeypatch: pytest.MonkeyPatch, rendu: Any) -> list[dict[str, Any]]:
+    """Remplace httpx.post : rend `rendu` (une réponse, ou une exception à lever), garde l'appel."""
+    import httpx
+
+    appels: list[dict[str, Any]] = []
+
+    def post(url: str, **kwargs: Any) -> httpx.Response:
+        appels.append({"url": url, **kwargs})
+        if isinstance(rendu, Exception):
+            raise rendu
+        return rendu
+
+    monkeypatch.setattr(httpx, "post", post)
+    return appels
+
+
+def test_client_envoie_la_requete_avec_la_cle(monkeypatch: pytest.MonkeyPatch) -> None:
+    import httpx
+
+    corps = reponse("tool_calls", outil(PROPOSITION))
+    appels = poser_http(monkeypatch, httpx.Response(200, json=corps))
+    assert ia.ClientOpenRouter(CLE_FACTICE).envoyer({"model": "m"}) == corps
+    assert appels[0]["url"] == ia.URL_OPENROUTER
+    assert appels[0]["headers"]["Authorization"] == f"Bearer {CLE_FACTICE}"
+    assert appels[0]["json"] == {"model": "m"}
+    assert appels[0]["timeout"] == ia.DELAI_S
+
+
+@pytest.mark.parametrize(
+    ("statut", "attendu"),
+    [(401, "clé"), (403, "clé"), (402, "crédit"), (429, "Réessayez"), (502, "Réessayez")],
+)
+def test_client_erreurs_http_sans_fuite(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, statut: int, attendu: str
+) -> None:
+    import httpx
+
+    poser_http(monkeypatch, httpx.Response(statut, json={"error": {"message": f"détail {CLE_FACTICE}"}}))
+    with caplog.at_level("DEBUG"), pytest.raises(ia.PropositionImpossible) as erreur:
+        ia.ClientOpenRouter(CLE_FACTICE).envoyer({"model": "m"})
+    assert attendu in str(erreur.value)
+    assert CLE_FACTICE not in str(erreur.value) and CLE_FACTICE not in caplog.text
+    assert "détail" not in caplog.text  # le corps de l'erreur n'est jamais journalisé
+
+
+def test_client_injoignable_ou_reponse_illisible(monkeypatch: pytest.MonkeyPatch) -> None:
+    import httpx
+
+    poser_http(monkeypatch, httpx.ConnectTimeout("délai dépassé"))
+    with pytest.raises(ia.PropositionImpossible, match="injoignable"):
+        ia.ClientOpenRouter(CLE_FACTICE).envoyer({})
+    poser_http(monkeypatch, httpx.Response(200, text="<html>pas du json</html>"))
+    with pytest.raises(ia.PropositionImpossible, match="illisible"):
+        ia.ClientOpenRouter(CLE_FACTICE).envoyer({})
+    poser_http(monkeypatch, httpx.Response(200, json=[1, 2]))
+    with pytest.raises(ia.PropositionImpossible, match="illisible"):
+        ia.ClientOpenRouter(CLE_FACTICE).envoyer({})
 
 
 # --- C1 : le travail enregistre une version non validée -----------------------------------------
@@ -465,7 +576,7 @@ def test_le_type_est_enregistre() -> None:
 def test_c1_proposition_enregistree_sans_validation(
     conn: Connexion, monde: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    client = ClientSimule(reponse("tool_use", outil(PROPOSITION)))
+    client = ClientSimule(reponse("tool_calls", outil(PROPOSITION)))
     monkeypatch.setattr(job, "client_ia", lambda: client)
     monkeypatch.setenv(ia.VARIABLE_MODELE, "modele-test")
 
@@ -525,7 +636,7 @@ def test_version_validee_tiree_d_une_proposition(
     conn: Connexion, monde: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Migration 0004 : la version revue porte sa proposition et ses corrections, figées une fois validée."""
-    monkeypatch.setattr(job, "client_ia", lambda: ClientSimule(reponse("tool_use", outil(PROPOSITION))))
+    monkeypatch.setattr(job, "client_ia", lambda: ClientSimule(reponse("tool_calls", outil(PROPOSITION))))
     assert lancer(conn, monde["org"], {"groupe_id": str(monde["groupe"])})[0] == "termine"
     prop = conn.execute(
         "select id from public.reglages where groupe_id = %s and origine = 'proposition'", (monde["groupe"],)
@@ -554,7 +665,7 @@ def test_version_validee_tiree_d_une_proposition(
 def test_groupe_d_une_autre_organisation_introuvable(
     conn: Connexion, monde: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    client = ClientSimule(reponse("tool_use", outil(PROPOSITION)))
+    client = ClientSimule(reponse("tool_calls", outil(PROPOSITION)))
     monkeypatch.setattr(job, "client_ia", lambda: client)
     statut, ident = lancer(conn, monde["autre"], {"groupe_id": str(monde["groupe"])})
     assert statut == "echec"

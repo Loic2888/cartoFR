@@ -26,7 +26,7 @@ commercialisation, pas avant l'usage interne (PRD, décidé le 2026-10-06).
 | 2 | Comptes des consultants | Consultants des organisations clientes | Adresse e-mail, dates de connexion, appartenance et rôle | Jusqu'à la suppression du compte ; comptes inactifs : **à décider** | VPS Hetzner (DE) | Hetzner, Brevo |
 | 3 | Journaux techniques | Aucune par construction | Aucune donnée personnelle (vérifié par test) | Rotation : 3 fichiers de 10 Mo par service ; journal d'audit GoTrue : **à décider** | VPS Hetzner (DE) | Hetzner |
 | 4 | Sauvegardes | Celles des traitements 1 et 2 | Copie du serveur et de la base de l'app | 7 jours glissants (Hetzner) ; `pg_dump` quotidien : **à décider** | Hetzner (DE) | Hetzner |
-| 5 | Proposition de réglages par IA (P2, pas encore construit) | Aucune : données de sociétés seulement | SIREN, dénominations, marques, adresses de siège | **À décider** (politique de l'API) | Anthropic, États-Unis | Anthropic |
+| 5 | Proposition de réglages par IA (P2) | Aucune : données de sociétés seulement | Nom du groupe ; dénomination, sigle et SIREN de la tête et de ses filiales directes | Aucune chez le fournisseur du modèle (routage `zdr`) ; chez OpenRouter : **à décider** | OpenRouter puis fournisseur du modèle, États-Unis | OpenRouter, Anthropic |
 
 ## 1. Registre des sociétés et calcul des cartos
 
@@ -135,20 +135,28 @@ commercialisation, pas avant l'usage interne (PRD, décidé le 2026-10-06).
 - **Lieu** : Hetzner, Allemagne.
 - **Sous-traitants** : Hetzner.
 
-## 5. Proposition de réglages par IA (P2, pas encore construit)
+## 5. Proposition de réglages par IA (P2)
 
 - **Finalité** : proposer les marques et exclusions d'un groupe, que l'humain
   valide ensuite (principes 1 et 2).
 - **Base légale** : intérêt légitime ; aucune donnée personnelle envoyée.
-- **Données envoyées** : données de sociétés publiques seulement (SIREN,
-  dénominations, marques, adresses de siège). **Jamais un nom de personne**,
-  ni dirigeant, ni consultant (condition R5 de l'architecture). La tâche qui
-  construira cet appel portera le test qui le vérifie.
-- **Durée** : celle de l'API Anthropic pour les requêtes, **à décider** (à lire
-  dans ses conditions au moment de US3).
-- **Lieu** : Anthropic, États-Unis : transfert hors UE, acceptable seulement
-  parce qu'aucune donnée personnelle n'y part.
-- **Sous-traitant** : Anthropic.
+- **Données envoyées** : données de sociétés publiques seulement : le nom du
+  groupe, et la dénomination, le sigle et le SIREN de la tête et de ses
+  filiales directes (80 au plus). **Jamais un nom de personne**, ni dirigeant,
+  ni consultant (condition R5 de l'architecture ; vérifié par
+  `worker/tests/ia/test_proposition.py`).
+- **Passage** : OpenRouter (passerelle), qui transmet au fournisseur du modèle
+  (Anthropic par défaut) et exécute lui-même la recherche et la lecture web.
+  Décidé le 2026-10-09 (T037).
+- **Durée** : chaque requête exige un fournisseur sans conservation ni
+  collecte (`provider.zdr`, `data_collection: deny`). La conservation chez
+  OpenRouter lui-même : **à décider** (à lire dans ses conditions et à régler
+  dans les paramètres de confidentialité du compte).
+- **Lieu** : OpenRouter et Anthropic, États-Unis : transfert hors UE,
+  acceptable seulement parce qu'aucune donnée personnelle n'y part. Le routage
+  UE d'OpenRouter est réservé aux comptes entreprise.
+- **Sous-traitants** : OpenRouter, Anthropic (ou le fournisseur du modèle
+  choisi par `CARTOFR_MODELE_IA`).
 
 ## Hors de l'app : le prototype
 
@@ -174,7 +182,8 @@ de cela n'entre dans git. Lieu du poste, durée de conservation de `out/` et de
    contrat).
 9. Rotation des `pg_dump` quotidiens, et la procédure qui rejoue les
    suppressions de comptes après une restauration.
-10. Durée de conservation de l'API Anthropic (P2).
+10. Durée de conservation chez OpenRouter (P2) et réglage de confidentialité du compte
+    (journalisation des requêtes désactivée, ZDR au niveau du compte).
 11. Ce que deviennent l'organisation et ses cartos à la fin d'un contrat
     client, et après le départ de son dernier membre.
 12. Lieu et durées du poste de développement du prototype (`data/`, `out/`,

@@ -1,7 +1,7 @@
-"""Proposer les réglages d'un groupe avec l'API Claude (T025, FR-008, ARCHI « IA (P2, US3) »).
+"""Proposer les réglages d'un groupe avec l'IA, par OpenRouter (T025, T037, FR-008, ARCHI « IA (P2, US3) »).
 
 But : partir d'une page pré-remplie au lieu d'une page blanche. L'IA lit le site et
-le rapport annuel du groupe (recherche web côté Anthropic) et propose des marques,
+le rapport annuel du groupe (recherche et lecture web, outils serveur d'OpenRouter) et propose des marques,
 des sigles, des maisons (nom légal) et des débuts de nom à exclure, chacun avec
 l'URL de sa source. Une règle écrite range ensuite chaque marque : avec des
 homonymes au registre, elle est ambiguë (deuxième preuve exigée par le moteur).
@@ -14,17 +14,18 @@ Usage (le travail `proposition` de cartofr.jobs.proposition enchaîne ces étape
                                   societes_du_groupe(con, "775670417"))
     ranges = ranger(elements, homonymes)
 
-Entrées : le registre DuckDB (`societes`, `unites_legales`, `liens`), ANTHROPIC_API_KEY,
-CARTOFR_MODELE_IA (facultatif, `claude-sonnet-5-5` par défaut).
+Entrées : le registre DuckDB (`societes`, `unites_legales`, `liens`), OPENROUTER_API_KEY,
+CARTOFR_MODELE_IA (facultatif, nom OpenRouter, `anthropic/claude-sonnet-5.5` par défaut).
 Sorties : des `ElementRange` (liste des réglages, valeur, source, homonymes).
 
 Règles tenues ici :
 - l'IA propose, elle ne décide jamais (principe 1) : ce module ne rend qu'une
   proposition, enregistrée comme version non validée par le travail ;
-- ce qui part chez Anthropic (États-Unis, R5) : le nom du groupe, la raison
+- ce qui part chez OpenRouter puis le fournisseur du modèle (hors UE, R5) : le nom du groupe, la raison
   sociale, le sigle et le SIREN de la tête et de ses filiales directes. Que des
   données de sociétés publiques : la table des dirigeants personnes physiques
-  n'est jamais lue ici (garde-fou 6, principe 6 ; test_proposition.py, C2) ;
+  n'est jamais lue ici (garde-fou 6, principe 6 ; test_proposition.py, C2). Le routage est
+  limité aux fournisseurs sans conservation ni collecte (`provider` : zdr, data_collection) ;
 - chaque élément gardé de l'IA porte une source http(s) : un élément sans source est écarté ;
 - rien de validé ne se perd en silence (principe 2) : les éléments de la dernière version
   validée que l'IA ne repropose pas sont ajoutés à la revue, gardés par défaut (`garder_validees`) ;
@@ -38,6 +39,7 @@ Règles tenues ici :
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -53,12 +55,14 @@ from cartofr.reglages import MOTIF_TEXTE, TEXTE_MAX
 log = logging.getLogger(__name__)
 
 VARIABLE_MODELE = "CARTOFR_MODELE_IA"
-VARIABLE_CLE_API = "ANTHROPIC_API_KEY"
-MODELE_DEFAUT = "claude-sonnet-5-5"
+VARIABLE_CLE_API = "OPENROUTER_API_KEY"
+MODELE_DEFAUT = "anthropic/claude-sonnet-5.5"
+URL_OPENROUTER = "https://openrouter.ai/api/v1/chat/completions"
+DELAI_S = 600.0  # recherche et lecture web côté serveur : la réponse peut prendre des minutes
 
 MAX_FILIALES = 80  # filiales directes données en contexte à l'IA
 MAX_TOKENS = 16000
-MAX_TOURS = 6  # requêtes au plus : reprises après `pause_turn` et une relance
+MAX_TOURS = 6  # requêtes au plus : la première et les relances
 RECHERCHES_MAX = 8
 LECTURES_MAX = 8
 SOURCE_MAX = 500
@@ -92,7 +96,7 @@ class PropositionImpossible(RuntimeError):
 
 
 class CleIaManquante(RuntimeError):
-    """ANTHROPIC_API_KEY n'est pas définie dans l'environnement du worker."""
+    """OPENROUTER_API_KEY n'est pas définie dans l'environnement du worker."""
 
 
 @dataclass(frozen=True)
@@ -427,63 +431,136 @@ def _decrire(s: SocietePublique) -> str:
 
 
 def construire_requete(entree: Entree, modele: str) -> dict[str, Any]:
-    """Les paramètres de l'appel à l'API (client.beta.messages.create)."""
+    """Le corps de la requête OpenRouter (POST /chat/completions, format OpenAI).
+
+    La recherche et la lecture web sont des outils serveur d'OpenRouter : il les exécute
+    lui-même et ne rend au worker que l'appel de l'outil de proposition. `provider` limite le
+    routage aux fournisseurs sans conservation ni collecte des données (R5, T037)."""
     return {
         "model": modele,
         "max_tokens": MAX_TOKENS,
-        "system": SYSTEME,
-        "messages": [{"role": "user", "content": message_utilisateur(entree)}],
-        "tools": [
-            {"type": "web_search_20260209", "name": "web_search", "max_uses": RECHERCHES_MAX},
-            {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": LECTURES_MAX},
-            OUTIL_PROPOSITION,
+        "messages": [
+            {"role": "system", "content": SYSTEME},
+            {"role": "user", "content": message_utilisateur(entree)},
         ],
-        "tool_choice": {"type": "auto"},
-        # Refus d'un classifieur de sécurité : l'API rejoue la requête sur un autre modèle.
-        "betas": ["server-side-fallback-2026-07-01"],
-        "fallbacks": "default",
+        "tools": [
+            {"type": "openrouter:web_search", "parameters": {"max_uses": RECHERCHES_MAX}},
+            {"type": "openrouter:web_fetch", "parameters": {"max_uses": LECTURES_MAX}},
+            {
+                "type": "function",
+                "function": {
+                    "name": OUTIL_PROPOSITION["name"],
+                    "description": OUTIL_PROPOSITION["description"],
+                    "parameters": OUTIL_PROPOSITION["input_schema"],
+                    "strict": True,
+                },
+            },
+        ],
+        "tool_choice": "auto",
+        "max_tool_calls": RECHERCHES_MAX + LECTURES_MAX,
+        "provider": {"data_collection": "deny", "zdr": True},
     }
 
 
 def modele() -> str:
-    """Le modèle : CARTOFR_MODELE_IA, sinon claude-sonnet-5-5."""
+    """Le modèle (nom OpenRouter) : CARTOFR_MODELE_IA, sinon anthropic/claude-sonnet-5.5."""
     return os.environ.get(VARIABLE_MODELE, "").strip() or MODELE_DEFAUT
 
 
-def client_ia() -> Any:
-    """Un client Anthropic, la clé lue dans ANTHROPIC_API_KEY (jamais écrite ailleurs)."""
-    if not os.environ.get(VARIABLE_CLE_API, "").strip():
+class ClientOpenRouter:
+    """Envoie une requête à OpenRouter et rend la réponse JSON. La clé est lue dans
+    OPENROUTER_API_KEY et ne sort que dans l'en-tête Authorization. Une erreur HTTP devient
+    PropositionImpossible ; le journal n'en garde que le statut, jamais le corps."""
+
+    def __init__(self, cle: str, url: str = URL_OPENROUTER, delai: float = DELAI_S) -> None:
+        self._cle = cle
+        self._url = url
+        self._delai = delai
+
+    def envoyer(self, corps: dict[str, Any]) -> dict[str, Any]:
+        import httpx
+
+        try:
+            reponse = httpx.post(
+                self._url,
+                json=corps,
+                headers={"Authorization": f"Bearer {self._cle}", "X-Title": "cartoFR"},
+                timeout=self._delai,
+            )
+        except httpx.HTTPError as e:
+            log.warning("proposition IA : OpenRouter injoignable (%s)", type(e).__name__)
+            raise PropositionImpossible("Le service d'IA est injoignable. Réessayez plus tard.") from None
+        if reponse.status_code in (401, 403):
+            log.warning("proposition IA : OpenRouter refuse la clé (HTTP %s)", reponse.status_code)
+            raise PropositionImpossible("La clé du service d'IA est refusée : prévenez l'administrateur.")
+        if reponse.status_code == 402:
+            log.warning("proposition IA : crédit OpenRouter épuisé (HTTP 402)")
+            raise PropositionImpossible("Le crédit du service d'IA est épuisé : prévenez l'administrateur.")
+        if reponse.status_code >= 400:
+            log.warning("proposition IA : OpenRouter répond HTTP %s", reponse.status_code)
+            raise PropositionImpossible("Le service d'IA a renvoyé une erreur. Réessayez plus tard.")
+        try:
+            donnees = reponse.json()
+        except ValueError:
+            raise PropositionImpossible("La réponse du service d'IA est illisible.") from None
+        if not isinstance(donnees, dict):
+            raise PropositionImpossible("La réponse du service d'IA est illisible.")
+        return donnees  # pyright: ignore[reportUnknownVariableType]
+
+
+def client_ia() -> ClientOpenRouter:
+    """Un client OpenRouter, la clé lue dans OPENROUTER_API_KEY (jamais écrite ailleurs)."""
+    cle = os.environ.get(VARIABLE_CLE_API, "").strip()
+    if not cle:
         raise CleIaManquante(
             f"La variable {VARIABLE_CLE_API} n'est pas définie : le worker ne peut pas appeler l'IA."
         )
-    import anthropic
+    return ClientOpenRouter(cle)
 
-    return anthropic.Anthropic()
+
+def _message(reponse: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    """Le message de l'assistant et la raison de fin du premier choix ; illisible : erreur."""
+    if isinstance(reponse.get("error"), dict):
+        raise PropositionImpossible("Le service d'IA a renvoyé une erreur. Réessayez plus tard.")
+    choix = reponse.get("choices")
+    if not isinstance(choix, list) or not choix or not isinstance(choix[0], dict):
+        raise PropositionImpossible("La réponse du service d'IA est illisible.")
+    premier: dict[str, Any] = choix[0]  # pyright: ignore[reportUnknownVariableType]
+    message = premier.get("message")
+    if not isinstance(message, dict):
+        raise PropositionImpossible("La réponse du service d'IA est illisible.")
+    fin = premier.get("finish_reason")
+    return message, fin if isinstance(fin, str) else None  # pyright: ignore[reportUnknownVariableType]
 
 
 def appeler(client: Any, requete: dict[str, Any], max_tours: int = MAX_TOURS) -> dict[str, Any]:
-    """Interroge l'API jusqu'à l'appel de l'outil de proposition, et rend ses arguments.
+    """Interroge l'IA jusqu'à l'appel de l'outil de proposition, et rend ses arguments.
 
-    `pause_turn` (boucle de recherche web interrompue côté serveur) : la réponse est renvoyée
-    telle quelle pour reprendre. Fin sans appel de l'outil : une relance. Refus, réponse
-    tronquée ou trop de tours : PropositionImpossible.
+    Fin sans appel de l'outil : le message est gardé et une relance est envoyée. Refus
+    (`refusal` ou filtre de contenu), réponse tronquée, arguments illisibles ou trop de
+    tours : PropositionImpossible.
     """
     messages = list(requete["messages"])
     for _ in range(max_tours):
-        reponse = client.beta.messages.create(**{**requete, "messages": messages})
-        if reponse.stop_reason == "refusal":
+        message, fin = _message(client.envoyer({**requete, "messages": messages}))
+        if message.get("refusal") or fin == "content_filter":
             raise PropositionImpossible("L'IA a refusé de faire la proposition.")
-        for bloc in reponse.content:
-            if getattr(bloc, "type", None) == "tool_use" and getattr(bloc, "name", None) == OUTIL:
-                entree = getattr(bloc, "input", None)
-                if not isinstance(entree, dict):
-                    raise PropositionImpossible("La proposition de l'IA est illisible.")
-                return dict(entree)  # pyright: ignore[reportUnknownArgumentType]
-        if reponse.stop_reason == "max_tokens":
+        appels = message.get("tool_calls")
+        for appel in appels if isinstance(appels, list) else []:  # pyright: ignore[reportUnknownVariableType]
+            fonction = appel.get("function") if isinstance(appel, dict) else None  # pyright: ignore[reportUnknownMemberType]
+            if not isinstance(fonction, dict) or fonction.get("name") != OUTIL:  # pyright: ignore[reportUnknownMemberType]
+                continue
+            try:
+                arguments = json.loads(fonction.get("arguments") or "")  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
+            except (TypeError, ValueError):
+                raise PropositionImpossible("La proposition de l'IA est illisible.") from None
+            if not isinstance(arguments, dict):
+                raise PropositionImpossible("La proposition de l'IA est illisible.")
+            return dict(arguments)  # pyright: ignore[reportUnknownArgumentType]
+        if fin == "length":
             raise PropositionImpossible("La réponse de l'IA a été tronquée.")
-        messages.append({"role": "assistant", "content": reponse.content})
-        if reponse.stop_reason != "pause_turn":
-            messages.append({"role": "user", "content": RELANCE})
+        messages.append({"role": "assistant", "content": message.get("content") or ""})
+        messages.append({"role": "user", "content": RELANCE})
     raise PropositionImpossible("L'IA n'a pas rendu de proposition.")
 
 
