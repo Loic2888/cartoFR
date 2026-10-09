@@ -275,3 +275,10 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 - Perdu : le repli automatique d'Anthropic après un refus (`fallbacks`), qui n'existe pas au format OpenAI. Un refus fait échouer le travail avec « L'IA a refusé de faire la proposition. »
 - Tests : la requête et le client HTTP sont simulés, aucun appel réel. Le test « aucun nom de dirigeant dans la requête » passe sur le nouveau format ; les erreurs HTTP (401, 402, 429, 5xx, réseau, réponse illisible) donnent un message français sans la clé ni le corps de la réponse dans le journal. Moteur inchangé : non-régression sans objet.
 - Ouvert : une proposition réelle (T037 C5, puis la mesure SC-007 de T026) demande une clé OpenRouter dans `.env`.
+
+### Proposition IA recentrée sur les marques, sans modèle par défaut (T038)
+
+- Constat, avec Loïc : l'IA ne rend aucune liste de filiales (sa réponse n'a que marques, sigles, maisons et exclusions) ; le moteur trouve les filiales au registre. Lire un rapport annuel en entier ne servait donc à rien, et c'est ce qui coûtait le plus de jetons. La consigne vise maintenant les pages courtes du site qui listent les marques et les maisons ; le rapport annuel n'est ouvert que si le site ne les donne pas.
+- Pas de plafond de taille de page (décision de Loïc) : un plafond couperait la fin des pages, et avec un modèle peu cher une page entière coûte quelques centimes.
+- Plus de modèle par défaut (décision de Loïc) : `CARTOFR_MODELE_IA` est obligatoire, sinon le travail échoue sans appeler l'IA. Sonnet 5.5 est écarté (2 $ / 10 $ le million de jetons en entrée / sortie chez OpenRouter). Candidats relevés le 2026-10-09 : Claude Haiku 5.5 (0,10 $ / 0,50 $), DeepSeek V3.2 (0,26 $ / 0,42 $), Mistral Large 4 (0,68 $ / 2,09 $). Les modèles chinois posent la question de l'hébergement (R5) : à examiner avant de choisir. Choix sur l'essai comparatif (T038 C4).
+- Chaque proposition journalise modèle, requêtes, jetons, recherches web et coût réel en dollars, même en échec. Des nombres seulement.

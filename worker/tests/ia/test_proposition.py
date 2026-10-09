@@ -410,8 +410,13 @@ def test_appel_abandonne_apres_trop_de_tours() -> None:
 
 
 def test_modele_et_cle(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pas de modèle par défaut (T038) : absent ou vide, le travail s'arrête avec un message clair.
     monkeypatch.delenv(ia.VARIABLE_MODELE, raising=False)
-    assert ia.modele() == "anthropic/claude-sonnet-5.5"
+    with pytest.raises(ia.ModeleIaManquant):
+        ia.modele()
+    monkeypatch.setenv(ia.VARIABLE_MODELE, "   ")
+    with pytest.raises(ia.ModeleIaManquant):
+        ia.modele()
     monkeypatch.setenv(ia.VARIABLE_MODELE, "autre/modele")
     assert ia.modele() == "autre/modele"
     monkeypatch.delenv(ia.VARIABLE_CLE_API, raising=False)
@@ -422,6 +427,55 @@ def test_modele_et_cle(monkeypatch: pytest.MonkeyPatch) -> None:
         ia.client_ia()
     monkeypatch.setenv(ia.VARIABLE_CLE_API, "cle-factice")
     assert isinstance(ia.client_ia(), ia.ClientOpenRouter)
+
+
+def test_consigne_vise_les_pages_de_marques_pas_les_filiales() -> None:
+    """T038 : le moteur trouve les filiales au registre ; l'IA cherche les marques sur les pages
+    courtes du site, et n'ouvre pas un rapport annuel en entier."""
+    assert "ne cherche pas" in ia.SYSTEME and "liste des filiales" in ia.SYSTEME
+    assert "nos marques" in ia.SYSTEME
+    assert "Ne lis pas un rapport annuel en entier" in ia.SYSTEME
+
+
+def test_consommation_additionnee_et_journalisee(caplog: pytest.LogCaptureFixture) -> None:
+    usage1 = {
+        "prompt_tokens": 1200,
+        "completion_tokens": 80,
+        "cost": 0.0021,
+        "server_tool_use": {"web_search_requests": 3},
+    }
+    usage2 = {"prompt_tokens": 3400, "completion_tokens": 400, "cost": 0.004}
+    client = ClientSimule(
+        {**reponse("stop", contenu="Voici."), "usage": usage1},
+        {**reponse("tool_calls", outil(PROPOSITION)), "usage": usage2},
+    )
+    with caplog.at_level("INFO", logger=ia.log.name):
+        ia.proposer(entree_test(), client, "modele/test")
+    ligne = next(m for m in caplog.messages if "jetons" in m)
+    assert ligne == (
+        "proposition IA : modèle modele/test, 2 requêtes, 4600 jetons en entrée, 480 en sortie, "
+        "3 recherches web, coût 0.0061 $"
+    )
+    # Des nombres seulement : rien de la proposition ni du texte de l'IA.
+    assert "Voici" not in caplog.text and "Alphamark" not in caplog.text
+
+
+def test_consommation_journalisee_meme_en_erreur(caplog: pytest.LogCaptureFixture) -> None:
+    client = ClientSimule({**reponse("length", contenu="Début"), "usage": {"prompt_tokens": 50, "cost": "x"}})
+    with caplog.at_level("INFO", logger=ia.log.name), pytest.raises(ia.PropositionImpossible):
+        ia.proposer(entree_test(), client, "modele/test")
+    assert any(
+        "1 requêtes, 50 jetons en entrée, 0 en sortie, 0 recherches web, coût inconnu" in m
+        for m in caplog.messages
+    )
+
+
+def test_consommation_ignore_les_valeurs_bizarres() -> None:
+    conso = ia.Consommation()
+    conso.ajouter({"usage": {"prompt_tokens": -5, "completion_tokens": True, "cost": None}})
+    conso.ajouter({"usage": "rien"})
+    conso.ajouter({})
+    assert (conso.requetes, conso.jetons_entree, conso.jetons_sortie, conso.cout) == (3, 0, 0, None)
 
 
 # --- Client OpenRouter (HTTP simulé, jamais d'appel réel) -----------------------------------------
@@ -637,6 +691,7 @@ def test_version_validee_tiree_d_une_proposition(
 ) -> None:
     """Migration 0004 : la version revue porte sa proposition et ses corrections, figées une fois validée."""
     monkeypatch.setattr(job, "client_ia", lambda: ClientSimule(reponse("tool_calls", outil(PROPOSITION))))
+    monkeypatch.setenv(ia.VARIABLE_MODELE, "modele-test")
     assert lancer(conn, monde["org"], {"groupe_id": str(monde["groupe"])})[0] == "termine"
     prop = conn.execute(
         "select id from public.reglages where groupe_id = %s and origine = 'proposition'", (monde["groupe"],)
@@ -688,9 +743,25 @@ def test_parametres_invalides(conn: Connexion, monde: dict[str, Any], parametres
 def test_sans_cle_api_le_travail_echoue(
     conn: Connexion, monde: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setenv(ia.VARIABLE_MODELE, "modele-test")
     monkeypatch.delenv(ia.VARIABLE_CLE_API, raising=False)
     statut, ident = lancer(conn, monde["org"], {"groupe_id": str(monde["groupe"])})
     erreur = conn.execute("select erreur from public.travaux where id = %s", (ident,)).fetchone()
     conn.commit()
     assert statut == "echec"
     assert erreur == ("échec du travail (CleIaManquante)",)
+
+
+def test_sans_modele_le_travail_echoue_sans_appel(
+    conn: Connexion, monde: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T038 : pas de modèle par défaut. Sans CARTOFR_MODELE_IA, aucun appel à l'IA."""
+    client = ClientSimule()
+    monkeypatch.setattr(job, "client_ia", lambda: client)
+    monkeypatch.delenv(ia.VARIABLE_MODELE, raising=False)
+    statut, ident = lancer(conn, monde["org"], {"groupe_id": str(monde["groupe"])})
+    erreur = conn.execute("select erreur from public.travaux where id = %s", (ident,)).fetchone()
+    conn.commit()
+    assert statut == "echec"
+    assert erreur == ("échec du travail (ModeleIaManquant)",)
+    assert client.requetes == []
