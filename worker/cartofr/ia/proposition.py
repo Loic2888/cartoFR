@@ -22,7 +22,7 @@ Règles tenues ici :
 - l'IA propose, elle ne décide jamais (principe 1) : ce module ne rend qu'une
   proposition, enregistrée comme version non validée par le travail ;
 - ce qui part chez OpenRouter puis le fournisseur du modèle (hors UE, R5) : le nom du groupe, la raison
-  sociale, le sigle et le SIREN de la tête et de ses filiales directes. Que des
+  sociale, le sigle et le SIREN de la tête et des plus grosses sociétés du groupe. Que des
   données de sociétés publiques : la table des dirigeants personnes physiques
   n'est jamais lue ici (garde-fou 6, principe 6 ; test_proposition.py, C2). Le routage est
   limité aux fournisseurs sans conservation ni collecte (`provider` : zdr, data_collection) ;
@@ -60,11 +60,16 @@ VARIABLE_CLE_API = "OPENROUTER_API_KEY"
 URL_OPENROUTER = "https://openrouter.ai/api/v1/chat/completions"
 DELAI_S = 600.0  # recherche et lecture web côté serveur : la réponse peut prendre des minutes
 
-MAX_FILIALES = 80  # filiales directes données en contexte à l'IA
-MAX_TOKENS = 16000
+MAX_FILIALES = 150  # sociétés du groupe données en contexte à l'IA, les plus grosses d'abord (T039)
+# Sortie, raisonnement compris (T039) : une proposition exhaustive dépassait 16 000 jetons et
+# l'appel de l'outil arrivait coupé. On ne paie que ce qui est produit.
+MAX_TOKENS = 64000
 MAX_TOURS = 6  # requêtes au plus : la première et les relances
-RECHERCHES_MAX = 8
-LECTURES_MAX = 8
+# Budget d'outils serveur (T039) : de quoi parcourir chaque pôle d'activité du groupe. OpenRouter
+# plafonne le total d'une requête à 30 (`max_tool_calls`).
+RECHERCHES_MAX = 10
+LECTURES_MAX = 20
+OUTILS_MAX = 30
 SOURCE_MAX = 500
 OUTIL = "proposer_reglages"
 
@@ -166,15 +171,22 @@ select s.siren, coalesce(u.denomination, s.denomination) as nom, u.sigle
  where s.siren = $siren
 """
 
-# Filiales directes en vigueur, les plus grosses d'abord. Personnes morales seulement :
-# `societes` ne porte que des personnes morales, et les catégories 1xxx sont écartées.
+# Sociétés du groupe en vigueur (liens directs ou non depuis la tête), les plus grosses d'abord
+# (T039 : les filiales directes seules ne donnaient pas assez de pistes de marques). Personnes
+# morales seulement : `societes` ne porte que des personnes morales, et les catégories 1xxx
+# sont écartées.
 _FILIALES = """
-select distinct s.siren, coalesce(u.denomination, s.denomination) as nom, u.sigle,
+with recursive groupe(siren) as (
+    select $siren
+    union
+    select l.enfant from liens l join groupe g on l.parent = g.siren where l.fin is null
+)
+select s.siren, coalesce(u.denomination, s.denomination) as nom, u.sigle,
        try_cast(u.tranche_effectifs as integer) as tranche
-  from liens l
-  join societes s on s.siren = l.enfant
+  from groupe g
+  join societes s on s.siren = g.siren
   left join unites_legales u on u.siren = s.siren
- where l.parent = $siren and l.fin is null and s.fin is null
+ where s.siren <> $siren and s.fin is null
    and coalesce(u.denomination, s.denomination) is not null
    and (u.categorie_juridique is null or u.categorie_juridique not between 1000 and 1999)
  order by tranche desc nulls last, nom, s.siren
@@ -194,7 +206,7 @@ select siren from groupe
 def lire_entree(
     con: duckdb.DuckDBPyConnection, groupe: str, tete_siren: str, max_filiales: int = MAX_FILIALES
 ) -> Entree:
-    """Le contexte donné à l'IA : la tête et ses filiales directes, lues au registre."""
+    """Le contexte donné à l'IA : la tête et les plus grosses sociétés du groupe, lues au registre."""
     ligne = con.execute(_TETE, {"siren": tete_siren}).fetchone()
     tete = (
         SocietePublique(tete_siren, str(ligne[1]).strip(), _ou_rien(ligne[2]))
@@ -362,10 +374,19 @@ de sociétés françaises à partir du registre du commerce. Tu proposes ; un hu
 
 Le moteur trouve lui-même les filiales au registre (mandats entre sociétés) : ne cherche pas \
 la liste des filiales, ni l'annexe des comptes consolidés. Ce qui lui manque, ce sont les noms \
-que le registre ne relie pas au groupe. Cherche-les sur les pages courtes du site officiel du \
-groupe qui listent ses marques, ses maisons ou ses activités (« nos marques », « nos maisons », \
-« nos métiers »). Ne lis pas un rapport annuel en entier ; ouvre-le seulement si le site ne \
-donne pas ces listes.
+de marques et de maisons, pour retrouver les sociétés que le registre ne relie pas au groupe. \
+Le but est d'être exhaustif : le consultant retire un élément en un clic, mais il ne pense pas \
+à ajouter ce qui manque.
+
+Méthode :
+1. Trouve la page du site officiel qui liste les pôles d'activité, les marques ou les maisons \
+du groupe (« nos marques », « nos maisons », « nos métiers », « nos activités »).
+2. Ouvre la page de chaque pôle ou de chaque activité, et relève toutes les marques et \
+maisons qu'elle cite, pas seulement les plus connues. Fais de même pour les filiales \
+importantes qui ont leur propre site.
+3. Sers-toi des sociétés du groupe données plus bas : leurs noms sont des pistes de marques \
+et de maisons à vérifier sur le site.
+4. N'ouvre un rapport annuel que si le site ne donne pas ces listes, et jamais en entier.
 
 Ce que tu proposes :
 - marques : les noms commerciaux sous lesquels les filiales françaises du groupe sont \
@@ -381,7 +402,7 @@ Pas d'URL inventée : si tu n'as pas de source, n'ajoute pas l'élément.
 - Uniquement des noms de sociétés, de marques ou de sigles. Jamais le nom d'une personne \
 physique (dirigeant, fondateur, actionnaire), même si une marque le contient : dans ce cas \
 écris la marque seule si elle est une marque déposée de société, sinon omets-la.
-- Préfère peu d'éléments sûrs à beaucoup d'éléments douteux.
+- Exhaustif sur ce que tes sources citent, mais rien d'inventé : chaque élément vient d'une page lue.
 - Termine en appelant l'outil proposer_reglages une seule fois, avec toute ta proposition."""
 
 RELANCE = "Appelle maintenant l'outil proposer_reglages avec ta proposition, sources comprises."
@@ -428,7 +449,7 @@ def message_utilisateur(entree: Entree) -> str:
         f"Société de tête : {_decrire(entree.tete)}",
     ]
     if entree.filiales:
-        lignes.append("Filiales directes au registre (les plus grosses d'abord) :")
+        lignes.append("Sociétés du groupe au registre (les plus grosses d'abord) :")
         lignes.extend(f"- {_decrire(f)}" for f in entree.filiales)
     lignes.append("")
     lignes.append("Propose les réglages de ce groupe pour la France, avec une source pour chaque élément.")
@@ -467,7 +488,7 @@ def construire_requete(entree: Entree, modele: str) -> dict[str, Any]:
             },
         ],
         "tool_choice": "auto",
-        "max_tool_calls": RECHERCHES_MAX + LECTURES_MAX,
+        "max_tool_calls": OUTILS_MAX,
         "provider": {"data_collection": "deny", "zdr": True},
     }
 
@@ -568,7 +589,8 @@ class Consommation:
             return
         self.jetons_entree += _entier(usage.get("prompt_tokens"))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         self.jetons_sortie += _entier(usage.get("completion_tokens"))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-        outils = usage.get("server_tool_use")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        # Champ d'OpenRouter : `server_tool_use_details` (relevé le 2026-10-10) ; l'ancien nom reste lu.
+        outils = usage.get("server_tool_use_details") or usage.get("server_tool_use")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
         if isinstance(outils, dict):
             self.recherches_web += _entier(outils.get("web_search_requests"))  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
         cout = usage.get("cost")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
@@ -614,6 +636,8 @@ def appeler(
         message, fin = _message(reponse)  # pyright: ignore[reportUnknownArgumentType]
         if message.get("refusal") or fin == "content_filter":
             raise PropositionImpossible("L'IA a refusé de faire la proposition.")
+        if fin == "length":  # avant les appels : leurs arguments seraient coupés
+            raise PropositionImpossible("La réponse de l'IA a été tronquée.")
         appels = message.get("tool_calls")
         for appel in appels if isinstance(appels, list) else []:  # pyright: ignore[reportUnknownVariableType]
             fonction = appel.get("function") if isinstance(appel, dict) else None  # pyright: ignore[reportUnknownMemberType]
@@ -626,8 +650,6 @@ def appeler(
             if not isinstance(arguments, dict):
                 raise PropositionImpossible("La proposition de l'IA est illisible.")
             return dict(arguments)  # pyright: ignore[reportUnknownArgumentType]
-        if fin == "length":
-            raise PropositionImpossible("La réponse de l'IA a été tronquée.")
         messages.append({"role": "assistant", "content": message.get("content") or ""})
         messages.append({"role": "user", "content": RELANCE})
     raise PropositionImpossible("L'IA n'a pas rendu de proposition.")
