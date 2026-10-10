@@ -34,7 +34,7 @@ Consigne de l'IA recentrée sur les pages de marques et de maisons ; aucun modè
 - [x] **C1** : la consigne vise les pages de marques et écarte la liste des filiales (test)
 - [x] **C2** : sans `CARTOFR_MODELE_IA`, aucun appel n'est fait et le travail échoue (`ModeleIaManquant`, test)
 - [x] **C3** : la consommation est additionnée sur les requêtes et journalisée, y compris en échec, sans texte de l'IA (test)
-- [ ] **C4** : essai comparatif de quelques modèles (Haiku, Mistral, DeepSeek…) sur LVMH, VINCI et CMAF : corrections par rapport à `config/` et coût réel, puis choix du modèle par Loïc — demande une clé OpenRouter
+- [x] **C4** : ~~essai comparatif des modèles~~ — abandonné le 2026-10-10 : Loïc juge sur les prix, sans essai, et a mis `anthropic/claude-haiku-5.5` dans `.env` ; le modèle reste réglable
 
 ## Dépendances
 

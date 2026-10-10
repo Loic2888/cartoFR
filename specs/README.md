@@ -64,8 +64,9 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 
 - [x] `T025` — Faire proposer les réglages par l'IA
 - [ ] `T026` — Afficher la proposition et mesurer les corrections *(C1, C2 faits ; C3 ouvert : mesure SC-007 avec l'API réelle)*
-- [ ] `T037` — Faire passer la proposition IA par OpenRouter *(C1 à C4 faits ; C5 ouvert : proposition réelle avec une clé OpenRouter)*
-- [ ] `T038` — Recentrer la proposition IA sur les marques et mesurer son coût *(C1 à C3 faits ; C4 ouvert : essai comparatif des modèles avec une clé OpenRouter)*
+- [x] `T037` — Faire passer la proposition IA par OpenRouter
+- [x] `T038` — Recentrer la proposition IA sur les marques et mesurer son coût
+- [x] `T039` — Améliorer le rappel de la proposition IA
 
 ## Phase 6 : US4 — Traiter les cas douteux (P2)
 

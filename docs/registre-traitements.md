@@ -26,7 +26,7 @@ commercialisation, pas avant l'usage interne (PRD, décidé le 2026-10-06).
 | 2 | Comptes des consultants | Consultants des organisations clientes | Adresse e-mail, dates de connexion, appartenance et rôle | Jusqu'à la suppression du compte ; comptes inactifs : **à décider** | VPS Hetzner (DE) | Hetzner, Brevo |
 | 3 | Journaux techniques | Aucune par construction | Aucune donnée personnelle (vérifié par test) | Rotation : 3 fichiers de 10 Mo par service ; journal d'audit GoTrue : **à décider** | VPS Hetzner (DE) | Hetzner |
 | 4 | Sauvegardes | Celles des traitements 1 et 2 | Copie du serveur et de la base de l'app | 7 jours glissants (Hetzner) ; `pg_dump` quotidien : **à décider** | Hetzner (DE) | Hetzner |
-| 5 | Proposition de réglages par IA (P2) | Aucune : données de sociétés seulement | Nom du groupe ; dénomination, sigle et SIREN de la tête et de ses filiales directes | Aucune chez le fournisseur du modèle (routage `zdr`) ; chez OpenRouter : **à décider** | OpenRouter puis fournisseur du modèle, États-Unis | OpenRouter, Anthropic |
+| 5 | Proposition de réglages par IA (P2) | Aucune : données de sociétés seulement | Nom du groupe ; dénomination, sigle et SIREN de la tête et des plus grosses sociétés du groupe (150 au plus) | Aucune chez le fournisseur du modèle (routage `zdr`) ; chez OpenRouter : **à décider** | OpenRouter puis fournisseur du modèle, États-Unis | OpenRouter, Anthropic |
 
 ## 1. Registre des sociétés et calcul des cartos
 
@@ -141,8 +141,9 @@ commercialisation, pas avant l'usage interne (PRD, décidé le 2026-10-06).
   valide ensuite (principes 1 et 2).
 - **Base légale** : intérêt légitime ; aucune donnée personnelle envoyée.
 - **Données envoyées** : données de sociétés publiques seulement : le nom du
-  groupe, et la dénomination, le sigle et le SIREN de la tête et de ses
-  filiales directes (80 au plus). **Jamais un nom de personne**, ni dirigeant,
+  groupe, et la dénomination, le sigle et le SIREN de la tête et des plus
+  grosses sociétés du groupe au registre (150 au plus, T039). **Jamais un
+  nom de personne**, ni dirigeant,
   ni consultant (condition R5 de l'architecture ; vérifié par
   `worker/tests/ia/test_proposition.py`).
 - **Passage** : OpenRouter (passerelle), qui transmet au fournisseur du modèle

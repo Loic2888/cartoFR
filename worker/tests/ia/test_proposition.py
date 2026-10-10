@@ -156,6 +156,7 @@ def test_aucun_nom_de_dirigeant_dans_la_requete(chemin: Path) -> None:
     # Le contexte est bien celui du registre : des sociétés seulement.
     assert "ALPHAMARK HOLDING" in envoye and F1 in envoye and F3 in envoye
     assert ANCIENNE not in envoye  # lien fermé
+    assert F2 in envoye  # T039 : sous-filiale, au-delà des filiales directes
 
 
 def test_le_code_ne_lit_jamais_la_table_des_dirigeants() -> None:
@@ -402,6 +403,13 @@ def test_appel_refus_tronque_ou_illisible(rendu: dict[str, Any]) -> None:
         ia.proposer(entree_test(), ClientSimule(rendu), "modele-test")
 
 
+def test_appel_coupe_dit_tronquee_pas_illisible() -> None:
+    """T039 : un appel d'outil coupé par la limite de sortie est une réponse tronquée."""
+    coupe = {"id": "c", "type": "function", "function": {"name": ia.OUTIL, "arguments": '{"marques": [{"nom'}}
+    with pytest.raises(ia.PropositionImpossible, match="tronquée"):
+        ia.proposer(entree_test(), ClientSimule(reponse("length", coupe)), "modele-test")
+
+
 def test_appel_abandonne_apres_trop_de_tours() -> None:
     client = ClientSimule(*(reponse("stop", contenu="Rien.") for _ in range(ia.MAX_TOURS)))
     with pytest.raises(ia.PropositionImpossible):
@@ -434,7 +442,10 @@ def test_consigne_vise_les_pages_de_marques_pas_les_filiales() -> None:
     courtes du site, et n'ouvre pas un rapport annuel en entier."""
     assert "ne cherche pas" in ia.SYSTEME and "liste des filiales" in ia.SYSTEME
     assert "nos marques" in ia.SYSTEME
-    assert "Ne lis pas un rapport annuel en entier" in ia.SYSTEME
+    assert "jamais en entier" in ia.SYSTEME
+    # T039 : le rappel compte, sans rien inventer.
+    assert "exhaustif" in ia.SYSTEME and "rien d'inventé" in ia.SYSTEME
+    assert "Préfère peu" not in ia.SYSTEME
 
 
 def test_consommation_additionnee_et_journalisee(caplog: pytest.LogCaptureFixture) -> None:
@@ -468,6 +479,29 @@ def test_consommation_journalisee_meme_en_erreur(caplog: pytest.LogCaptureFixtur
         "1 requêtes, 50 jetons en entrée, 0 en sortie, 0 recherches web, coût inconnu" in m
         for m in caplog.messages
     )
+
+
+def test_consommation_lit_le_champ_d_openrouter() -> None:
+    """T039 : OpenRouter range les recherches dans `server_tool_use_details`."""
+    conso = ia.Consommation()
+    conso.ajouter({"usage": {"server_tool_use_details": {"web_search_requests": 5}}})
+    conso.ajouter({"usage": {"server_tool_use": {"web_search_requests": 2}}})
+    assert conso.recherches_web == 7
+
+
+def test_lire_entree_prend_les_plus_grosses_societes_du_groupe(chemin: Path) -> None:
+    """T039 : tout le groupe (sous-filiales comprises), sans la tête ni les liens fermés,
+    les plus grosses d'abord, dans la limite donnée."""
+    con = lecture(chemin)
+    try:
+        entree = ia.lire_entree(con, "ALPHAMARK", TETE)
+        une = ia.lire_entree(con, "ALPHAMARK", TETE, max_filiales=1)
+    finally:
+        con.close()
+    sirens = [f.siren for f in entree.filiales]
+    assert set(sirens) == {F1, F2, F3}
+    assert sirens[0] == F1  # tranche 32 : la plus grosse
+    assert [f.siren for f in une.filiales] == [F1]
 
 
 def test_consommation_ignore_les_valeurs_bizarres() -> None:

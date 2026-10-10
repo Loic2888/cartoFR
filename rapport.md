@@ -282,3 +282,22 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 - Pas de plafond de taille de page (décision de Loïc) : un plafond couperait la fin des pages, et avec un modèle peu cher une page entière coûte quelques centimes.
 - Plus de modèle par défaut (décision de Loïc) : `CARTOFR_MODELE_IA` est obligatoire, sinon le travail échoue sans appeler l'IA. Sonnet 5.5 est écarté (2 $ / 10 $ le million de jetons en entrée / sortie chez OpenRouter). Candidats relevés le 2026-10-09 : Claude Haiku 5.5 (0,10 $ / 0,50 $), DeepSeek V3.2 (0,26 $ / 0,42 $), Mistral Large 4 (0,68 $ / 2,09 $). Les modèles chinois posent la question de l'hébergement (R5) : à examiner avant de choisir. Choix sur l'essai comparatif (T038 C4).
 - Chaque proposition journalise modèle, requêtes, jetons, recherches web et coût réel en dollars, même en échec. Des nombres seulement.
+
+## 2026-10-10
+
+### Premières propositions réelles, et rappel amélioré (T037 C5, T039)
+
+- Modèle : `anthropic/claude-haiku-5.5` par OpenRouter (choisi par Loïc dans `.env`). Une proposition par groupe, comparée aux réglages validés de `config/` (marques sûres, ambiguës et sigles ; maisons de l'organigramme).
+- Avant T039, l'IA ne proposait presque rien de faux mais trop peu : elle n'utilisait que 3 à 6 de ses 16 recherches et lectures, freinée par « préfère peu d'éléments sûrs » et ne connaissant que les filiales directes.
+- T039 : consigne d'exhaustivité (parcourir chaque pôle d'activité, rien d'inventé), contexte élargi aux 150 plus grosses sociétés du groupe, 10 recherches et 20 lectures au plus, sortie jusqu'à 64 000 jetons.
+
+| Groupe | Marques de `config/` retrouvées, avant → après | Maisons, avant → après | Éléments proposés, avant → après | Coût, avant → après |
+|---|---|---|---|---|
+| LVMH | 23/74 → **49/74** | 13/47 → **33/47** | 34 → 114 | 0,029 $ → 0,231 $ |
+| VINCI | 18/71 → **26/71** | 15/37 → **23/37** | 25 → 79 | 0,042 $ → 0,046 $ |
+| CMAF | 18/52 → **26/52** | 9/13 → 9/13 | 52 → 90 | 0,022 $ → 0,092 $ |
+
+- Les éléments nouveaux (absents de `config/`) sont en grande majorité de vraies sociétés ou marques du groupe : Le Bon Marché, Paris Match, Tiffany & Co., Bvlgari pour LVMH ; Soletanche Bachy, Freyssinet, Spiecapag pour VINCI ; CIC, ACM, Cofidis, AFEDIM pour CMAF. Bruit : pour LVMH, des marques étrangères (domaines viticoles américains…) sans société en France ; la règle des homonymes les range sans effet, mais elles allongent la revue.
+- Coût : LVMH monte à 23 centimes, parce que l'IA a ouvert le rapport annuel (658 000 jetons en entrée) malgré la consigne. Les trois groupes coûtent 37 centimes en tout.
+- Deux défauts trouvés en mesurant, corrigés : le compteur de recherches lisait un champ qu'OpenRouter n'envoie pas (`server_tool_use_details` est le bon) ; une proposition longue (CMAF) dépassait 16 000 jetons de sortie, l'appel d'outil arrivait coupé et le travail échouait en « illisible » au lieu de « tronquée ».
+- Moteur inchangé : non-régression sans objet.

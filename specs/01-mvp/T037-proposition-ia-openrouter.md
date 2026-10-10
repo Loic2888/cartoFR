@@ -48,7 +48,7 @@ Remplacer l'appel à l'API Anthropic du travail `proposition` par un appel à Op
 - [x] **C2** : la requête envoyée porte les outils serveur OpenRouter, la fonction de proposition stricte et `provider` ZDR (test)
 - [x] **C3** : le test « aucun nom de dirigeant dans la requête » passe sur le nouveau format
 - [x] **C4** : erreurs HTTP 401, 402, 429, 5xx, réseau et réponse illisible donnent un message français, sans clé ni corps de réponse dans le journal (test)
-- [ ] **C5** : une proposition réelle sur un groupe connu, comparée à `config/` — demande une clé OpenRouter
+- [x] **C5** : une proposition réelle sur un groupe connu, comparée à `config/` — fait le 2026-10-10 sur LVMH, VINCI et CMAF (`rapport.md`, T039)
 
 ## Tests et validation
 
