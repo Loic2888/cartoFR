@@ -67,6 +67,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 - [x] `T037` — Faire passer la proposition IA par OpenRouter
 - [x] `T038` — Recentrer la proposition IA sur les marques et mesurer son coût
 - [x] `T039` — Améliorer le rappel de la proposition IA
+- [x] `T040` — Signaler à la revue les marques qu'aucune société ne porte
 
 ## Phase 6 : US4 — Traiter les cas douteux (P2)
 

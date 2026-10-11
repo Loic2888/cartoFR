@@ -24,7 +24,7 @@ import type { Reglages } from "./schema";
 const MOI = "00000000-0000-4000-8000-000000000001";
 const SOURCE = "https://groupe-fictif.example/marques";
 
-const IA = { origine: "ia", deja_valide_en: null } as const;
+const IA = { origine: "ia", deja_valide_en: null, sans_societe: false } as const;
 const ELEMENTS: Element[] = [
   { ...IA, liste: "marques_sures", valeur: "Marque Fictive", source: SOURCE, homonymes: 0 },
   { ...IA, liste: "marques_ambigues", valeur: "Soleil", source: SOURCE, homonymes: 12 },
@@ -104,6 +104,7 @@ describe("éléments déjà validés (principe 2)", () => {
     source: null,
     origine: "validee",
     deja_valide_en: "marques_sures",
+    sans_societe: false,
   };
   const REPROPOSEE: Element = { ...ELEMENTS[1], deja_valide_en: "marques_sures" };
   const elements = [ELEMENTS[0], REPROPOSEE, VALIDEE];
@@ -138,7 +139,7 @@ describe("éléments déjà validés (principe 2)", () => {
 
   it("lit une proposition sans origine (ancienne forme) comme venant de l'IA", () => {
     const lus = lireElements({ modele: "m", elements: [{ liste: "marques_sures", valeur: "X", source: SOURCE }] });
-    expect(lus?.[0]).toMatchObject({ origine: "ia", deja_valide_en: null });
+    expect(lus?.[0]).toMatchObject({ origine: "ia", deja_valide_en: null, sans_societe: false });
     expect(lireElements({ modele: "m", elements: [VALIDEE] })).toEqual([VALIDEE]);
   });
 });
@@ -148,6 +149,17 @@ describe("lecture et affichage", () => {
     expect(lireElements({ modele: "m", elements: ELEMENTS })).toEqual(ELEMENTS);
     expect(lireElements({ modele: "m", elements: [{ liste: "exclus", valeur: "x", source: SOURCE }] })).toBeNull();
     expect(lireElements(null)).toBeNull();
+  });
+
+  it("lit le signalement des marques sans société au registre (T040)", () => {
+    const lus = lireElements({
+      modele: "m",
+      elements: [{ liste: "marques_sures", valeur: "Zeta", source: SOURCE, sans_societe: true }],
+    });
+    expect(lus?.[0]?.sans_societe).toBe(true);
+    expect(
+      lireElements({ modele: "m", elements: [{ liste: "marques_sures", valeur: "Z", source: SOURCE, sans_societe: "oui" }] }),
+    ).toBeNull();
   });
 
   it("une source n'est un lien qu'en http(s)", () => {

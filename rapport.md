@@ -301,3 +301,22 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 - Coût : LVMH monte à 23 centimes, parce que l'IA a ouvert le rapport annuel (658 000 jetons en entrée) malgré la consigne. Les trois groupes coûtent 37 centimes en tout.
 - Deux défauts trouvés en mesurant, corrigés : le compteur de recherches lisait un champ qu'OpenRouter n'envoie pas (`server_tool_use_details` est le bon) ; une proposition longue (CMAF) dépassait 16 000 jetons de sortie, l'appel d'outil arrivait coupé et le travail échouait en « illisible » au lieu de « tronquée ».
 - Moteur inchangé : non-régression sans objet.
+
+## 2026-10-11
+
+### Bruit de la proposition IA : deux pistes écartées, un signalement retenu (T040)
+
+Objectif : réduire le bruit (marques sans activité en France) et gagner encore en rappel. Une proposition réelle par groupe et par configuration, Claude Haiku 5.5, comparée à `config/`. Marques retrouvées :
+
+| Groupe | T039 (en place) | Consigne « actives en France » + passes par pôle | Consigne « actives en France » seule |
+|---|---|---|---|
+| LVMH | **49**/74 (0,23 $) | 41/74 (0,41 $) | 26/74 (0,05 $) |
+| VINCI | **26**/71 (0,05 $) | 24/71 (0,20 $) | 20/71 (0,06 $) |
+| CMAF | 26/52 (0,09 $) | **35**/52 (0,17 $) | 29/52 (0,07 $) |
+
+- La consigne « seulement les marques actives en France » enlève le bruit mais fait baisser le rappel : l'IA écarte aussi de vraies marques dont elle doute. Écartée.
+- Les passes par pôle d'activité (repérage des pôles, puis une passe par pôle, 8 au plus) coûtent 2 à 4 fois plus pour un gain qui n'apparaît que sur CMAF. Écartées, non commitées.
+- D'un essai à l'autre, le rappel varie beaucoup : il suit surtout la quantité de pages que l'IA choisit de lire. Un écart de quelques marques sur un seul essai ne prouve rien ; une prochaine idée se mesurera sur plusieurs essais par groupe.
+- Filtre essayé à sec, sans IA : écarter les marques qu'aucune société active du registre ne porte. Il aurait écarté de vraies marques validées : 6 sur 75 dans LVMH (Veuve Clicquot, Moët & Chandon : leur société s'appelle MHCS ; Maison Francis Kurkdjian…), 6 sur 71 dans VINCI (Graniou ATEM, Lyon Aéroports…), 4 sur 53 dans CMAF (L'Est Républicain, Vosges Matin…). Abandonné.
+- Retenu (décision de Loïc) : ces marques restent dans la proposition, signalées « À vérifier : aucune société du registre ne porte ce nom » à la revue. Le consultant garde Veuve Clicquot et rejette un domaine viticole étranger en un clic. Gratuit, sans effet sur le rappel.
+- Coût des essais IA depuis le 2026-10-10 : environ 1,70 $.
