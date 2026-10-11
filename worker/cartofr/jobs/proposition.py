@@ -3,7 +3,8 @@
 But : l'interface (bouton « Proposer », T026) insère un travail `proposition` dont
 les paramètres portent `groupe_id` et `demande_par` (l'id auth.users du
 consultant). Ce travail lit le groupe, interroge l'IA (cartofr.ia.proposition),
-range les marques par la règle des homonymes au registre, puis enregistre une
+range les marques par la règle des homonymes au registre et signale celles qu'aucune
+société du registre ne porte (T040), puis enregistre une
 nouvelle version de `reglages`, origine `proposition`, **sans `valide_le`**.
 
 Usage : exécuté par la boucle du worker (`cartofr.travaux`), jamais appelé à la main.
@@ -47,7 +48,7 @@ from psycopg.types.json import Jsonb
 from cartofr.ia.proposition import (
     ElementRange,
     client_ia,
-    compter_homonymes,
+    compter_porteurs,
     contenu_propose,
     garder_validees,
     lire_entree,
@@ -55,6 +56,7 @@ from cartofr.ia.proposition import (
     nettoyer,
     proposer,
     ranger,
+    sans_societe,
     societes_du_groupe,
 )
 from cartofr.jobs import Contexte, enregistrer
@@ -181,21 +183,23 @@ def travail_proposition(ctx: Contexte) -> None:
     con = _ouvrir(registre)
     try:
         marques = [e.valeur for e in elements if e.type == "marque"]
-        homonymes = compter_homonymes(con, marques, societes_du_groupe(con, tete)) if marques else {}
+        porteurs = compter_porteurs(con, marques, societes_du_groupe(con, tete)) if marques else {}
     finally:
         con.close()
+    homonymes = {m: p.hors_groupe for m, p in porteurs.items()}
 
-    ranges = garder_validees(ranger(elements, homonymes), base)
+    ranges = garder_validees(ranger(elements, homonymes, sans_societe(porteurs)), base)
     contenu = valider(contenu_propose(nom_groupe, tete, ranges, base)).model_dump()
     _, version = enregistrer_proposition(
         conn, groupe_id, ctx.organisation_id, contenu, ranges, nom_modele, demande_par
     )
     log.info(
         "travail %s : proposition enregistrée (version %s, %s éléments dont %s déjà validés"
-        " non reproposés, %s marques ambiguës)",
+        " non reproposés, %s marques ambiguës, %s marques sans société au registre)",
         ctx.travail_id,
         version,
         len(ranges),
         sum(1 for r in ranges if r.origine == "validee"),
         sum(1 for r in ranges if r.liste == "marques_ambigues"),
+        sum(1 for r in ranges if r.sans_societe),
     )

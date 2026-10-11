@@ -190,6 +190,54 @@ def test_compter_homonymes_cas_limites(chemin: Path) -> None:
     assert comptes["Deltamark"] == 0  # société cessée : pas comptée
 
 
+def test_compter_porteurs_dans_et_hors_du_groupe(chemin: Path) -> None:
+    """T040 : les sociétés qui portent la marque, dans le groupe et hors du groupe."""
+    con = lecture(chemin)
+    try:
+        porteurs = ia.compter_porteurs(
+            con,
+            ["Alphamark", "Gammamark", "Zetamark", "Deltamark", "Omegamark"],
+            ia.societes_du_groupe(con, TETE),
+        )
+    finally:
+        con.close()
+    assert porteurs["Alphamark"] == ia.Porteurs(
+        dans_groupe=3, hors_groupe=1
+    )  # tête, F1, F2 ; SAS ALPHAMARK CONSEIL
+    assert porteurs["Gammamark"] == ia.Porteurs(dans_groupe=1, hors_groupe=1)  # F3 ; la société cédée
+    assert porteurs["Omegamark"] == ia.Porteurs(dans_groupe=0, hors_groupe=1)
+    assert porteurs["Zetamark"] == ia.Porteurs(0, 0)  # aucune société
+    assert porteurs["Deltamark"] == ia.Porteurs(0, 0)  # seule une société cessée la porte
+
+
+def test_marques_sans_societe_signalees_jamais_ecartees() -> None:
+    """T040 : une marque qu'aucune société active ne porte est signalée, pas écartée ; une
+    marque portée seulement dans le groupe, ou seulement dehors, n'est pas signalée ; les
+    autres types ne le sont jamais."""
+    porteurs = {
+        "Seule dans le groupe": ia.Porteurs(2, 0),
+        "Seule dehors": ia.Porteurs(0, 4),
+        "Nulle part": ia.Porteurs(0, 0),
+    }
+    assert ia.sans_societe(porteurs) == {"Nulle part"}
+    elements = [
+        ElementBrut("marque", "Seule dans le groupe", SOURCE),
+        ElementBrut("marque", "Seule dehors", SOURCE),
+        ElementBrut("marque", "Nulle part", SOURCE),
+        ElementBrut("maison", "Nulle part", SOURCE),
+    ]
+    homonymes = {m: p.hors_groupe for m, p in porteurs.items()}
+    ranges = ia.ranger(elements, homonymes, ia.sans_societe(porteurs))
+    assert [(r.liste, r.valeur, r.sans_societe) for r in ranges] == [
+        ("marques_sures", "Seule dans le groupe", False),
+        ("marques_ambigues", "Seule dehors", False),
+        ("marques_sures", "Nulle part", True),  # gardée, rangée comme les autres, signalée
+        ("organigramme", "Nulle part", False),
+    ]
+    assert ranges[2].en_json()["sans_societe"] is True
+    assert ia.ranger(elements, homonymes)[2].sans_societe is False  # sans liste : rien de signalé
+
+
 def test_la_tete_seule_n_est_pas_un_homonyme(tmp_path: Path) -> None:
     mini = MiniRegistre()
     mini.societe(TETE, "ALPHAMARK")
@@ -661,6 +709,28 @@ def test_le_type_est_enregistre() -> None:
     assert TRAVAUX["proposition"] is job.travail_proposition
 
 
+def test_marque_sans_societe_gardee_et_signalee(
+    conn: Connexion, monde: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T040 de bout en bout : la marque qu'aucune société du registre ne porte reste dans la
+    proposition, signalée pour la revue ; les autres ne le sont pas."""
+    proposition = {**PROPOSITION, "marques": [*PROPOSITION["marques"], element("Zetamark")]}
+    monkeypatch.setattr(job, "client_ia", lambda: ClientSimule(reponse("tool_calls", outil(proposition))))
+    monkeypatch.setenv(ia.VARIABLE_MODELE, "modele-test")
+    assert lancer(conn, monde["org"], {"groupe_id": str(monde["groupe"])})[0] == "termine"
+    ligne = conn.execute(
+        "select contenu, proposition->'elements' from public.reglages where groupe_id = %s"
+        " order by version desc limit 1",
+        (monde["groupe"],),
+    ).fetchone()
+    conn.commit()
+    assert ligne is not None
+    contenu, elements = ligne
+    assert "Zetamark" in valider(contenu).marques_sures  # zéro homonyme : sûre, comme toute marque
+    signalees = [e["valeur"] for e in elements if e["sans_societe"]]
+    assert signalees == ["Zetamark"]
+
+
 def test_c1_proposition_enregistree_sans_validation(
     conn: Connexion, monde: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -706,6 +776,7 @@ def test_c1_proposition_enregistree_sans_validation(
             "homonymes": None,
             "origine": "validee",
             "deja_valide_en": "marques_sures",
+            "sans_societe": False,
         }
     ]
     alpha = next(e for e in ia_seule if e["valeur"] == "Alphamark")

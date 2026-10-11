@@ -183,6 +183,12 @@ export function RevueProposition({
                       {e.deja_valide_en !== e.liste ? " : l'IA le range dans une autre liste." : "."}
                     </p>
                   ) : null}
+                  {e.sans_societe ? (
+                    <p className="text-sm font-medium">
+                      À vérifier : aucune société du registre ne porte ce nom. Gardez-la si sa société
+                      porte un autre nom ; rejetez-la si la marque n&apos;a pas d&apos;activité en France.
+                    </p>
+                  ) : null}
                   <p className="text-sm text-muted-foreground">
                     {e.origine === "validee" ? "Liste" : "Proposé en"} : {LIBELLES_LISTES[e.liste]}
                     {e.homonymes != null && e.liste.startsWith("marques_")

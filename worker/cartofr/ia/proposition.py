@@ -10,9 +10,10 @@ Usage (le travail `proposition` de cartofr.jobs.proposition enchaîne ces étape
     entree = lire_entree(con, "LVMH", "775670417")         # registre, lecture seule
     bruts = proposer(entree, client_ia(), modele())         # appel à l'API
     elements = nettoyer(bruts)
-    homonymes = compter_homonymes(con, [e.valeur for e in elements if e.type == "marque"],
-                                  societes_du_groupe(con, "775670417"))
-    ranges = ranger(elements, homonymes)
+    porteurs = compter_porteurs(con, [e.valeur for e in elements if e.type == "marque"],
+                                societes_du_groupe(con, "775670417"))
+    ranges = ranger(elements, {m: p.hors_groupe for m, p in porteurs.items()},
+                    sans_societe(porteurs))                            # T040 : signalées
 
 Entrées : le registre DuckDB (`societes`, `unites_legales`, `liens`), OPENROUTER_API_KEY,
 CARTOFR_MODELE_IA (obligatoire, nom OpenRouter ; pas de modèle par défaut, T038).
@@ -150,6 +151,9 @@ class ElementRange:
     homonymes: int | None = None  # marques proposées seulement : homonymes au registre
     origine: Literal["ia", "validee"] = "ia"
     deja_valide_en: str | None = None
+    # T040 : marque qu'aucune société active du registre ne porte, ni dans le groupe ni dehors.
+    # Signalée à la revue, jamais écartée : sa société peut porter un autre nom (Veuve Clicquot).
+    sans_societe: bool = False
 
     def en_json(self) -> dict[str, Any]:
         return {
@@ -159,6 +163,7 @@ class ElementRange:
             "homonymes": self.homonymes,
             "origine": self.origine,
             "deja_valide_en": self.deja_valide_en,
+            "sans_societe": self.sans_societe,
         }
 
 
@@ -227,13 +232,22 @@ def societes_du_groupe(con: duckdb.DuckDBPyConnection, tete_siren: str) -> set[s
     return {str(s) for (s,) in con.execute(_GROUPE, {"siren": tete_siren}).fetchall()}
 
 
-def compter_homonymes(
+@dataclass(frozen=True)
+class Porteurs:
+    """Les sociétés actives du registre dont un nom commence par une marque : dans le groupe
+    (la tête et ce qu'elle dirige) et hors du groupe (les homonymes)."""
+
+    dans_groupe: int
+    hors_groupe: int
+
+
+def compter_porteurs(
     con: duckdb.DuckDBPyConnection, marques: Iterable[str], groupe: set[str]
-) -> dict[str, int]:
-    """Pour chaque marque (clé : la marque telle que donnée), le nombre de sociétés actives
-    hors du groupe dont un nom commence par elle, au sens de la recherche de candidates du
-    moteur : mot entier, casse, accents et ponctuation ignorés, formes juridiques admises
-    devant (« SAS ALPHAMARK » compte, « ALPHAMARKET » non)."""
+) -> dict[str, Porteurs]:
+    """Pour chaque marque (clé : la marque telle que donnée), les sociétés actives dont un nom
+    commence par elle, dans et hors du groupe, au sens de la recherche de candidates du moteur :
+    mot entier, casse, accents et ponctuation ignorés, formes juridiques admises devant
+    (« SAS ALPHAMARK » compte, « ALPHAMARKET » non)."""
     a_compter = [m for m in dict.fromkeys(marques) if norm(m)]
     if not a_compter:
         return {}
@@ -241,19 +255,36 @@ def compter_homonymes(
     prefixe = "(?:(?:" + "|".join(PREFIXES) + ") )*"
     con.register("groupe_propose", _table_sirens(groupe))
     try:
-        comptes: dict[str, int] = {}
+        comptes: dict[str, Porteurs] = {}
         for marque in a_compter:
             motif = "^" + prefixe + re.escape(norm(marque)) + "( |$)"
             ligne = con.execute(
-                f"select count(*) from {TABLE_NOMS} n"
-                " where (regexp_matches(n0, $m) or regexp_matches(n1, $m) or regexp_matches(n2, $m))"
-                "   and n.siren not in (select siren from groupe_propose)",
+                f"select count(*) filter (where n.siren in (select siren from groupe_propose)),"
+                f"       count(*) filter (where n.siren not in (select siren from groupe_propose))"
+                f"  from {TABLE_NOMS} n"
+                " where (regexp_matches(n0, $m) or regexp_matches(n1, $m) or regexp_matches(n2, $m))",
                 {"m": motif},
             ).fetchone()
-            comptes[marque] = int(ligne[0]) if ligne else 0
+            comptes[marque] = Porteurs(int(ligne[0]), int(ligne[1])) if ligne else Porteurs(0, 0)
         return comptes
     finally:
         con.unregister("groupe_propose")
+
+
+def compter_homonymes(
+    con: duckdb.DuckDBPyConnection, marques: Iterable[str], groupe: set[str]
+) -> dict[str, int]:
+    """Pour chaque marque, le nombre de sociétés actives hors du groupe dont un nom commence par
+    elle (les homonymes, au sens de `compter_porteurs`)."""
+    return {m: p.hors_groupe for m, p in compter_porteurs(con, marques, groupe).items()}
+
+
+def sans_societe(porteurs: dict[str, Porteurs]) -> set[str]:
+    """T040 : les marques qu'aucune société active du registre ne porte, ni dans le groupe ni
+    ailleurs. Elles ne sont pas écartées : la société d'une vraie marque peut porter un autre nom
+    (Veuve Clicquot, Moët & Chandon : MHCS). Mesuré le 2026-10-11 : 6 marques validées sur 75 dans
+    LVMH, 6 sur 71 dans VINCI, 4 sur 53 dans CMAF sont dans ce cas. La revue les signale."""
+    return {m for m, p in porteurs.items() if p.dans_groupe + p.hors_groupe == 0}
 
 
 def _table_sirens(sirens: set[str]) -> Any:
@@ -290,17 +321,21 @@ def nettoyer(bruts: Iterable[ElementBrut]) -> list[ElementBrut]:
     return gardes
 
 
-def ranger(elements: Iterable[ElementBrut], homonymes: dict[str, int]) -> list[ElementRange]:
+def ranger(
+    elements: Iterable[ElementBrut], homonymes: dict[str, int], sans_societe: Iterable[str] = ()
+) -> list[ElementRange]:
     """La règle écrite (US3, scénario 2) : une marque qui a au moins un homonyme au registre va
     dans `marques_ambigues`, sinon dans `marques_sures`. Une marque dont le compte manque est
     rangée ambiguë : dans le doute, la deuxième preuve est exigée. Les autres types vont dans
-    leur liste (LISTE_DU_TYPE), sans compte."""
+    leur liste (LISTE_DU_TYPE), sans compte. Une marque de `sans_societe` (aucune société active
+    ne la porte, T040) est rangée de même et marquée pour la revue."""
+    sans = set(sans_societe)
     ranges: list[ElementRange] = []
     for e in elements:
         if e.type == "marque":
             n = homonymes.get(e.valeur)
             liste = "marques_sures" if n == 0 else "marques_ambigues"
-            ranges.append(ElementRange(liste, e.valeur, e.source, n))
+            ranges.append(ElementRange(liste, e.valeur, e.source, n, sans_societe=e.valeur in sans))
         else:
             ranges.append(ElementRange(LISTE_DU_TYPE[e.type], e.valeur, e.source))
     return ranges

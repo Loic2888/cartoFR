@@ -52,6 +52,9 @@ const schemaElement = z.object({
   origine: z.enum(["ia", "validee"]).default("ia"),
   // La liste où la valeur était déjà validée, s'il y en a une.
   deja_valide_en: z.enum(LISTES_PROPOSEES).nullable().default(null),
+  // Marque qu'aucune société active du registre ne porte (T040, décidé par le worker) : à
+  // vérifier avant de la garder, sa société peut porter un autre nom.
+  sans_societe: z.boolean().default(false),
 });
 export type Element = z.infer<typeof schemaElement>;
 
