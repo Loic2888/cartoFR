@@ -48,4 +48,25 @@ for f in "${fichiers[@]}"; do
     psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q -1 -f - < "$f"
 done
 
+# Mot de passe du rôle en lecture seule du service recherche (migration 0006, T041),
+# lu dans infra/.env et passé à psql par l'environnement du conteneur, jamais affiché
+# ni écrit dans la ligne de commande. Rejouable : il ne fait que reposer le mot de passe.
+mdp_recherche=""
+if [ -f infra/.env ]; then
+  mdp_recherche="$(grep -E '^RECHERCHE_DB_PASSWORD=' infra/.env | head -1 | cut -d= -f2- || true)"
+fi
+role_present="$(docker compose -f infra/docker-compose.yml exec -T db \
+  psql -U postgres -d postgres -tAq -c "select 1 from pg_roles where rolname = 'cartofr_recherche'")"
+if [ "$role_present" = "1" ]; then
+  if [ -z "$mdp_recherche" ]; then
+    echo "RECHERCHE_DB_PASSWORD absent d'infra/.env : le service recherche ne pourra pas se connecter." >&2
+    echo "Ajoutez la ligne (par ex. RECHERCHE_DB_PASSWORD=\$(openssl rand -hex 24)) puis relancez ce script." >&2
+    exit 1
+  fi
+  printf '%s\n' "alter role cartofr_recherche with login password :'mdp';" |
+    docker compose -f infra/docker-compose.yml exec -T -e MDP="$mdp_recherche" db \
+      sh -c 'psql -U postgres -d postgres -v ON_ERROR_STOP=1 -q -v mdp="$MDP" -f -'
+  echo "Rôle cartofr_recherche : mot de passe posé."
+fi
+
 echo "Migrations appliquées : ${#fichiers[@]}."

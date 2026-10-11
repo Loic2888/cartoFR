@@ -320,3 +320,11 @@ Objectif : réduire le bruit (marques sans activité en France) et gagner encore
 - Filtre essayé à sec, sans IA : écarter les marques qu'aucune société active du registre ne porte. Il aurait écarté de vraies marques validées : 6 sur 75 dans LVMH (Veuve Clicquot, Moët & Chandon : leur société s'appelle MHCS ; Maison Francis Kurkdjian…), 6 sur 71 dans VINCI (Graniou ATEM, Lyon Aéroports…), 4 sur 53 dans CMAF (L'Est Républicain, Vosges Matin…). Abandonné.
 - Retenu (décision de Loïc) : ces marques restent dans la proposition, signalées « À vérifier : aucune société du registre ne porte ce nom » à la revue. Le consultant garde Veuve Clicquot et rejette un domaine viticole étranger en un clic. Gratuit, sans effet sur le rappel.
 - Coût des essais IA depuis le 2026-10-10 : environ 1,70 $.
+
+### Le service recherche lit les cartos avec un rôle en lecture seule (T041)
+
+- Avant : l'export du skill (T029) lisait les cartos avec le rôle `postgres`, qui contourne RLS. L'isolation entre organisations ne tenait que par le filtre écrit dans les requêtes.
+- Maintenant : rôle `cartofr_recherche` (migration 0006). Lecture seule par défaut, quatre tables (`groupes`, `reglages`, `cartos`, `carto_societes`), aucun contournement de RLS. Ses politiques ne lui montrent que l'organisation déclarée pour la transaction (`set_config('cartofr.organisation', …)`), et rien sans déclaration. Les requêtes gardent leur filtre : deux barrières.
+- Mot de passe hors du code : `RECHERCHE_DB_PASSWORD` dans `infra/.env`, posé par `infra/appliquer-migrations.sh`. Une installation antérieure ajoute la ligne à la main (`infra/README.md`).
+- Piège : dans l'image Supabase, `postgres` n'est pas superutilisateur ; il doit être membre du rôle pour le prendre (`set role`). La migration le fait.
+- Vérifié : 12 tests (privilèges, rien sans déclaration, seule l'organisation déclarée même si la requête en demande une autre, aucune autre table, aucune écriture, route d'export). Sur une base neuve, une vraie connexion avec le rôle est en lecture seule et ne voit aucune carto sans déclaration. Suite complète : 520 tests réussis.
