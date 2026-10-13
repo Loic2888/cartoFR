@@ -269,11 +269,24 @@ class Client:
 
     def unites_du_jour(self, jour: date) -> Iterator[list[dict[str, Any]]]:
         """Unités légales traitées le `jour`, hors entrepreneurs individuels."""
-        q = (
-            f"dateDernierTraitementUniteLegale:{_plage(jour)}"
-            f" AND -periode(categorieJuridiqueUniteLegale:{CJ_ENTREPRENEUR_INDIVIDUEL})"
-        )
-        return self.pages("/siren", "unitesLegales", q, CHAMPS_UNITES)
+        return self.pages("/siren", "unitesLegales", _requete_unites(jour), CHAMPS_UNITES)
+
+    def premiere_unite_depuis(self, jour: date, siren_min: str) -> dict[str, Any] | None:
+        """La première unité légale (hors EI), par SIREN croissant, traitée le `jour` et de SIREN
+        au moins `siren_min` ; None s'il n'y en a pas. Sert au tirage du contrôle de fraîcheur
+        (T015) : un plancher tiré au hasard couvre tous les SIREN, pas seulement les plus petits."""
+        params: dict[str, str | int] = {
+            "q": f"{_requete_unites(jour)} AND siren:[{siren_min} TO 999999999]",
+            "nombre": 1,
+            "tri": "siren",
+            "champs": ",".join(CHAMPS_UNITES),
+        }
+        corps = self._get("/siren", params)
+        elements = (corps or {}).get("unitesLegales") or []
+        if not isinstance(elements, list):
+            raise ErreurSirene("Réponse Sirene inattendue : `unitesLegales` n'est pas une liste.")
+        premier = elements[0] if elements else None  # pyright: ignore[reportUnknownVariableType]
+        return premier if isinstance(premier, dict) else None  # pyright: ignore[reportUnknownVariableType]
 
     def sieges_du_jour(self, jour: date) -> Iterator[list[dict[str, Any]]]:
         """Établissements sièges traités le `jour`, hors entrepreneurs individuels."""
@@ -282,6 +295,13 @@ class Client:
             f" AND -categorieJuridiqueUniteLegale:{CJ_ENTREPRENEUR_INDIVIDUEL}"
         )
         return self.pages("/siret", "etablissements", q, CHAMPS_ETABLISSEMENTS)
+
+
+def _requete_unites(jour: date) -> str:
+    return (
+        f"dateDernierTraitementUniteLegale:{_plage(jour)}"
+        f" AND -periode(categorieJuridiqueUniteLegale:{CJ_ENTREPRENEUR_INDIVIDUEL})"
+    )
 
 
 def _plage(jour: date) -> str:
@@ -575,6 +595,20 @@ COLONNES_SIEGE = (
     "naf",
     "tranche",
 )
+
+
+def simuler_unites(con: duckdb.DuckDBPyConnection, unites: list[dict[str, Any]], jour: date) -> Bilan:
+    """Ce qu'`appliquer_unites` changerait, sans rien changer : mêmes requêtes, puis rollback.
+
+    Sert au contrôle de fraîcheur (T015) : une unité déjà appliquée ne change rien.
+    """
+    bilan = Bilan()
+    con.execute("begin transaction")
+    try:
+        appliquer_unites(con, unites, jour, bilan)
+    finally:
+        con.execute("rollback")
+    return bilan
 
 
 def appliquer_sieges(

@@ -289,6 +289,18 @@ def appliquer(con: duckdb.DuckDBPyConnection, fiches: list[Fiche], jour: date) -
     Sur une erreur, tout le lot est annulé (rollback) et l'erreur remonte :
     le registre reste exactement tel qu'avant l'appel.
     """
+    return _passer(con, fiches, jour, garder=True)
+
+
+def simuler(con: duckdb.DuckDBPyConnection, fiches: list[Fiche], jour: date) -> Bilan:
+    """Ce qu'`appliquer` changerait, sans rien changer : mêmes requêtes, puis rollback.
+
+    Sert au contrôle de fraîcheur (T015) : une fiche déjà appliquée ne change rien.
+    """
+    return _passer(con, fiches, jour, garder=False)
+
+
+def _passer(con: duckdb.DuckDBPyConnection, fiches: list[Fiche], jour: date, garder: bool) -> Bilan:
     bilan = Bilan(fiches=len(fiches))
     if not fiches:
         return bilan
@@ -299,7 +311,10 @@ def appliquer(con: duckdb.DuckDBPyConnection, fiches: list[Fiche], jour: date) -
             con.execute(sql, {"jour": jour} if "$jour" in sql else None)
             setattr(bilan, nom, _compte(con))
         con.execute("drop table lot_fiches; drop table lot_liens; drop table lot_personnes")
-        con.commit()
+        if garder:
+            con.commit()
+        else:
+            con.rollback()
     except BaseException:
         con.rollback()
         raise

@@ -42,7 +42,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 - [x] `T012` [P] — Appliquer les changements de SIRENE au registre
 - [x] `T013` — Planifier la synchro nocturne et publier l'état du registre
 - [x] `T014` — Afficher l'état du registre aux admins
-- [ ] `T015` — Rattraper le registre et contrôler la fraîcheur
+- [ ] `T015` — Rattraper le registre et contrôler la fraîcheur *(C1 fait le 2026-10-13 : le script de contrôle ; C2 attend le serveur, T005)*
 
 **Point de contrôle** : le registre se met à jour seul chaque nuit. Un admin voit dans l'app la date des données et tout échec, avec sa cause. Le contrôle de fraîcheur trouve 10 changements sur 10 publiés dans les 7 derniers jours.
 
@@ -56,14 +56,14 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 - [x] `T021` — Lancer une carto et enregistrer le résultat
 - [x] `T022` [P] — Afficher l'arbre du groupe avec ses preuves
 - [x] `T023` [P] — Exporter la carto en CSV, sans aucun nom de personne
-- [ ] `T024` — Faire la recette du MVP
+- [x] `T024` — Faire la recette du MVP *(C2, chronométrage SC-002, abandonné le 2026-10-13 : SC-002 non mesuré)*
 
 **Point de contrôle** : un consultant se connecte, cherche « LVMH », valide ses réglages, lance la carto, parcourt l'arbre au clavier et sur mobile, puis exporte un CSV sans aucun nom de personne. Le tout en moins de 30 minutes, avec au moins les scores du prototype.
 
 ## Phase 5 : US3 — L'IA propose les réglages (P2)
 
 - [x] `T025` — Faire proposer les réglages par l'IA
-- [ ] `T026` — Afficher la proposition et mesurer les corrections *(C1, C2 faits ; C3 ouvert : mesure SC-007 avec l'API réelle)*
+- [x] `T026` — Afficher la proposition et mesurer les corrections *(SC-007 mesuré le 2026-10-13 : **non tenu**, 64,7 corrections en moyenne au moins ; cible ou méthode à trancher)*
 - [x] `T037` — Faire passer la proposition IA par OpenRouter
 - [x] `T038` — Recentrer la proposition IA sur les marques et mesurer son coût
 - [x] `T039` — Améliorer le rappel de la proposition IA
@@ -92,6 +92,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 ## Phase 9 : Finitions
 
 - [x] `T031` [P] — Écrire le registre des traitements et permettre la suppression d'un compte
+- [x] `T041` — Donner au service recherche un rôle Postgres en lecture seule
 - [ ] `T032` — Retirer les scripts du prototype une fois la parité atteinte
 
 ## Carte des dépendances
@@ -157,12 +158,12 @@ Vérifié par fichiers partagés : deux tâches `[P]` d'une même phase ne touch
 | Critère | Tâches |
 |---|---|
 | SC-001 Justesse | T016 (non-régression du moteur), T024 (depuis l'app) |
-| SC-002 Moins de 30 min | T024 |
+| SC-002 Moins de 30 min | T024 — **non mesuré** : chronométrage abandonné le 2026-10-13 (décision de Loïc) |
 | SC-003 Fraîcheur ≤ 7 jours | T011, T012, T015 |
 | SC-004 Moins de 5 min | T021 (durée enregistrée), T024 |
 | SC-005 Aucun nom de personne | T023 |
 | SC-006 Adoption à 3 mois | **Aucune tâche** : c'est une mesure faite 3 mois après la livraison du MVP, en comptant les missions. À noter dans `rapport.md` à cette date. |
-| SC-007 IA | T026 |
+| SC-007 IA | T026 — **non tenu** le 2026-10-13 (64,7 corrections en moyenne au moins, cible < 5) |
 
 ## Contrôle constitutionnel
 

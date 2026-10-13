@@ -115,9 +115,11 @@ services:
     command: ["python", "-m", "cartofr.api_recherche", "--port", "8080"]
     environment:
       CARTOFR_DATA: /app/data
-      # Export du skill (T029) : lit une carto terminée dans la base de l'app,
-      # en lecture seule, filtrée par l'organisation que web a lue sous RLS.
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
+      # Export du skill (T029) : lit une carto terminée dans la base de l'app.
+      # Rôle cartofr_recherche (migration 0006, T041) : lecture seule, quatre
+      # tables, RLS limité à l'organisation déclarée pour chaque requête. Son mot
+      # de passe est posé par infra/appliquer-migrations.sh.
+      DATABASE_URL: postgresql://cartofr_recherche:${RECHERCHE_DB_PASSWORD}@db:5432/postgres
     depends_on:
       db:
         condition: service_healthy
