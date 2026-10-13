@@ -77,11 +77,8 @@ L'app tient sa propre copie du registre français (SIRENE et RNE), avec tous les
 
 **Testable seule** : on lance la validation du skill sur l'export des trois groupes de référence, et on attend 0 erreur.
 
-### US6 — Site web et page LinkedIn (Priorité : P3)
-**En tant que** consultant, **je veux** voir le domaine et la page LinkedIn de chaque société, **pour** préparer la prospection.
-
-**Testable seule** : sur LVMH, on compte la part des sociétés ciblables qui ont un domaine renseigné.
-Ces données s'ajoutent à la base lors de sa mise à jour, jamais pendant le calcul d'une carto.
+### US6 — Site web et page LinkedIn — *retirée*
+*Retirée le 2026-10-13, décision de Loïc : cartoFR ne fait pas d'enrichissement, seulement la carto des entreprises françaises. Le domaine et la page LinkedIn servent la prospection, qui est le travail d'un autre outil (HubSpot, Cargo). Voir « Hors périmètre ».*
 
 ### Cas limites
 - **Groupe introuvable** : message « Aucune société trouvée », avec la possibilité de saisir directement le SIREN de la tête.
@@ -106,7 +103,7 @@ Ces données s'ajoutent à la base lors de sa mise à jour, jamais pendant le ca
 - **FR-008** : l'app DOIT proposer des réglages pré-remplis et sourcés, qui restent sans effet tant qu'un humain ne les a pas validés. — *US3*
 - **FR-009** : l'app DOIT lister les cas douteux avec leurs indices, et enregistrer la décision du consultant pour les cartos suivantes. — *US4*
 - **FR-010** : l'app DOIT exporter les 6 tables du skill account-mapping. — *US5*
-- **FR-011** : la mise à jour de la base DOIT pouvoir ajouter le domaine et la page LinkedIn des sociétés. — *US6*
+- ~~**FR-011** : la mise à jour de la base DOIT pouvoir ajouter le domaine et la page LinkedIn des sociétés.~~ — *retirée le 2026-10-13, décision de Loïc : cartoFR ne fait pas d'enrichissement, seulement la carto des entreprises françaises*
 
 ### Entités principales
 - **Société** : SIREN, nom, siège, activité, effectif, statut, opposition à la prospection, dates de début et de fin.
@@ -136,6 +133,7 @@ Ces données s'ajoutent à la base lors de sa mise à jour, jamais pendant le ca
 - **Pourcentages de détention** : le registre dit qui dirige, pas qui possède combien.
 - **Décideurs et contacts** : contraintes légales lourdes (licence INPI, RGPD).
 - **Accès client** : seule l'équipe Youno se connecte en V1.
+- **Enrichissement** (site web, page LinkedIn, toute donnée de prospection) : cartoFR fait la carto des entreprises françaises, pas l'enrichissement. La prospection est le travail d'un autre outil. Décidé le 2026-10-13 (Loïc), US6 retirée.
 
 ## Hypothèses
 
@@ -165,7 +163,7 @@ Ces données s'ajoutent à la base lors de sa mise à jour, jamais pendant le ca
 | R8 Tests sur la logique métier | ⚠️ | Chaque règle du moteur (filiale, maison mère, confiance, ciblable) arrive avec ses tests. SC-001 sert de non-régression |
 | P1 L'IA ne décide pas qu'une société est une filiale | ✅ | US3 propose des réglages, et FR-008 les rend sans effet avant validation |
 | P2 Réglages validés par un humain | ✅ | FR-005 : le moteur ne tourne que sur une version validée |
-| P3 Aucun appel extérieur pendant une carto | ✅ | FR-006. US6 enrichit la base lors de sa mise à jour, pas pendant le calcul |
+| P3 Aucun appel extérieur pendant une carto | ✅ | FR-006 |
 | P4 Un lien n'est jamais effacé, il est fermé | ✅ | FR-002 |
 | P5 Pas de régression silencieuse | ✅ | SC-001, mesuré sur LVMH, VINCI et CMAF |
 

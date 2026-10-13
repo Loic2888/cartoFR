@@ -1,5 +1,7 @@
 # T030 — Ajouter le domaine et la page LinkedIn des sociétés
 
+> **Abandonnée le 2026-10-13, décision de Loïc** : cartoFR ne fait pas d'enrichissement, seulement la carto des entreprises françaises. La prospection est le travail d'un autre outil. US6 et FR-011 sont retirées du PRD. Le fichier reste pour l'historique ; l'étude des sources est résumée dans `rapport.md` (2026-10-13).
+
 **Story** : US6 (P3) · **Phase** : US6 · **Parallèle** : [P]
 **Couvre** : FR-011 · P3
 **Estimé** : 3 h

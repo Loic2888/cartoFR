@@ -247,4 +247,4 @@ Les scripts de la racine (`engine.py`, `build_links.py`…) restent en place tan
 ### Phase 3 — P2 et P3
 1. US3 : proposition des réglages par l'IA.
 2. US4 : liste des cas douteux et décisions mémorisées.
-3. US5 et US6 : export des 6 tables du skill, puis domaine et LinkedIn.
+3. US5 : export des 6 tables du skill. (US6, domaine et LinkedIn, retirée le 2026-10-13 : pas d'enrichissement.)

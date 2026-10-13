@@ -343,6 +343,11 @@ Objectif : réduire le bruit (marques sans activité en France) et gagner encore
 
 ## 2026-10-13
 
+### Retrait de l'enrichissement : US6 et T030 abandonnées
+
+- Décision de Loïc : cartoFR fait la carto des entreprises françaises, pas l'enrichissement. Le site web et la page LinkedIn servent la prospection, qui est le travail d'un autre outil (HubSpot, Cargo). US6 et FR-011 sont retirées du PRD, T030 est abandonnée, et « Enrichissement » rejoint le hors périmètre. La colonne `domain` de l'export du skill reste vide, comme aujourd'hui : l'outil de prospection la remplit.
+- Étude faite avant la décision, gardée pour mémoire. Aucune source gratuite et officielle ne donne le site d'une société française : ni SIRENE, ni l'API Recherche d'entreprises, ni le BODACC. Wikidata couvre 12,5 % des sociétés ciblables de LVMH (13 sur 104). Le reste aurait demandé une recherche web par l'IA, ou un fournisseur payant comme Societeinfo. Le scraping de LinkedIn est interdit par ses conditions d'utilisation.
+- Pendant l'étude, une requête envoyée à Wikidata portait par erreur l'adresse e-mail de Loïc dans l'en-tête User-Agent. Une seule requête, sans aucune donnée du projet. L'adresse a été retirée des requêtes suivantes.
 ### Contrôle hebdomadaire de fraîcheur (T015 C1)
 
 - `worker/scripts/controle_fraicheur.py` tire au hasard 10 changements publiés dans les 7 derniers jours, de J-7 à hier (aujourd'hui n'est pas encore synchronisé) : 5 fiches RNE (API diff INPI) et 5 unités légales SIRENE, hors entrepreneurs individuels. Il rend « Retrouvés : N/10 ».
