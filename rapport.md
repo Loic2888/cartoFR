@@ -320,3 +320,11 @@ Objectif : réduire le bruit (marques sans activité en France) et gagner encore
 - Filtre essayé à sec, sans IA : écarter les marques qu'aucune société active du registre ne porte. Il aurait écarté de vraies marques validées : 6 sur 75 dans LVMH (Veuve Clicquot, Moët & Chandon : leur société s'appelle MHCS ; Maison Francis Kurkdjian…), 6 sur 71 dans VINCI (Graniou ATEM, Lyon Aéroports…), 4 sur 53 dans CMAF (L'Est Républicain, Vosges Matin…). Abandonné.
 - Retenu (décision de Loïc) : ces marques restent dans la proposition, signalées « À vérifier : aucune société du registre ne porte ce nom » à la revue. Le consultant garde Veuve Clicquot et rejette un domaine viticole étranger en un clic. Gratuit, sans effet sur le rappel.
 - Coût des essais IA depuis le 2026-10-10 : environ 1,70 $.
+
+## 2026-10-13
+
+### Retrait de l'enrichissement : US6 et T030 abandonnées
+
+- Décision de Loïc : cartoFR fait la carto des entreprises françaises, pas l'enrichissement. Le site web et la page LinkedIn servent la prospection, qui est le travail d'un autre outil (HubSpot, Cargo). US6 et FR-011 sont retirées du PRD, T030 est abandonnée, et « Enrichissement » rejoint le hors périmètre. La colonne `domain` de l'export du skill reste vide, comme aujourd'hui : l'outil de prospection la remplit.
+- Étude faite avant la décision, gardée pour mémoire. Aucune source gratuite et officielle ne donne le site d'une société française : ni SIRENE, ni l'API Recherche d'entreprises, ni le BODACC. Wikidata couvre 12,5 % des sociétés ciblables de LVMH (13 sur 104). Le reste aurait demandé une recherche web par l'IA, ou un fournisseur payant comme Societeinfo. Le scraping de LinkedIn est interdit par ses conditions d'utilisation.
+- Pendant l'étude, une requête envoyée à Wikidata portait par erreur l'adresse e-mail de Loïc dans l'en-tête User-Agent. Une seule requête, sans aucune donnée du projet. L'adresse a été retirée des requêtes suivantes.

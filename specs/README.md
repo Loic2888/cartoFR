@@ -78,9 +78,9 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 
 - [x] `T029` [P] — Exporter les 6 tables du skill account-mapping
 
-## Phase 8 : US6 — Site web et page LinkedIn (P3)
+## Phase 8 : US6 — Site web et page LinkedIn — *retirée le 2026-10-13*
 
-- [ ] `T030` [P] — Ajouter le domaine et la page LinkedIn des sociétés *(`needs-spec` : source à choisir)*
+- [ ] ~~`T030` — Ajouter le domaine et la page LinkedIn des sociétés~~ *(abandonnée le 2026-10-13, décision de Loïc : cartoFR ne fait pas d'enrichissement)*
 
 ## Phase 8b : Moteur — défauts trouvés par T017 (P1, jamais en parallèle : même fichier)
 
@@ -111,7 +111,7 @@ T001 ── T007 ─┬─ T011 (+T010) ─ T013     │             │
                        └──────────── T021 ─┬─ T022 ─┬─ T024 ── T032
                                            └─ T023 ─┘
 T021 ─┬─ T025 ── T026        T021 ── T027 ── T028
-      └─ T029 (+T019)        T013 ── T030        T009 ── T031
+      └─ T029 (+T019)        T009 ── T031
 ```
 
 ## Tâches parallèles
@@ -138,7 +138,7 @@ Vérifié par fichiers partagés : deux tâches `[P]` d'une même phase ne touch
 | US3 | P2 | T025, T026 | FR-008 | SC-007 |
 | US4 | P2 | T027, T028 | FR-009 | — |
 | US5 | P3 | T029 | FR-010 | — |
-| US6 | P3 | T030 | FR-011 | — |
+| ~~US6~~ | — | retirée le 2026-10-13 | ~~FR-011~~ | — |
 
 | Exigence | Tâches |
 |---|---|
@@ -152,7 +152,7 @@ Vérifié par fichiers partagés : deux tâches `[P]` d'une même phase ne touch
 | FR-008 | T025, T026 |
 | FR-009 | T027, T028 |
 | FR-010 | T029 |
-| FR-011 | T030 |
+| ~~FR-011~~ | retirée le 2026-10-13 |
 
 | Critère | Tâches |
 |---|---|
@@ -181,7 +181,7 @@ Vérifié par fichiers partagés : deux tâches `[P]` d'une même phase ne touch
 | R8 Tests sur la logique métier | ✅ | T017 (règles du moteur), T011 et T012 (synchro), T027 (cas douteux) |
 | P1 L'IA ne décide pas | ✅ | T025 C1 (proposition non validée) |
 | P2 Réglages validés par un humain | ✅ | T020, T021 C1 (refus d'une version non validée) |
-| P3 Aucun appel extérieur pendant une carto | ✅ | T016 C2 (moteur avec le réseau coupé), T030 C1 |
+| P3 Aucun appel extérieur pendant une carto | ✅ | T016 C2 (moteur avec le réseau coupé) |
 | P4 Fermer, jamais effacer | ✅ | T011 C2 et C4 |
 | P5 Pas de régression silencieuse | ✅ | T016 C1, T024 C1, T027 C4, T032 C3. La non-régression a besoin de `data/` (19 Go) : elle tourne en local avant chaque PR qui touche le moteur, pas dans la CI |
 | P6 Le registre ne quitte pas le worker | ✅ | T018 C3, T019 C2 et C3 |

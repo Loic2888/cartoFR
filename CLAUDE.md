@@ -19,7 +19,8 @@ Youno (missions clients), commercialisable ensuite.
    l'arbre du groupe en France (maison mère, filiales, sous-filiales), avec pour
    chaque lien sa preuve, une confiance A/B/C et si la société est ciblable.
    V1 : une carto qui affiche la date de ses données, 7 jours au plus. Pas d'alertes, pas de
-   poussée CRM.
+   poussée CRM, pas d'enrichissement (site web, LinkedIn : décidé le 2026-10-13, la
+   prospection est le travail d'un autre outil).
 
 Aujourd'hui le dépôt contient le **prototype** : des scripts Python qui
 tournent sur une base locale (DuckDB + parquet). La vision produit est dans
