@@ -26,7 +26,7 @@ Rattrapage initial sur le serveur, et un script de contrôle hebdomadaire de 10 
 —
 
 ## Critères de succès
-- [ ] **C1** : `worker/scripts/controle_fraicheur.py` rend le nombre de changements trouvés sur 10
+- [x] **C1** : `worker/scripts/controle_fraicheur.py` rend le nombre de changements trouvés sur 10
 - [ ] **C2** : `rapport.md` contient, datés, le rattrapage terminé et un premier contrôle à 10/10
 
 ## Tests et validation

@@ -341,6 +341,17 @@ Objectif : réduire le bruit (marques sans activité en France) et gagner encore
 - Retenu (décision de Loïc) : ces marques restent dans la proposition, signalées « À vérifier : aucune société du registre ne porte ce nom » à la revue. Le consultant garde Veuve Clicquot et rejette un domaine viticole étranger en un clic. Gratuit, sans effet sur le rappel.
 - Coût des essais IA depuis le 2026-10-10 : environ 1,70 $.
 
+## 2026-10-13
+
+### Contrôle hebdomadaire de fraîcheur (T015 C1)
+
+- `worker/scripts/controle_fraicheur.py` tire au hasard 10 changements publiés dans les 7 derniers jours, de J-7 à hier (aujourd'hui n'est pas encore synchronisé) : 5 fiches RNE (API diff INPI) et 5 unités légales SIRENE, hors entrepreneurs individuels. Il rend « Retrouvés : N/10 ».
+- Règle « retrouvé » (`cartofr.registre.fraicheur`) : rejouer le changement avec les règles mêmes de la synchro ne modifie aucune ligne. Le rejeu se fait dans une transaction annulée (`synchro_rne.simuler`, `synchro_sirene.simuler_unites`) : le registre n'est jamais modifié. Un écart dit quelles tables auraient bougé (liens ouverts, société fermée…), avec le SIREN de la personne morale, pour vérifier à la main. Aucun nom n'est affiché.
+- Tirage : départ à un SIREN tiré au hasard (`searchAfter` pour l'INPI ; plancher `siren:[X TO 999999999]` pour l'INSEE), un même SIREN vérifié une seule fois. Un premier essai tirait le rang SIRENE parmi les 1 000 premiers résultats : il ne voyait que des SIREN en 1xx (secteur public). Corrigé avant le commit. Coût : 5 pages de 20 fiches du quota INPI, 5 requêtes Sirene.
+- Limites : la source rend l'état actuel de la société. Un changement survenu après la dernière synchro est compté manquant à tort. À l'inverse, une fiche modifiée sur un champ que le registre ne garde pas compte comme retrouvée : le contrôle mesure que le registre porte l'état actuel de la société, ce qui est l'objet de SC-003.
+- Essai sur le registre local, jamais rattrapé depuis le stock du 2026-03-04 : **6/10** retrouvés (graine 13). L'écart est attendu, et il montre que le contrôle voit les retards : liens à ouvrir et à fermer, société à créer, unité légale modifiée. Ce n'est pas la mesure de C2.
+- Tests : 15 (`test_fraicheur.py`) : fenêtre, rejeu sans effet sur le registre, fiche appliquée retrouvée, fiche nouvelle, radiation et cessation manquantes, tirages RNE et SIRENE sans toucher au curseur de la synchro, doublons retirés, tirages impossibles comptés manquants. Moteur non touché : non-régression sans objet.
+- Reste C2 : rattrapage sur le serveur (T005), puis un premier contrôle à 10/10.
 ### Le service recherche lit les cartos avec un rôle en lecture seule (T041)
 
 - Avant : l'export du skill (T029) lisait les cartos avec le rôle `postgres`, qui contourne RLS. L'isolation entre organisations ne tenait que par le filtre écrit dans les requêtes.

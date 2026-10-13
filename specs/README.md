@@ -42,7 +42,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 - [x] `T012` [P] — Appliquer les changements de SIRENE au registre
 - [x] `T013` — Planifier la synchro nocturne et publier l'état du registre
 - [x] `T014` — Afficher l'état du registre aux admins
-- [ ] `T015` — Rattraper le registre et contrôler la fraîcheur
+- [ ] `T015` — Rattraper le registre et contrôler la fraîcheur *(C1 fait le 2026-10-13 : le script de contrôle ; C2 attend le serveur, T005)*
 
 **Point de contrôle** : le registre se met à jour seul chaque nuit. Un admin voit dans l'app la date des données et tout échec, avec sa cause. Le contrôle de fraîcheur trouve 10 changements sur 10 publiés dans les 7 derniers jours.
 
