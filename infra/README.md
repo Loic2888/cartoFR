@@ -136,7 +136,12 @@ Deux services partent de la même image Python (`infra/worker.Dockerfile`) :
 | Service | Commande | Ce qu'il fait |
 |---|---|---|
 | `worker` | `python -m cartofr` | La file de travaux (cartos, synchro). Se connecte à `db` en direct, rôle `postgres` (`DATABASE_URL` construite depuis `POSTGRES_PASSWORD`). Monte `data/` en lecture et écriture. |
-| `recherche` | `python -m cartofr.api_recherche` | `GET /recherche?q=` : 20 sociétés au plus par nom, sigle ou SIREN (SIREN, nom, sigle, ville, statut ; jamais de personne). Monte `data/` en lecture seule. Sert aussi `GET /export/skill/<carto>?organisation=` (T029) : les 6 tables du skill account-mapping d'une carto terminée, en zip, lues dans `db` (`DATABASE_URL`, lecture seule, filtrées par organisation). |
+| `recherche` | `python -m cartofr.api_recherche` | `GET /recherche?q=` : 20 sociétés au plus par nom, sigle ou SIREN (SIREN, nom, sigle, ville, statut ; jamais de personne). Monte `data/` en lecture seule. Sert aussi `GET /export/skill/<carto>?organisation=` (T029) : les 6 tables du skill account-mapping d'une carto terminée, en zip, lues dans `db` avec le rôle `cartofr_recherche` (T041, migration 0006) : lecture seule, quatre tables, et RLS qui ne lui montre que l'organisation déclarée pour la requête. Mot de passe : `RECHERCHE_DB_PASSWORD` d'`infra/.env`, posé par `infra/appliquer-migrations.sh`. |
+
+**Installation antérieure à T041** (`infra/.env` déjà généré) : ajouter la ligne
+`RECHERCHE_DB_PASSWORD=` avec une valeur aléatoire (`openssl rand -hex 24`), passer
+la migration `bash infra/appliquer-migrations.sh supabase/migrations/0006_role_recherche.sql`,
+puis relancer le service : `docker compose -f infra/docker-compose.yml up -d recherche`.
 
 La synchro de nuit (T013) est réglée dans `worker` :
 `CARTOFR_SYNCHRO_HEURE` (`02:00`), **sans elle aucune synchro de nuit ne

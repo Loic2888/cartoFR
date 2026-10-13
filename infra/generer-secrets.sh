@@ -47,6 +47,8 @@ variables = {
     "ADDITIONAL_REDIRECT_URLS": "",
     # Secrets Supabase
     "POSTGRES_PASSWORD": secrets.token_hex(24),
+    # Rôle en lecture seule du service recherche (T041), posé par appliquer-migrations.sh
+    "RECHERCHE_DB_PASSWORD": secrets.token_hex(24),
     "JWT_SECRET": jwt_secret,
     "JWT_EXPIRY": "3600",
     "ANON_KEY": jwt("anon", jwt_secret),

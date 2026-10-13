@@ -140,6 +140,8 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 
 **SC-002 : à mesurer par Loïc, guide dans `docs/recette-sc002.md`.** Trois groupes jamais réglés y sont proposés (Bigard, Fayat, Roullier ; 38 à 83 sociétés avec un brouillon minimal).
 
+**Décision du 2026-10-13 (Loïc) : SC-002 ne sera pas chronométré.** Pas le temps pour les trois sessions. T024 C2 est abandonné, T024 est clos sur C1, C3 et C4. SC-002 (« moins de 30 minutes de la saisie à l'export ») reste **non mesuré** : rien ne prouve qu'il est tenu, rien ne prouve le contraire. Le guide `docs/recette-sc002.md` reste en place si la mesure redevient utile. Indice, pas preuve : le calcul prend moins d'une minute (SC-004), le reste est le temps de saisie et de relecture du consultant.
+
 ### 2026-10-07, marque sûre et mandat « Autre » (T033)
 
 - Défaut trouvé par T017 : dans `decide`, la branche du mandat faible (« Autre », code 99) rendait `None` dès qu'il manquait le second indice, avant les règles de la marque sûre et de l'adresse. Un mandat « Autre » servait donc de veto. Correction : cette branche ne décide plus que l'entrée (« mandat 'Autre' et deux indices ») ; sinon la société passe aux règles suivantes, comme sans ce mandat. Rien d'autre ne change dans le moteur.
@@ -257,13 +259,31 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 - Next ne décide rien sur le groupe : il compte les choix du consultant (principe 7). Tests : `web/lib/reglages/proposition.test.ts`.
 - Limite : si le consultant passe par l'éditeur classique au lieu de la revue, la version enregistrée ne porte pas de compte de corrections. Elle ne compte pas dans SC-007.
 
-**SC-007 : non mesuré, critère ouvert.** La mesure demande de vraies propositions, donc l'API réelle (clé `OPENROUTER_API_KEY` depuis T037) ; aucune n'a été faite. Rien n'est inventé ici. Protocole :
+**SC-007 : non mesuré le 2026-10-08 (mesure du 2026-10-13 plus bas).** La mesure demande de vraies propositions, donc l'API réelle (clé `OPENROUTER_API_KEY` depuis T037) ; aucune n'a été faite. Rien n'est inventé ici. Protocole :
 
 1. Sur une base de test, créer les groupes LVMH, VINCI et CMAF sans leurs réglages de départ (ou dans une organisation à part).
 2. Pour chacun, cliquer « Proposer des réglages » et chronométrer du clic à la validation.
 3. Revoir la proposition en prenant `config/<groupe>.json` comme référence : rejeter ce qui n'y est pas et qui est faux, corriger les listes, ajouter ce qui manque et compte (marques, sigles, maisons, exclusions par nom).
 4. Relever `corrections` de la version validée (`select version, corrections from reglages where proposition_id is not null`) et la durée.
 5. Critère tenu si la moyenne des trois est sous 5 corrections et chaque durée sous 30 minutes. Noter le coût de l'appel (jetons) et le modèle (`CARTOFR_MODELE_IA`).
+
+**2026-10-13, SC-007 mesuré : non tenu, de loin.** Le protocole est rejoué sans clics par `worker/scripts/mesure_sc007.py` : une vraie proposition par groupe (groupe neuf, sans version validée), puis la revue qu'aurait faite un consultant avec `config/<groupe>.json` comme référence, comptée comme l'écran (`appliquerRevue`). Un élément de l'IA absent de `config/` peut être vrai ou faux, et la machine ne le sait pas : d'où une fourchette. `min` le garde, `max` le rejette, `estimé` rejette seulement ceux qu'aucune société du registre ne porte (signal T040). Modèle : `anthropic/claude-haiku-5.5`.
+
+| Groupe | Proposés | Gardés | Liste changée | Doublons | Absents de `config/` (dont sans société) | Ajouts | Corrections min / estimé / max | Coût |
+|---|---|---|---|---|---|---|---|---|
+| LVMH | 80 | 33 | 14 | 0 | 33 (19) | 38 | **52** / 71 / 85 | 0,054 $ |
+| VINCI | 49 | 5 | 20 | 3 | 21 (3) | 56 | **79** / 82 / 100 | 0,073 $ |
+| CMAF | 116 | 9 | 23 | 17 | 67 (20) | 23 | **63** / 83 / 130 | 0,066 $ |
+| **Moyenne** | | | | | | | **64,7** / 78,7 / 105 | |
+
+- Même l'hypothèse la plus favorable (tout élément absent de `config/` est juste) donne 64,7 corrections en moyenne, contre moins de 5 visés.
+- CMAF : cinq essais ont d'abord échoué en 429 « Provider returned error ». C'est le fournisseur derrière OpenRouter qui refusait ; la clé avait encore son crédit et une petite requête passait. Le sixième essai est passé (1,3 min, 7 recherches web). Le script réessaie maintenant trois fois, et enregistre chaque proposition dans `out/sc007/` pour ne pas la repayer.
+- Pour LVMH et VINCI, les ajouts pèsent le plus (38 et 56) : l'IA ne retrouve pas les marques qui ne figurent pas sur les pages qu'elle lit, en particulier les marques ambiguës de `config/` (22 et 23 manquent). Ce tirage rappelle moins que celui du 2026-10-10 (80 éléments proposés pour LVMH contre 114). Même constat que T040 : le rappel varie beaucoup d'un essai à l'autre.
+- Pour CMAF, c'est le bruit : 17 doublons et 67 éléments absents de `config/`.
+- La règle des homonymes coûte ensuite 11 corrections sur LVMH et 16 sur VINCI. Ce sont des marques que la règle range en « ambiguë », parce qu'une société hors du groupe porte un nom qui commence par elles, alors que les réglages validés les tiennent pour sûres. L'humain accepte un risque que la règle refuse. Ce n'est pas une erreur de l'IA, mais l'écran le compte comme une correction.
+- La durée (moins de 30 minutes, du clic à la validation) n'est pas mesurée : les chronos sont abandonnés (décision de Loïc du 2026-10-13, voir T024).
+- Lecture : la proposition fait gagner du temps (33 éléments justes sur 80 pour LVMH, avec leur source), mais elle ne dispense pas d'une revue complète. L'objectif « moins de 5 corrections » est hors de portée avec cette méthode. Deux suites possibles : revoir la cible SC-007 dans le PRD, ou changer la méthode (plusieurs passes et union des résultats, marques tirées du registre). C'est à Loïc de trancher.
+- Coût de la mesure : 0,19 $ pour les trois groupes. Les essais refusés n'ont rien coûté.
 
 ## 2026-10-09
 
@@ -332,3 +352,10 @@ Objectif : réduire le bruit (marques sans activité en France) et gagner encore
 - Essai sur le registre local, jamais rattrapé depuis le stock du 2026-03-04 : **6/10** retrouvés (graine 13). L'écart est attendu, et il montre que le contrôle voit les retards : liens à ouvrir et à fermer, société à créer, unité légale modifiée. Ce n'est pas la mesure de C2.
 - Tests : 15 (`test_fraicheur.py`) : fenêtre, rejeu sans effet sur le registre, fiche appliquée retrouvée, fiche nouvelle, radiation et cessation manquantes, tirages RNE et SIRENE sans toucher au curseur de la synchro, doublons retirés, tirages impossibles comptés manquants. Moteur non touché : non-régression sans objet.
 - Reste C2 : rattrapage sur le serveur (T005), puis un premier contrôle à 10/10.
+### Le service recherche lit les cartos avec un rôle en lecture seule (T041)
+
+- Avant : l'export du skill (T029) lisait les cartos avec le rôle `postgres`, qui contourne RLS. L'isolation entre organisations ne tenait que par le filtre écrit dans les requêtes.
+- Maintenant : rôle `cartofr_recherche` (migration 0006). Lecture seule par défaut, quatre tables (`groupes`, `reglages`, `cartos`, `carto_societes`), aucun contournement de RLS. Ses politiques ne lui montrent que l'organisation déclarée pour la transaction (`set_config('cartofr.organisation', …)`), et rien sans déclaration. Les requêtes gardent leur filtre : deux barrières.
+- Mot de passe hors du code : `RECHERCHE_DB_PASSWORD` dans `infra/.env`, posé par `infra/appliquer-migrations.sh`. Une installation antérieure ajoute la ligne à la main (`infra/README.md`).
+- Piège : dans l'image Supabase, `postgres` n'est pas superutilisateur ; il doit être membre du rôle pour le prendre (`set role`). La migration le fait.
+- Vérifié : 12 tests (privilèges, rien sans déclaration, seule l'organisation déclarée même si la requête en demande une autre, aucune autre table, aucune écriture, route d'export). Sur une base neuve, une vraie connexion avec le rôle est en lecture seule et ne voit aucune carto sans déclaration. Suite complète : 520 tests réussis.

@@ -21,7 +21,7 @@ Routes :
     GET /sante  → 200 {"statut": "ok"}
 
 Entrées : `<CARTOFR_DATA>/registre.duckdb` (`data` par défaut), ou CARTOFR_REGISTRE ;
-pour l'export, la base de l'app (DATABASE_URL, rôle service, en lecture seule).
+pour l'export, la base de l'app (DATABASE_URL, rôle `cartofr_recherche` en Docker, T041).
 Sortie : du JSON. `statut` vaut `active`, `cessee` (SIRENE : état C) ou
 `radiee` (fermée au registre : `fin` posée).
 
@@ -41,10 +41,13 @@ Règles tenues ici :
 - SQL paramétré : la saisie ne touche jamais le texte de la requête.
 
 Contrôle d'accès : aucune route n'est publiée hors du réseau Docker (ARCHI) ;
-seul web les appelle, après avoir vérifié la session. L'export lit la base en
-rôle service : il filtre la carto par l'organisation que web a lue avec la
-session de l'utilisateur (RLS), et rend 404 pour une carto d'une autre
-organisation, sans dire si elle existe.
+seul web les appelle, après avoir vérifié la session. L'export reçoit de web
+l'organisation lue avec la session de l'utilisateur (RLS), la déclare à la base
+pour sa transaction (`cartofr.organisation`), et rend 404 pour une carto d'une
+autre organisation, sans dire si elle existe. En Docker, il se connecte avec le
+rôle `cartofr_recherche` (migration 0006, T041) : lecture seule, quatre tables,
+et des politiques RLS qui ne montrent que l'organisation déclarée. Les requêtes
+filtrent aussi `organisation_id` : deux barrières plutôt qu'une.
 """
 
 import argparse
@@ -278,6 +281,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
         try:
             with self.server.connecter() as conn:  # type: ignore[attr-defined]
                 conn.read_only = True
+                # L'organisation de la transaction : le rôle cartofr_recherche ne voit qu'elle (T041).
+                conn.execute("select set_config('cartofr.organisation', %s, true)", (str(organisation_id),))
                 contenu = exporter(conn, carto_id, organisation_id)
         except CartoNonTerminee:
             self._repondre(HTTPStatus.CONFLICT, {"erreur": "carto_non_terminee"})

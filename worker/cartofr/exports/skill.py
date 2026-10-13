@@ -37,7 +37,8 @@ Règles tenues ici :
 - une cellule qui commence par = + - @, tabulation ou retour chariot est préfixée d'une
   apostrophe (injection de formule à l'ouverture dans un tableur, comme l'export T023) ;
 - une carto d'une autre organisation est introuvable : chaque lecture filtre
-  `organisation_id` (le worker lit en rôle service, qui contourne RLS).
+  `organisation_id`. En plus, le service recherche lit avec le rôle `cartofr_recherche`,
+  que RLS limite à l'organisation déclarée pour la transaction (T041).
 """
 
 from __future__ import annotations
