@@ -182,38 +182,38 @@ def test_tirage_rne_abandonne_apres_quelques_pages_vides() -> None:
 
 
 class FauxSirene:
-    def __init__(self, total: int) -> None:
-        self.total = total
-        self.appels: list[tuple[date, int, int]] = []
+    def __init__(self, unite_rendue: dict[str, Any] | None) -> None:
+        self.unite_rendue = unite_rendue
+        self.appels: list[tuple[date, str]] = []
 
-    def unites_a_partir_de(self, jour: date, debut: int, nombre: int) -> tuple[int, list[dict[str, Any]]]:
-        self.appels.append((jour, debut, nombre))
-        return self.total, ([unite("000000003")] if self.total else [])
+    def premiere_unite_depuis(self, jour: date, siren_min: str) -> dict[str, Any] | None:
+        self.appels.append((jour, siren_min))
+        return self.unite_rendue
 
 
-def test_tirage_sirene_rang_tire_sous_la_limite_de_l_api() -> None:
-    client = FauxSirene(total=50_000)
+def test_tirage_sirene_part_d_un_siren_tire_au_hasard() -> None:
+    client = FauxSirene(unite("000000003"))
     tirage = fraicheur.tirer_sirene(client, fraicheur.fenetre(AUJOURDHUI), random.Random(3))
     assert tirage is not None and tirage.siren == "000000003"
-    rangs = [debut for _, debut, _ in client.appels]
-    assert rangs[0] == 0 and 0 <= rangs[1] < fraicheur.RANG_MAX_SIRENE
+    jour, plancher = client.appels[0]
+    assert jour in fraicheur.fenetre(AUJOURDHUI)
+    assert len(plancher) == 9 and plancher.isdigit()
 
 
 def test_tirage_sirene_sans_changement_rend_rien() -> None:
-    client = FauxSirene(total=0)
+    client = FauxSirene(None)
     assert fraicheur.tirer_sirene(client, fraicheur.fenetre(AUJOURDHUI), random.Random(3)) is None
     assert len(client.appels) == fraicheur.ESSAIS_PAR_TIRAGE
 
 
-def test_client_sirene_demande_un_rang_et_lit_le_total() -> None:
+def test_client_sirene_demande_la_premiere_unite_au_dela_du_plancher() -> None:
     vues: list[httpx.Request] = []
 
     def serveur(requete: httpx.Request) -> httpx.Response:
         vues.append(requete)
         page = json_fixture("sirene/unites_page1.json")
         return httpx.Response(
-            200,
-            json={"header": {**page["header"], "total": 1234}, "unitesLegales": page["unitesLegales"][:1]},
+            200, json={"header": page["header"], "unitesLegales": page["unitesLegales"][:1]}
         )
 
     client = Client(
@@ -221,11 +221,21 @@ def test_client_sirene_demande_un_rang_et_lit_le_total() -> None:
         cle="cle-FAKE",
         limiteur=Limiteur(horloge=lambda: 0.0, dormir=lambda _s: None),
     )
-    total, unites = client.unites_a_partir_de(date(2026, 10, 10), 42, 1)
-    assert total == 1234 and len(unites) == 1
+    brute = client.premiere_unite_depuis(date(2026, 10, 10), "420000000")
+    assert brute is not None and brute["siren"] == "000000001"
     params = vues[0].url.params
-    assert params["debut"] == "42" and params["nombre"] == "1"
+    assert params["nombre"] == "1" and params["tri"] == "siren"
+    assert "siren:[420000000 TO 999999999]" in params["q"]
     assert "2026-10-10T00:00:00" in params["q"] and "categorieJuridiqueUniteLegale:1000" in params["q"]
+
+
+def test_client_sirene_sans_resultat_rend_none() -> None:
+    client = Client(
+        http=httpx.Client(transport=httpx.MockTransport(lambda _r: httpx.Response(404, json={}))),
+        cle="cle-FAKE",
+        limiteur=Limiteur(horloge=lambda: 0.0, dormir=lambda _s: None),
+    )
+    assert client.premiere_unite_depuis(date(2026, 10, 10), "999999990") is None
 
 
 # --- Contrôle complet --------------------------------------------------------------------------
@@ -238,6 +248,19 @@ def test_controle_compte_les_tirages_impossibles_comme_manquants(con: duckdb.Duc
         "sirene": lambda _jours: None,
     }
     resultat = fraicheur.controler(con, AUJOURDHUI, tirages, {"rne": 3, "sirene": 2})
-    assert resultat.retrouves == 3
-    assert resultat.non_tires == 2
+    # La même fiche revient à chaque tirage : vérifiée une fois, les deux autres sont des doublons.
+    assert resultat.retrouves == 1
+    assert resultat.non_tires == 4
     assert resultat.demandes == 5
+
+
+def test_controle_tire_de_nouveau_un_doublon(con: duckdb.DuckDBPyConnection) -> None:
+    appliquer(con, [fiche("societe_a_v1"), fiche("societe_radiee")], DEBUT)
+    suite = iter(["societe_a_v1", "societe_a_v1", "societe_radiee"])
+    tirages: dict[fraicheur.Source, Any] = {"rne": lambda _jours: tirage_rne(next(suite))}
+    resultat = fraicheur.controler(con, AUJOURDHUI, tirages, {"rne": 2})
+    assert [v.tirage.siren for v in resultat.verdicts] == [
+        fiche("societe_a_v1").siren,
+        fiche("societe_radiee").siren,
+    ]
+    assert resultat.non_tires == 0

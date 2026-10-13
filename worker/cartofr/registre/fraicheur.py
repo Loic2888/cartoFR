@@ -15,8 +15,9 @@ Tirage :
   au hasard (`searchAfter`), une fiche de personne morale au hasard dans la page. Coût : une
   page de `TAILLE_PAGE_RNE` fiches du quota INPI par tirage. Le curseur de la synchro
   (`<CARTOFR_DATA>/inpi_diff/curseur.json`) n'est jamais touché ;
-- SIRENE (API Sirene) : un jour au hasard, une unité légale au hasard parmi celles traitées ce
-  jour-là, hors entrepreneurs individuels (rang tiré sous 1 000, limite de l'API).
+- SIRENE (API Sirene) : un jour au hasard, la première unité légale traitée ce jour-là (hors
+  entrepreneurs individuels) à partir d'un SIREN tiré au hasard.
+Un même SIREN n'est vérifié qu'une fois par contrôle : un doublon est tiré de nouveau.
 
 Limite connue : la source rend l'état actuel de la société. Si elle a encore changé après la
 dernière synchro (aujourd'hui, par exemple), le contrôle la compte manquante à tort. Le SIREN
@@ -45,7 +46,6 @@ from cartofr.registre.synchro_sirene import lignes_unites
 
 FENETRE_JOURS = 7  # SC-003 : 7 jours de retard au plus
 TAILLE_PAGE_RNE = 20
-RANG_MAX_SIRENE = 1000  # l'API Sirene refuse `debut` au-delà
 ESSAIS_PAR_TIRAGE = 5  # jour sans changement, page vide : on retire, pas plus
 
 # Champs des bilans qui disent qu'une ligne du registre aurait changé.
@@ -74,7 +74,7 @@ Source = Literal["rne", "sirene"]
 class LecteurSirene(Protocol):
     """Ce que le tirage SIRENE attend du client (`synchro_sirene.Client`, remplaçable en test)."""
 
-    def unites_a_partir_de(self, jour: date, debut: int, nombre: int) -> tuple[int, list[dict[str, Any]]]: ...
+    def premiere_unite_depuis(self, jour: date, siren_min: str) -> dict[str, Any] | None: ...
 
 
 @dataclass(frozen=True)
@@ -145,16 +145,14 @@ def tirer_rne(client: LecteurDiff, jours: list[date], hasard: random.Random) -> 
 
 
 def tirer_sirene(client: LecteurSirene, jours: list[date], hasard: random.Random) -> Tirage | None:
-    """Une unité légale (hors EI) traitée un des `jours`, au hasard. None après trop d'essais."""
+    """Une unité légale (hors EI) traitée un des `jours`, au hasard : la première à partir d'un
+    SIREN tiré au hasard. None après trop d'essais."""
     for _ in range(ESSAIS_PAR_TIRAGE):
         jour = hasard.choice(jours)
-        total, _ = client.unites_a_partir_de(jour, 0, 1)
-        if total <= 0:
-            continue
-        _, unites = client.unites_a_partir_de(jour, hasard.randrange(min(total, RANG_MAX_SIRENE)), 1)
-        lignes = lignes_unites(unites)
+        brute = client.premiere_unite_depuis(jour, _siren_au_hasard(hasard))
+        lignes = lignes_unites([brute]) if brute is not None else []
         if lignes:
-            return Tirage("sirene", jour, str(lignes[0]["siren"]), unites[0])
+            return Tirage("sirene", jour, str(lignes[0]["siren"]), brute)
     return None
 
 
@@ -182,11 +180,18 @@ def controler(
     jours = fenetre(aujourdhui)
     verdicts: list[Verdict] = []
     non_tires = 0
+    vus: set[str] = set()
     for source, n in combien.items():
         for _ in range(n):
-            tirage = tirer[source](jours)
+            tirage = None
+            for _ in range(ESSAIS_PAR_TIRAGE):
+                tirage = tirer[source](jours)
+                if tirage is None or tirage.siren not in vus:
+                    break
+                tirage = None  # déjà vérifié : on retire
             if tirage is None:
                 non_tires += 1
                 continue
+            vus.add(tirage.siren)
             verdicts.append(verifier(con, tirage, aujourdhui))
     return Controle(verdicts, non_tires)

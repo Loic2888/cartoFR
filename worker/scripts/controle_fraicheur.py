@@ -12,7 +12,7 @@ Usage, depuis la racine du dépôt, quand aucune synchro ne tourne (le registre 
 
 Entrées : le registre `<CARTOFR_DATA>/registre.duckdb` ; INPI_USERNAME, INPI_PASSWORD et
 INSEE_API_KEY dans l'environnement ou le fichier CARTOFR_ENV_FILE (`.env` par défaut).
-Coût : une page de 20 fiches du quota INPI par tirage RNE, deux requêtes Sirene par tirage.
+Coût : une page de 20 fiches du quota INPI par tirage RNE, une requête Sirene par tirage.
 Sortie : une ligne par changement (source, jour, SIREN de la personne morale, retrouvé ou
 non et les tables qui auraient bougé), puis « Retrouvés : N/10 ». Aucun nom.
 Code de sortie : 0 si tous sont retrouvés, 1 sinon, 2 si le registre manque.
