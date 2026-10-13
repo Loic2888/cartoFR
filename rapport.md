@@ -140,6 +140,8 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 
 **SC-002 : à mesurer par Loïc, guide dans `docs/recette-sc002.md`.** Trois groupes jamais réglés y sont proposés (Bigard, Fayat, Roullier ; 38 à 83 sociétés avec un brouillon minimal).
 
+**Décision du 2026-10-13 (Loïc) : SC-002 ne sera pas chronométré.** Pas le temps pour les trois sessions. T024 C2 est abandonné, T024 est clos sur C1, C3 et C4. SC-002 (« moins de 30 minutes de la saisie à l'export ») reste **non mesuré** : rien ne prouve qu'il est tenu, rien ne prouve le contraire. Le guide `docs/recette-sc002.md` reste en place si la mesure redevient utile. Indice, pas preuve : le calcul prend moins d'une minute (SC-004), le reste est le temps de saisie et de relecture du consultant.
+
 ### 2026-10-07, marque sûre et mandat « Autre » (T033)
 
 - Défaut trouvé par T017 : dans `decide`, la branche du mandat faible (« Autre », code 99) rendait `None` dès qu'il manquait le second indice, avant les règles de la marque sûre et de l'adresse. Un mandat « Autre » servait donc de veto. Correction : cette branche ne décide plus que l'entrée (« mandat 'Autre' et deux indices ») ; sinon la société passe aux règles suivantes, comme sans ce mandat. Rien d'autre ne change dans le moteur.

@@ -56,7 +56,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 - [x] `T021` — Lancer une carto et enregistrer le résultat
 - [x] `T022` [P] — Afficher l'arbre du groupe avec ses preuves
 - [x] `T023` [P] — Exporter la carto en CSV, sans aucun nom de personne
-- [ ] `T024` — Faire la recette du MVP
+- [x] `T024` — Faire la recette du MVP *(C2, chronométrage SC-002, abandonné le 2026-10-13 : SC-002 non mesuré)*
 
 **Point de contrôle** : un consultant se connecte, cherche « LVMH », valide ses réglages, lance la carto, parcourt l'arbre au clavier et sur mobile, puis exporte un CSV sans aucun nom de personne. Le tout en moins de 30 minutes, avec au moins les scores du prototype.
 
@@ -158,7 +158,7 @@ Vérifié par fichiers partagés : deux tâches `[P]` d'une même phase ne touch
 | Critère | Tâches |
 |---|---|
 | SC-001 Justesse | T016 (non-régression du moteur), T024 (depuis l'app) |
-| SC-002 Moins de 30 min | T024 |
+| SC-002 Moins de 30 min | T024 — **non mesuré** : chronométrage abandonné le 2026-10-13 (décision de Loïc) |
 | SC-003 Fraîcheur ≤ 7 jours | T011, T012, T015 |
 | SC-004 Moins de 5 min | T021 (durée enregistrée), T024 |
 | SC-005 Aucun nom de personne | T023 |
