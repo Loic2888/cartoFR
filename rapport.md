@@ -364,3 +364,12 @@ Objectif : réduire le bruit (marques sans activité en France) et gagner encore
 - Mot de passe hors du code : `RECHERCHE_DB_PASSWORD` dans `infra/.env`, posé par `infra/appliquer-migrations.sh`. Une installation antérieure ajoute la ligne à la main (`infra/README.md`).
 - Piège : dans l'image Supabase, `postgres` n'est pas superutilisateur ; il doit être membre du rôle pour le prendre (`set role`). La migration le fait.
 - Vérifié : 12 tests (privilèges, rien sans déclaration, seule l'organisation déclarée même si la requête en demande une autre, aucune autre table, aucune écriture, route d'export). Sur une base neuve, une vraie connexion avec le rôle est en lecture seule et ne voit aucune carto sans déclaration. Suite complète : 520 tests réussis.
+
+## 2026-10-13
+
+### Retrait du prototype (T032)
+
+- Option validée par Loïc : on ne retire que ce que le paquet `worker/` remplace déjà. Retirés : `engine.py`, `brand_scan.py`, `compare.py`, `to_skill_tables.py`, `debug_addr.py`, `debug_round.py`, `role_codes.py`, `annuaire.py`, `bodacc.py`. Ils restent lisibles dans l'historique git et dans la copie du skill.
+- Gardés à la racine : `ftp_download.py`, `inpi.py` (lecture des identifiants, utilisée par `ftp_download.py`), `build_links.py` et `build_sieges.py`. Ils produisent les parquets que `cartofr.registre.construire` charge : sans eux, pas de reconstruction du registre depuis un nouveau stock.
+- Le skill `account-mapping` garde sa propre copie du prototype (`skills/account-mapping/scripts/moteur_france/`), pour l'usage hors de l'app. La règle « la racine fait foi, recopier dans le skill » est retirée de `CLAUDE.md` : le moteur qui fait foi est celui de `worker/`.
+- C1 : aucun script retiré n'était importé ni appelé par `worker/`, `infra/` ou la CI. C3, non-régression depuis le paquet après le retrait : LVMH 90 % (155/172), 15 en plus ; VINCI 81 % (813/1 007), 176 en plus ; CMAF 83 % (43/52). Mêmes scores que T033. Suite worker : 410 réussis.

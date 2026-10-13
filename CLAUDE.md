@@ -58,22 +58,26 @@ infra/                  docker-compose, Caddy, cron, sauvegardes
 config/                 réglages historiques des groupes (données de départ)
 ```
 
-Prototype, à la racine, jusqu'à ce que le worker atteigne les mêmes scores :
+Reste du prototype, à la racine (le moteur et l'export sont retirés depuis T032,
+2026-10-13 : le paquet `worker/` les remplace) :
 
 ```
-engine.py            le moteur de cartographie (boucle jusqu'au point fixe)
-brand_scan.py        candidates SIRENE par nom de marque
+ftp_download.py      télécharge le stock RNE de l'INPI (FTP) dans data/rne_stock/
+inpi.py              lecture des identifiants INPI (sert à ftp_download.py)
 build_links.py       stock RNE INPI → data/rne_links/ (liens, sociétés, personnes)
 build_sieges.py      SIRENE → data/sieges.parquet
-inpi.py annuaire.py bodacc.py ftp_download.py   clients des sources, cache dans data/
-compare.py to_skill_tables.py debug_*.py         comparaison, export, diagnostic
 config/<groupe>.json réglages d'un groupe (tête, marques, exclusions, organigramme)
 skills/account-mapping/   le skill v2 (lien .claude/skills/account-mapping)
 data/ basile/ out/   hors git : données (19 Go), références, sorties
 ```
 
-`skills/account-mapping/scripts/moteur_france/` est une **copie** des scripts
-de la racine. La racine fait foi : recopier dans le skill après un changement.
+Ces trois scripts produisent les parquets que `python -m cartofr.registre.construire`
+charge dans `registre.duckdb` : sans eux, pas de reconstruction du registre depuis
+un nouveau stock.
+
+`skills/account-mapping/scripts/moteur_france/` garde sa **propre copie** du
+prototype (moteur compris), pour le skill utilisé hors de l'app. Elle n'est plus
+synchronisée avec la racine ; le moteur qui fait foi est celui de `worker/`.
 
 ## Commandes
 
@@ -82,10 +86,10 @@ Les scripts lisent des chemins relatifs : les lancer depuis la racine.
 | Quoi | Commande |
 |---|---|
 | Installer | `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` |
-| Cartographier un groupe | `.venv/bin/python brand_scan.py config/<g>.json && .venv/bin/python engine.py config/<g>.json` |
-| Non-régression | `CARTOFR_DATA=data CARTOFR_REFERENCES=basile .venv/bin/python worker/scripts/non_regression.py` : moteur du paquet sur `data/registre.duckdb`, `lvmh`, `vinci` et `cmaf` (scores ci-dessous). L'ancien `compare.py <g>` reste pour le prototype |
-| Export skill | `.venv/bin/python to_skill_tables.py config/<g>.json` |
-| Reconstruire les tables | `.venv/bin/python build_sieges.py` puis `.venv/bin/python build_links.py data/rne_stock/<stock>.zip` (~15 min) |
+| Cartographier un groupe | Depuis l'app (fiche du groupe, « Lancer la carto »). Hors de l'app : la copie du skill, `skills/account-mapping/scripts/moteur_france/` |
+| Non-régression | `CARTOFR_DATA=data CARTOFR_REFERENCES=basile .venv/bin/python worker/scripts/non_regression.py` : moteur du paquet sur `data/registre.duckdb`, `lvmh`, `vinci` et `cmaf` (scores ci-dessous) |
+| Export skill | Depuis l'app (arbre de la carto, export des 6 tables : `worker/cartofr/exports/skill.py`) |
+| Reconstruire le registre | `.venv/bin/python build_sieges.py` puis `.venv/bin/python build_links.py data/rne_stock/<stock>.zip` (~15 min), puis `CARTOFR_DATA=data .venv/bin/python -m cartofr.registre.construire --remplacer` |
 | Lint / Typecheck / Tests | `.venv/bin/ruff check worker` · `.venv/bin/pyright -p worker` · `.venv/bin/pytest worker` · `npm --prefix web run lint` · `npm --prefix web run typecheck` · `npm --prefix web test` · `npm --prefix web run build` (détail dans `AGENTS.md`) |
 
 > Claude lance ces commandes pour se valider. Tant que lint et tests unitaires
