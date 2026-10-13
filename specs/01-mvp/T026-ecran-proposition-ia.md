@@ -29,7 +29,7 @@ Bouton « Proposer », affichage des sources, acceptation élément par élémen
 ## Critères de succès
 - [x] **C1** : Chaque élément proposé affiche sa source
 - [x] **C2** : Le nombre de corrections est enregistré à la validation
-- [ ] **C3** : `rapport.md` donne la moyenne des corrections sur LVMH, VINCI et CMAF (SC-007) — *ouvert le 2026-10-08 : demande l'API réelle ; protocole écrit dans `rapport.md`, mesure non faite*
+- [x] **C3** : `rapport.md` donne la moyenne des corrections sur LVMH, VINCI et CMAF (SC-007) — *mesuré le 2026-10-13 : 64,7 corrections en moyenne au moins (52, 79, 63). **SC-007 non tenu.** Revoir la cible ou la méthode : décision de Loïc*
 
 ## Tests et validation
 
