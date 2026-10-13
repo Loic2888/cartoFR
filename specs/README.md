@@ -63,7 +63,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 ## Phase 5 : US3 — L'IA propose les réglages (P2)
 
 - [x] `T025` — Faire proposer les réglages par l'IA
-- [ ] `T026` — Afficher la proposition et mesurer les corrections *(C1, C2 faits ; C3 ouvert : mesure SC-007 avec l'API réelle)*
+- [x] `T026` — Afficher la proposition et mesurer les corrections *(SC-007 mesuré le 2026-10-13 : **non tenu**, 64,7 corrections en moyenne au moins ; cible ou méthode à trancher)*
 - [x] `T037` — Faire passer la proposition IA par OpenRouter
 - [x] `T038` — Recentrer la proposition IA sur les marques et mesurer son coût
 - [x] `T039` — Améliorer le rappel de la proposition IA
@@ -162,7 +162,7 @@ Vérifié par fichiers partagés : deux tâches `[P]` d'une même phase ne touch
 | SC-004 Moins de 5 min | T021 (durée enregistrée), T024 |
 | SC-005 Aucun nom de personne | T023 |
 | SC-006 Adoption à 3 mois | **Aucune tâche** : c'est une mesure faite 3 mois après la livraison du MVP, en comptant les missions. À noter dans `rapport.md` à cette date. |
-| SC-007 IA | T026 |
+| SC-007 IA | T026 — **non tenu** le 2026-10-13 (64,7 corrections en moyenne au moins, cible < 5) |
 
 ## Contrôle constitutionnel
 

@@ -257,13 +257,31 @@ Pile Docker Compose complète en local (projet `cartofr-t024`), registre réel m
 - Next ne décide rien sur le groupe : il compte les choix du consultant (principe 7). Tests : `web/lib/reglages/proposition.test.ts`.
 - Limite : si le consultant passe par l'éditeur classique au lieu de la revue, la version enregistrée ne porte pas de compte de corrections. Elle ne compte pas dans SC-007.
 
-**SC-007 : non mesuré, critère ouvert.** La mesure demande de vraies propositions, donc l'API réelle (clé `OPENROUTER_API_KEY` depuis T037) ; aucune n'a été faite. Rien n'est inventé ici. Protocole :
+**SC-007 : non mesuré le 2026-10-08 (mesure du 2026-10-13 plus bas).** La mesure demande de vraies propositions, donc l'API réelle (clé `OPENROUTER_API_KEY` depuis T037) ; aucune n'a été faite. Rien n'est inventé ici. Protocole :
 
 1. Sur une base de test, créer les groupes LVMH, VINCI et CMAF sans leurs réglages de départ (ou dans une organisation à part).
 2. Pour chacun, cliquer « Proposer des réglages » et chronométrer du clic à la validation.
 3. Revoir la proposition en prenant `config/<groupe>.json` comme référence : rejeter ce qui n'y est pas et qui est faux, corriger les listes, ajouter ce qui manque et compte (marques, sigles, maisons, exclusions par nom).
 4. Relever `corrections` de la version validée (`select version, corrections from reglages where proposition_id is not null`) et la durée.
 5. Critère tenu si la moyenne des trois est sous 5 corrections et chaque durée sous 30 minutes. Noter le coût de l'appel (jetons) et le modèle (`CARTOFR_MODELE_IA`).
+
+**2026-10-13, SC-007 mesuré : non tenu, de loin.** Le protocole est rejoué sans clics par `worker/scripts/mesure_sc007.py` : une vraie proposition par groupe (groupe neuf, sans version validée), puis la revue qu'aurait faite un consultant avec `config/<groupe>.json` comme référence, comptée comme l'écran (`appliquerRevue`). Un élément de l'IA absent de `config/` peut être vrai ou faux, et la machine ne le sait pas : d'où une fourchette. `min` le garde, `max` le rejette, `estimé` rejette seulement ceux qu'aucune société du registre ne porte (signal T040). Modèle : `anthropic/claude-haiku-5.5`.
+
+| Groupe | Proposés | Gardés | Liste changée | Doublons | Absents de `config/` (dont sans société) | Ajouts | Corrections min / estimé / max | Coût |
+|---|---|---|---|---|---|---|---|---|
+| LVMH | 80 | 33 | 14 | 0 | 33 (19) | 38 | **52** / 71 / 85 | 0,054 $ |
+| VINCI | 49 | 5 | 20 | 3 | 21 (3) | 56 | **79** / 82 / 100 | 0,073 $ |
+| CMAF | 116 | 9 | 23 | 17 | 67 (20) | 23 | **63** / 83 / 130 | 0,066 $ |
+| **Moyenne** | | | | | | | **64,7** / 78,7 / 105 | |
+
+- Même l'hypothèse la plus favorable (tout élément absent de `config/` est juste) donne 64,7 corrections en moyenne, contre moins de 5 visés.
+- CMAF : cinq essais ont d'abord échoué en 429 « Provider returned error ». C'est le fournisseur derrière OpenRouter qui refusait ; la clé avait encore son crédit et une petite requête passait. Le sixième essai est passé (1,3 min, 7 recherches web). Le script réessaie maintenant trois fois, et enregistre chaque proposition dans `out/sc007/` pour ne pas la repayer.
+- Pour LVMH et VINCI, les ajouts pèsent le plus (38 et 56) : l'IA ne retrouve pas les marques qui ne figurent pas sur les pages qu'elle lit, en particulier les marques ambiguës de `config/` (22 et 23 manquent). Ce tirage rappelle moins que celui du 2026-10-10 (80 éléments proposés pour LVMH contre 114). Même constat que T040 : le rappel varie beaucoup d'un essai à l'autre.
+- Pour CMAF, c'est le bruit : 17 doublons et 67 éléments absents de `config/`.
+- La règle des homonymes coûte ensuite 11 corrections sur LVMH et 16 sur VINCI. Ce sont des marques que la règle range en « ambiguë », parce qu'une société hors du groupe porte un nom qui commence par elles, alors que les réglages validés les tiennent pour sûres. L'humain accepte un risque que la règle refuse. Ce n'est pas une erreur de l'IA, mais l'écran le compte comme une correction.
+- La durée (moins de 30 minutes, du clic à la validation) n'est pas mesurée : les chronos sont abandonnés (décision de Loïc du 2026-10-13, voir T024).
+- Lecture : la proposition fait gagner du temps (33 éléments justes sur 80 pour LVMH, avec leur source), mais elle ne dispense pas d'une revue complète. L'objectif « moins de 5 corrections » est hors de portée avec cette méthode. Deux suites possibles : revoir la cible SC-007 dans le PRD, ou changer la méthode (plusieurs passes et union des résultats, marques tirées du registre). C'est à Loïc de trancher.
+- Coût de la mesure : 0,19 $ pour les trois groupes. Les essais refusés n'ont rien coûté.
 
 ## 2026-10-09
 
