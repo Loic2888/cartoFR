@@ -95,6 +95,14 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 - [x] `T041` — Donner au service recherche un rôle Postgres en lecture seule
 - [x] `T032` — Retirer les scripts du prototype une fois la parité atteinte *(scripts du registre gardés à la racine)*
 
+## Phase 10 : Périmètre publié — une carto sans réglages faits à la main (P1)
+
+Ouverte le 2026-10-14 (mesures dans `rapport.md`) : sans réglages faits à la main, le moteur retrouve 1 à 16 % d'un groupe ; la liste des sociétés consolidées publiée par le groupe, croisée avec le registre, en donne 75 % pour VINCI et LVMH. Jamais en parallèle : chaque tâche part de la précédente.
+
+- [ ] `T042` — Lire le périmètre publié d'un groupe et retrouver ses sociétés dans le registre
+- [ ] `T043` — Faire entrer dans la carto les sociétés du périmètre publié et leurs blocs *(après T042)*
+- [ ] `T044` — Mettre le périmètre publié dans les réglages du groupe, et le faire trouver par l'IA *(après T043)*
+
 ## Carte des dépendances
 
 ```
@@ -113,6 +121,7 @@ T001 ── T007 ─┬─ T011 (+T010) ─ T013     │             │
                                            └─ T023 ─┘
 T021 ─┬─ T025 ── T026        T021 ── T027 ── T028
       └─ T029 (+T019)        T009 ── T031
+T042 ── T043 ── T044 (+T020, T026)
 ```
 
 ## Tâches parallèles
@@ -163,7 +172,7 @@ Vérifié par fichiers partagés : deux tâches `[P]` d'une même phase ne touch
 | SC-004 Moins de 5 min | T021 (durée enregistrée), T024 |
 | SC-005 Aucun nom de personne | T023 |
 | SC-006 Adoption à 3 mois | **Aucune tâche** : c'est une mesure faite 3 mois après la livraison du MVP, en comptant les missions. À noter dans `rapport.md` à cette date. |
-| SC-007 IA | T026 — **non tenu** le 2026-10-13 (64,7 corrections en moyenne au moins, cible < 5) |
+| SC-007 IA | T026 — **non tenu** le 2026-10-13 (64,7 corrections en moyenne au moins, cible < 5). Réécriture proposée par T044 : mesurer la carto obtenue sans correction |
 
 ## Contrôle constitutionnel
 

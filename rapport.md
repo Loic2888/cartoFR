@@ -373,3 +373,44 @@ Objectif : réduire le bruit (marques sans activité en France) et gagner encore
 - Gardés à la racine : `ftp_download.py`, `inpi.py` (lecture des identifiants, utilisée par `ftp_download.py`), `build_links.py` et `build_sieges.py`. Ils produisent les parquets que `cartofr.registre.construire` charge : sans eux, pas de reconstruction du registre depuis un nouveau stock.
 - Le skill `account-mapping` garde sa propre copie du prototype (`skills/account-mapping/scripts/moteur_france/`), pour l'usage hors de l'app. La règle « la racine fait foi, recopier dans le skill » est retirée de `CLAUDE.md` : le moteur qui fait foi est celui de `worker/`.
 - C1 : aucun script retiré n'était importé ni appelé par `worker/`, `infra/` ou la CI. C3, non-régression depuis le paquet après le retrait : LVMH 90 % (155/172), 15 en plus ; VINCI 81 % (813/1 007), 176 en plus ; CMAF 83 % (43/52). Mêmes scores que T033. Suite worker : 410 réussis.
+
+## 2026-10-14
+
+### Le moteur dépend des réglages faits à la main ; le périmètre publié du groupe peut les remplacer (T042)
+
+Point de départ : SC-007 non tenu (64,7 corrections au moins par proposition IA). Décision de Loïc : le but est une carto complète produite seule, pas une revue qui fait la moitié du travail. On ne baisse pas la cible : on cherche d'où vient le manque. Toutes les mesures ci-dessous sont locales et en lecture seule sur `data/registre.duckdb`, contre les références Basile. Elles n'affichent que des nombres et des dénominations de sociétés. Les scripts sont jetables (hors dépôt) : T042 en refera un, versionné.
+
+**1. Sans réglages, le moteur ne trouve presque rien.** Moteur du paquet, mêmes groupes :
+
+| Réglages | LVMH (172) | VINCI (1 007) | CMAF (52) |
+|---|---|---|---|
+| Tête seule, aucune marque | 2 · 0 en plus | 3 · 0 | 1 · 6 |
+| Proposition IA brute du 2026-10-13, sans correction | 26 (15 %) · 5 | 27 (3 %) · 5 | 36 · 266 |
+| Réglages validés (`config/`) | 155 (90 %) · 15 | 813 (81 %) · 176 | 43 · 529 |
+
+Le registre dit qui **dirige** une société, pas qui la **possède**. Les sociétés entrent par les marques ; dirigeants communs et adresse ne font que confirmer. Le moteur est donc un dictionnaire de marques tenu à la main, et l'IA ne sait pas le refaire.
+
+**2. Le groupe est relié dans le registre, mais on ne sait pas où il commence.** Plafond (sociétés de la référence reliées à la tête par un chemin qui reste dans la référence) : LVMH 131/172 par liens et dirigeants communs, 149 avec l'adresse ; VINCI 794 puis 906 sur 1 007 ; CMAF 48 puis 51 sur 52. Explorer depuis la tête sans savoir quoi suivre échoue : les liens de société seuls donnent 16 %, 1 % et 12 %. Ajouter les sociétés dirigées par un « cadre du groupe » donne 51 % pour LVMH (113 en plus), 4 % pour VINCI et 9 855 sociétés en plus pour CMAF, à cause des administrateurs mutualistes. En remontant les liens depuis chaque société de la référence, 8 sociétés VINCI sur 1 007 arrivent à la tête : le groupe est coupé en blocs (306, 271, 203 sociétés…) dont le sommet est présidé par une personne. Avec la tête et 5 sommets pris dans la référence, les liens seuls donnent 51 % de VINCI (62 en plus) : c'est le recollage des blocs qui manque.
+
+**3. Recollage des blocs par l'IA, sous une règle qui tranche.** Décision de Loïc : l'IA propose, une règle tranche (le principe 1 tient). Une question fermée par sommet (« cette société fait-elle partie du groupe ? URL et citation »). La règle relit la page et exige la citation, le nom ou le SIREN du bloc et le nom du groupe. Lots : 20 sommets vrais et 20 pièges par groupe. Les pièges partagent un dirigeant ou l'adresse avec le groupe et sont absents de la référence.
+
+- Haiku 5.5 répond « inconnu » même pour VINCI Construction France : écarté. Sonnet 5.5 : 80 questions, 5,51 $ (environ 7 centimes la question). Les premiers essais à 6 en parallèle ont pris des 429 du fournisseur, sans frais. Relancé à 2 en parallèle.
+- Vrais : l'IA dit oui pour 15/20 (LVMH) et 17/20 (VINCI). La règle recolle 10 et 13 blocs, soit 88 et 590 sociétés, dont 66 et 529 dans la référence. Couverture, avec ce que la tête atteint déjà : environ 55 % et 53 %. Refus de la règle : pages illisibles (PDF, sites qui refusent le robot) et noms de bloc non retrouvés (VINCI Immobilier Promotion, 306 sociétés).
+- Pièges : aucune fausse entrée nette. LVMH : un recollage, Paris Match, que la liste consolidée 2024 de LVMH confirme : c'est la référence qui est ancienne. VINCI : les pièges étaient mal choisis, la plupart sont d'anciennes filiales d'Eurovia avec des filiales déjà dans la référence.
+- Limite : VINCI a des centaines de sommets distincts. La longue traîne coûterait des dizaines de dollars par carto.
+- Au passage, un SIREN inventé (celui de VINCI Construction France) a été donné à Loïc en exemple, puis utilisé dans un essai (3 centimes). Le vrai, vérifié dans le registre, est 380 448 944.
+
+**4. Le périmètre publié du groupe, croisé avec le registre, sans IA.** Les groupes cotés publient la liste de leurs sociétés consolidées. Correspondance par nom normalisé avec SIRENE (un seul porteur, ou homonymes départagés par le registre ou par la commune du siège), puis descente dans les blocs du registre :
+
+| Groupe | Document | Lignes en France | Liste seule | Liste + blocs du registre |
+|---|---|---|---|---|
+| VINCI | Liste exhaustive des sociétés consolidées 2025 (vinci.com) | 1 139 | 355 (35 %) · 500 en plus | **760 (75 %)** · 736 en plus |
+| LVMH | Comptes consolidés 2024, liste p. 67 (AMF), principales sociétés seulement | 232 | 102 (59 %) · 74 en plus | **129 (75 %)** · 131 en plus |
+| CMAF | Document d'enregistrement universel 2024 | — | non mesuré | non mesuré |
+
+- VINCI : 844 noms trouvés une fois, 129 homonymes (10 départagés), 145 introuvables (abréviations, sociétés renommées, SCI au nom d'adresse). Sur les 499 sociétés de la liste absentes de la référence, 442 (89 %) sont reliées au groupe par le registre (lien de société, dirigeant commun ou adresse). Pour celles de la référence, la proportion est de 97 % (334/345). La référence Basile sous-compte donc VINCI : 75 % est un minimum.
+- LVMH : 150 noms trouvés une fois, 26 départagés par la commune, 39 homonymes, 17 introuvables. Manques typiques : écart de libellé (« MH France – Moët Hennessy France »), sociétés absentes de la liste (Samaritaine, Château d'Esclans, Hublot France).
+- CMAF : le site investisseurs de la BFCM répond 403 à tout téléchargement automatique. Pas de contournement. L'app devra accepter un PDF déposé par le consultant.
+- Coût : un document par groupe, aucun appel IA, environ 2 minutes de calcul.
+
+**Lecture.** « Périmètre publié + registre » rend 75 % sur VINCI et LVMH sans réglage humain, avec des « en plus » qui sont surtout des oublis de la référence. Les réglages faits à la main restent devant (81 % et 90 %). L'écart se travaille par une correspondance des noms plus souple, sous confirmation du registre, puis par les signaux secondaires (marques sûres, adresse) et par le recollage IA des seuls gros blocs non couverts. Le travail de l'IA change : trouver l'URL du périmètre, plus seulement des marques. Le principe 2 et SC-007 sont à revoir en conséquence : c'est l'objet de T042.
