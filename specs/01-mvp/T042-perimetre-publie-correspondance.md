@@ -37,10 +37,10 @@ Règle de correspondance, mesurée le 2026-10-14 :
 | P6, P7 | ✅ | Tout est dans le paquet Python ; rien dans `web/` |
 
 ## Critères de succès
-- [ ] **C1** : l'extraction lit les deux formats mesurés : VINCI (« nom pays taux méthode ») et LVMH (« nom ville, pays méthode taux % », noms sur deux lignes, en-têtes et numéros de page ignorés). Elle ne garde que la France et l'outre-mer (tests sur fixtures générées)
-- [ ] **C2** : la correspondance rend un SIREN pour un porteur unique et départage par la commune ou par le registre ; elle refuse et explique dans les autres cas. Tests : homonymes, abréviations, forme juridique en tête ou en fin, société fermée, entrepreneur individuel écarté
+- [x] **C1** : l'extraction lit les deux formats mesurés : VINCI (« nom pays taux méthode ») et LVMH (« nom ville, pays méthode taux % », noms sur deux lignes, en-têtes et numéros de page ignorés). Elle ne garde que la France et l'outre-mer (tests sur fixtures générées)
+- [x] **C2** : la correspondance rend un SIREN pour un porteur unique et départage par la commune ou par le registre ; elle refuse et explique dans les autres cas. Tests : homonymes, abréviations, forme juridique en tête ou en fin, société fermée, entrepreneur individuel écarté
 - [ ] **C3** : `mesure_perimetre.py` sur les documents du 2026-10-14 retrouve au moins les chiffres de la mesure jetable : VINCI 844 noms à un seul porteur ou plus, LVMH 176 retenus ou plus
-- [ ] **C4** : la liste des lignes refusées (introuvables, homonymes) sort avec la raison, pour qu'un humain ou T044 puisse les reprendre
+- [x] **C4** : la liste des lignes refusées (introuvables, homonymes) sort avec la raison, pour qu'un humain ou T044 puisse les reprendre
 
 ## Dépendances
 

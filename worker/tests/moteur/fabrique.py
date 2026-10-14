@@ -73,6 +73,7 @@ class _Societe:
     salaries: int | None
     diffusion_commerciale: bool
     active: bool
+    commune: str = "PARIS"
 
 
 @dataclass
@@ -95,11 +96,12 @@ class MiniRegistre:
         salaries: int | None = None,
         diffusion_commerciale: bool = True,
         active: bool = True,
+        commune: str = "PARIS",
     ) -> str:
-        """Ajoute une société ; par défaut une SAS de 10 à 19 salariés, seule à son adresse."""
+        """Ajoute une société ; par défaut une SAS de 10 à 19 salariés, seule à son adresse, à Paris."""
         self.societes.append(
             _Societe(siren, nom, cj, naf, tranche, adresse or f"{siren} RUE INVENTEE 75000", salaries,
-                     diffusion_commerciale, active)
+                     diffusion_commerciale, active, commune)
         )  # fmt: skip
         return siren
 
@@ -133,8 +135,8 @@ class MiniRegistre:
                 if s.active:
                     con.execute(
                         "insert into sieges values"
-                        " (?, ?, '1', 'RUE', 'INVENTEE', '75000', 'PARIS', ?, ?, ?, ?, ?)",
-                        [s.siren, s.siren + "00011", s.adresse, s.nom, s.cj, s.naf, s.tranche],
+                        " (?, ?, '1', 'RUE', 'INVENTEE', '75000', ?, ?, ?, ?, ?, ?)",
+                        [s.siren, s.siren + "00011", s.commune, s.adresse, s.nom, s.cj, s.naf, s.tranche],
                     )
                 con.execute(
                     "insert into unites_legales (siren, denomination, categorie_juridique, naf,"
