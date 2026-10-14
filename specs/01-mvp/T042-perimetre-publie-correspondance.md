@@ -39,7 +39,7 @@ Règle de correspondance, mesurée le 2026-10-14 :
 ## Critères de succès
 - [x] **C1** : l'extraction lit les deux formats mesurés : VINCI (« nom pays taux méthode ») et LVMH (« nom ville, pays méthode taux % », noms sur deux lignes, en-têtes et numéros de page ignorés). Elle ne garde que la France et l'outre-mer (tests sur fixtures générées)
 - [x] **C2** : la correspondance rend un SIREN pour un porteur unique et départage par la commune ou par le registre ; elle refuse et explique dans les autres cas. Tests : homonymes, abréviations, forme juridique en tête ou en fin, société fermée, entrepreneur individuel écarté
-- [ ] **C3** : `mesure_perimetre.py` sur les documents du 2026-10-14 retrouve au moins les chiffres de la mesure jetable : VINCI 844 noms à un seul porteur ou plus, LVMH 176 retenus ou plus
+- [x] **C3** : `mesure_perimetre.py` sur les documents du 2026-10-14 retrouve au moins autant de sociétés de la référence que la mesure jetable : VINCI ≥ 760 avec les blocs du registre, LVMH ≥ 102 avec la liste seule. Les « en plus » sont relevés à côté. *Réécrit le 2026-10-14, décision de Loïc : le premier seuil (« LVMH 176 retenues ou plus ») comptait les lignes retenues, fausses correspondances comprises. Tenu : VINCI 764 retrouvées (751 en plus contre 748, +3), LVMH 104 (67 en plus contre 74).*
 - [x] **C4** : la liste des lignes refusées (introuvables, homonymes) sort avec la raison, pour qu'un humain ou T044 puisse les reprendre
 
 ## Dépendances

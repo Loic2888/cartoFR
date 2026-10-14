@@ -439,7 +439,7 @@ Le registre dit qui **dirige** une société, pas qui la **possède**. Les soci�
 | LVMH | 232 | 134 / 34 / 2 | 17 / 45 / 0 | 104 (60 %) · 67 en plus | **128 (74 %)** · 116 en plus |
 
 - Sur LVMH, la règle resserrée retient 170 lignes au lieu de 177. Elle retrouve autant de sociétés de la référence (104), avec 6 en plus de moins. Les 7 lignes perdues étaient donc surtout des fausses correspondances. Avec les blocs, une vraie société est perdue (129 → 128) et 14 sociétés en plus disparaissent.
-- Le seuil de C3 (« LVMH 176 retenues ou plus ») comptait ces erreurs. C3 n'est pas tenu tel qu'il est écrit. Correction de C3 proposée à Loïc : juger sur les sociétés de la référence retrouvées, pas sur le nombre de lignes retenues.
+- Le seuil de C3 (« LVMH 176 retenues ou plus ») comptait ces erreurs. Décision de Loïc : C3 juge désormais les sociétés de la référence retrouvées (VINCI ≥ 760 avec les blocs, LVMH ≥ 102 avec la liste seule), les « en plus » relevés à côté. Tenu : VINCI 764 (751 en plus contre 748), LVMH 104 (67 en plus contre 74).
 - Limites connues :
   - la liste VINCI n'a donné aucune ligne en mise en équivalence : sa section B a sans doute un autre format, à voir avec T043 C2 ;
   - un nom coupé sur deux lignes dont le siège n'est pas dans la ville du document se rabat sur la fin du nom, si elle existe seule dans SIRENE ;
