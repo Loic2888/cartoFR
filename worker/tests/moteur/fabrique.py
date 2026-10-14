@@ -134,8 +134,7 @@ class MiniRegistre:
                 etat = "A" if s.active else "C"
                 if s.active:
                     con.execute(
-                        "insert into sieges values"
-                        " (?, ?, '1', 'RUE', 'INVENTEE', '75000', ?, ?, ?, ?, ?, ?)",
+                        "insert into sieges values (?, ?, '1', 'RUE', 'INVENTEE', '75000', ?, ?, ?, ?, ?, ?)",
                         [s.siren, s.siren + "00011", s.commune, s.adresse, s.nom, s.cj, s.naf, s.tranche],
                     )
                 con.execute(
