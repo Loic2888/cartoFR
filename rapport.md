@@ -341,6 +341,14 @@ Objectif : réduire le bruit (marques sans activité en France) et gagner encore
 - Retenu (décision de Loïc) : ces marques restent dans la proposition, signalées « À vérifier : aucune société du registre ne porte ce nom » à la revue. Le consultant garde Veuve Clicquot et rejette un domaine viticole étranger en un clic. Gratuit, sans effet sur le rappel.
 - Coût des essais IA depuis le 2026-10-10 : environ 1,70 $.
 
+### Le service recherche lit les cartos avec un rôle en lecture seule (T041)
+
+- Avant : l'export du skill (T029) lisait les cartos avec le rôle `postgres`, qui contourne RLS. L'isolation entre organisations ne tenait que par le filtre écrit dans les requêtes.
+- Maintenant : rôle `cartofr_recherche` (migration 0006). Lecture seule par défaut, quatre tables (`groupes`, `reglages`, `cartos`, `carto_societes`), aucun contournement de RLS. Ses politiques ne lui montrent que l'organisation déclarée pour la transaction (`set_config('cartofr.organisation', …)`), et rien sans déclaration. Les requêtes gardent leur filtre : deux barrières.
+- Mot de passe hors du code : `RECHERCHE_DB_PASSWORD` dans `infra/.env`, posé par `infra/appliquer-migrations.sh`. Une installation antérieure ajoute la ligne à la main (`infra/README.md`).
+- Piège : dans l'image Supabase, `postgres` n'est pas superutilisateur ; il doit être membre du rôle pour le prendre (`set role`). La migration le fait.
+- Vérifié : 12 tests (privilèges, rien sans déclaration, seule l'organisation déclarée même si la requête en demande une autre, aucune autre table, aucune écriture, route d'export). Sur une base neuve, une vraie connexion avec le rôle est en lecture seule et ne voit aucune carto sans déclaration. Suite complète : 520 tests réussis.
+
 ## 2026-10-13
 
 ### Retrait de l'enrichissement : US6 et T030 abandonnées
@@ -348,6 +356,7 @@ Objectif : réduire le bruit (marques sans activité en France) et gagner encore
 - Décision de Loïc : cartoFR fait la carto des entreprises françaises, pas l'enrichissement. Le site web et la page LinkedIn servent la prospection, qui est le travail d'un autre outil (HubSpot, Cargo). US6 et FR-011 sont retirées du PRD, T030 est abandonnée, et « Enrichissement » rejoint le hors périmètre. La colonne `domain` de l'export du skill reste vide, comme aujourd'hui : l'outil de prospection la remplit.
 - Étude faite avant la décision, gardée pour mémoire. Aucune source gratuite et officielle ne donne le site d'une société française : ni SIRENE, ni l'API Recherche d'entreprises, ni le BODACC. Wikidata couvre 12,5 % des sociétés ciblables de LVMH (13 sur 104). Le reste aurait demandé une recherche web par l'IA, ou un fournisseur payant comme Societeinfo. Le scraping de LinkedIn est interdit par ses conditions d'utilisation.
 - Pendant l'étude, une requête envoyée à Wikidata portait par erreur l'adresse e-mail de Loïc dans l'en-tête User-Agent. Une seule requête, sans aucune donnée du projet. L'adresse a été retirée des requêtes suivantes.
+
 ### Contrôle hebdomadaire de fraîcheur (T015 C1)
 
 - `worker/scripts/controle_fraicheur.py` tire au hasard 10 changements publiés dans les 7 derniers jours, de J-7 à hier (aujourd'hui n'est pas encore synchronisé) : 5 fiches RNE (API diff INPI) et 5 unités légales SIRENE, hors entrepreneurs individuels. Il rend « Retrouvés : N/10 ».
@@ -357,10 +366,10 @@ Objectif : réduire le bruit (marques sans activité en France) et gagner encore
 - Essai sur le registre local, jamais rattrapé depuis le stock du 2026-03-04 : **6/10** retrouvés (graine 13). L'écart est attendu, et il montre que le contrôle voit les retards : liens à ouvrir et à fermer, société à créer, unité légale modifiée. Ce n'est pas la mesure de C2.
 - Tests : 15 (`test_fraicheur.py`) : fenêtre, rejeu sans effet sur le registre, fiche appliquée retrouvée, fiche nouvelle, radiation et cessation manquantes, tirages RNE et SIRENE sans toucher au curseur de la synchro, doublons retirés, tirages impossibles comptés manquants. Moteur non touché : non-régression sans objet.
 - Reste C2 : rattrapage sur le serveur (T005), puis un premier contrôle à 10/10.
-### Le service recherche lit les cartos avec un rôle en lecture seule (T041)
 
-- Avant : l'export du skill (T029) lisait les cartos avec le rôle `postgres`, qui contourne RLS. L'isolation entre organisations ne tenait que par le filtre écrit dans les requêtes.
-- Maintenant : rôle `cartofr_recherche` (migration 0006). Lecture seule par défaut, quatre tables (`groupes`, `reglages`, `cartos`, `carto_societes`), aucun contournement de RLS. Ses politiques ne lui montrent que l'organisation déclarée pour la transaction (`set_config('cartofr.organisation', …)`), et rien sans déclaration. Les requêtes gardent leur filtre : deux barrières.
-- Mot de passe hors du code : `RECHERCHE_DB_PASSWORD` dans `infra/.env`, posé par `infra/appliquer-migrations.sh`. Une installation antérieure ajoute la ligne à la main (`infra/README.md`).
-- Piège : dans l'image Supabase, `postgres` n'est pas superutilisateur ; il doit être membre du rôle pour le prendre (`set role`). La migration le fait.
-- Vérifié : 12 tests (privilèges, rien sans déclaration, seule l'organisation déclarée même si la requête en demande une autre, aucune autre table, aucune écriture, route d'export). Sur une base neuve, une vraie connexion avec le rôle est en lecture seule et ne voit aucune carto sans déclaration. Suite complète : 520 tests réussis.
+### Retrait du prototype (T032)
+
+- Option validée par Loïc : on ne retire que ce que le paquet `worker/` remplace déjà. Retirés : `engine.py`, `brand_scan.py`, `compare.py`, `to_skill_tables.py`, `debug_addr.py`, `debug_round.py`, `role_codes.py`, `annuaire.py`, `bodacc.py`. Ils restent lisibles dans l'historique git et dans la copie du skill.
+- Gardés à la racine : `ftp_download.py`, `inpi.py` (lecture des identifiants, utilisée par `ftp_download.py`), `build_links.py` et `build_sieges.py`. Ils produisent les parquets que `cartofr.registre.construire` charge : sans eux, pas de reconstruction du registre depuis un nouveau stock.
+- Le skill `account-mapping` garde sa propre copie du prototype (`skills/account-mapping/scripts/moteur_france/`), pour l'usage hors de l'app. La règle « la racine fait foi, recopier dans le skill » est retirée de `CLAUDE.md` : le moteur qui fait foi est celui de `worker/`.
+- C1 : aucun script retiré n'était importé ni appelé par `worker/`, `infra/` ou la CI. C3, non-régression depuis le paquet après le retrait : LVMH 90 % (155/172), 15 en plus ; VINCI 81 % (813/1 007), 176 en plus ; CMAF 83 % (43/52). Mêmes scores que T033. Suite worker : 410 réussis.

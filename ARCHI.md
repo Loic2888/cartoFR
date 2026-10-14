@@ -150,7 +150,7 @@ Décidé le 2026-10-07. Le réglage `familles_exclues` contient des noms de fami
 | P2 Réglages validés | ✅ | Le worker refuse un travail `carto` dont la version de réglages n'est pas validée |
 | P3 Aucun appel extérieur pendant une carto | ✅ | Le moteur ne lit que `registre.duckdb`. Les API ne servent qu'au travail `synchro` |
 | P4 Fermer, jamais effacer | ✅ | Colonnes `debut` et `fin`, aucun `DELETE` dans la synchro, avec un test dédié |
-| P5 Pas de régression silencieuse | ✅ | `compare.py` sur LVMH, VINCI et CMAF avant toute PR qui touche le moteur |
+| P5 Pas de régression silencieuse | ✅ | `worker/scripts/non_regression.py` (autrefois `compare.py`) sur LVMH, VINCI et CMAF avant toute PR qui touche le moteur |
 
 Aucun ⛔.
 
@@ -214,7 +214,7 @@ config/                 réglages historiques (LVMH, VINCI, CMAF), importés com
 skills/account-mapping/ le skill, inchangé (export P3)
 ```
 
-Les scripts de la racine (`engine.py`, `build_links.py`…) restent en place tant que le worker n'a pas atteint les mêmes scores. Ils sont ensuite retirés dans une PR dédiée.
+Les scripts de la racine (`engine.py`, `build_links.py`…) restent en place tant que le worker n'a pas atteint les mêmes scores. Ils sont ensuite retirés dans une PR dédiée. *Fait le 2026-10-13 (T032) : moteur, recherche de marques, comparaison, export et diagnostics retirés ; `ftp_download.py`, `inpi.py`, `build_links.py` et `build_sieges.py` restent, parce que `construire` lit leurs parquets.*
 
 ## Coûts
 

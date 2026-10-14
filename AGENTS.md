@@ -20,8 +20,8 @@ Concrètement, trois obligations remplacent les questions qu'on ne te pose plus.
 Un travail n'est pas fini quand le code est écrit. Il est fini quand :
 
 ```
-.venv/bin/python engine.py config/<g>.json   ← pour lvmh, vinci, cmaf (tableau Commandes de CLAUDE.md)
-.venv/bin/python compare.py <g>              ← scores au moins égaux à ceux de CLAUDE.md
+CARTOFR_DATA=data CARTOFR_REFERENCES=basile .venv/bin/python worker/scripts/non_regression.py
+                                             ← lvmh, vinci, cmaf : scores au moins égaux à ceux de CLAUDE.md
 .venv/bin/ruff check worker                  ← lint du worker
 .venv/bin/ruff format --check worker         ← format du worker
 .venv/bin/pyright -p worker                  ← typecheck du worker (sans -p, pyright ne vérifie rien et sort à 0)
@@ -115,7 +115,7 @@ partout.
 
 ### 🟠 Structural — le cœur du produit
 
-- Le code applicatif, et d'abord `engine.py` (toute règle qui décide)
+- Le code applicatif, et d'abord le moteur, `worker/cartofr/moteur/` (toute règle qui décide)
 - `config/*.json` : un réglage faux fait entrer des centaines de fausses sociétés
 - Le schéma de base et les migrations
 - `PRD.md`, `ARCHI.md`, `specs/**`

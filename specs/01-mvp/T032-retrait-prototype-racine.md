@@ -27,9 +27,11 @@ Supprimer les scripts racine devenus inutiles, mettre à jour CLAUDE.md (Structu
 —
 
 ## Critères de succès
-- [ ] **C1** : Aucun script de la racine n'est encore appelé par `worker/` ni par `infra/`
-- [ ] **C2** : `CLAUDE.md` décrit la structure et les commandes du paquet, plus celles du prototype
-- [ ] **C3** : La non-régression lancée depuis le paquet donne les scores de T024
+
+*Fait le 2026-10-13, option A validée par Loïc : seuls les scripts déjà remplacés par le paquet sont retirés. `ftp_download.py`, `inpi.py`, `build_links.py` et `build_sieges.py` restent (reconstruction du registre). La copie du skill reste telle quelle, sans synchro.*
+- [x] **C1** : Aucun script de la racine n'est encore appelé par `worker/` ni par `infra/`
+- [x] **C2** : `CLAUDE.md` décrit la structure et les commandes du paquet, plus celles du prototype
+- [x] **C3** : La non-régression lancée depuis le paquet donne les scores de T024
 
 ## Tests et validation
 

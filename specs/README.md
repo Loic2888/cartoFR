@@ -93,7 +93,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 
 - [x] `T031` [P] — Écrire le registre des traitements et permettre la suppression d'un compte
 - [x] `T041` — Donner au service recherche un rôle Postgres en lecture seule
-- [ ] `T032` — Retirer les scripts du prototype une fois la parité atteinte
+- [x] `T032` — Retirer les scripts du prototype une fois la parité atteinte *(scripts du registre gardés à la racine)*
 
 ## Carte des dépendances
 
