@@ -99,9 +99,15 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 
 Ouverte le 2026-10-14 (mesures dans `rapport.md`) : sans réglages faits à la main, le moteur retrouve 1 à 16 % d'un groupe ; la liste des sociétés consolidées publiée par le groupe, croisée avec le registre, en donne 75 % pour VINCI et LVMH. Jamais en parallèle : chaque tâche part de la précédente.
 
-- [ ] `T042` — Lire le périmètre publié d'un groupe et retrouver ses sociétés dans le registre
+- [x] `T042` — Lire le périmètre publié d'un groupe et retrouver ses sociétés dans le registre
 - [ ] `T043` — Faire entrer dans la carto les sociétés du périmètre publié et leurs blocs *(après T042)*
 - [ ] `T044` — Mettre le périmètre publié dans les réglages du groupe, et le faire trouver par l'IA *(après T043)*
+
+## Phase 11 : Arbre du registre — vers la carto du pays (P1)
+
+Ouverte le 2026-10-15 (mesure dans `rapport.md`) : les blocs du registre mêlent les groupes, les arbres à une mère les séparent proprement. La carto du pays elle-même, avec le recollage des arbres par les listes publiées, attend une mise à jour de `PRD.md`, d'`ARCHI.md` et du principe 2.
+
+- [x] `T045` — Construire l'arbre à une mère du registre
 
 ## Carte des dépendances
 
@@ -122,6 +128,7 @@ T001 ── T007 ─┬─ T011 (+T010) ─ T013     │             │
 T021 ─┬─ T025 ── T026        T021 ── T027 ── T028
       └─ T029 (+T019)        T009 ── T031
 T042 ── T043 ── T044 (+T020, T026)
+T007, T013 ── T045
 ```
 
 ## Tâches parallèles

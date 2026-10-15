@@ -64,6 +64,7 @@ Deux magasins, chacun pour ce qu'il fait bien. C'est la décision centrale (ADR-
 | `sieges` | SIRENE : siège, adresse, nom, forme juridique, activité, tranche d'effectif (les `etablissements` ne sont pas encore chargés) | 7,8 M |
 | `unites_legales` | SIRENE, personnes morales seulement (cj 1000 refusée) : dénominations, sigle, forme juridique, activité, effectif, état. Aucune colonne de personne. Lue par la recherche des marques (T016) | 13,1 M |
 | `mises_a_jour` | date, source, volumes ajoutés et fermés, statut | — |
+| `arbre` | T045 : une ligne par société qui a une mère (SIREN de la mère, rôle, sommet, profondeur, boucle). Table dérivée de `liens`, remplacée à chaque calcul, jamais une source. Aucun nom. Recalculée par la synchro quand le RNE a changé `liens` ; pour elle, `mises_a_jour.ajoutes` compte les sommets changés | 0,8 M |
 
 Un lien ou une société qui disparaît reçoit une date `fin`. Il n'y a jamais de `DELETE` (principe 4). Construit par `python -m cartofr.registre.construire` (T007) : 1,4 Go, 27 s, 3 Go de mémoire au plus, le 2026-10-06 ; 2,4 Go, 1 min 12 s, 3,4 Go de mémoire au plus avec `unites_legales` (T016, 2026-10-07).
 

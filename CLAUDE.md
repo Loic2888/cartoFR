@@ -90,6 +90,7 @@ Les scripts lisent des chemins relatifs : les lancer depuis la racine.
 | Non-régression | `CARTOFR_DATA=data CARTOFR_REFERENCES=basile .venv/bin/python worker/scripts/non_regression.py` : moteur du paquet sur `data/registre.duckdb`, `lvmh`, `vinci` et `cmaf` (scores ci-dessous) |
 | Export skill | Depuis l'app (arbre de la carto, export des 6 tables : `worker/cartofr/exports/skill.py`) |
 | Reconstruire le registre | `.venv/bin/python build_sieges.py` puis `.venv/bin/python build_links.py data/rne_stock/<stock>.zip` (~15 min), puis `CARTOFR_DATA=data .venv/bin/python -m cartofr.registre.construire --remplacer` |
+| Arbre du registre | `CARTOFR_DATA=data .venv/bin/python -m cartofr.registre.arbre` (30 à 45 s, 2026-10-15 ; la synchro nocturne le recalcule seule). Mesure : `CARTOFR_DATA=data CARTOFR_REFERENCES=basile .venv/bin/python worker/scripts/mesure_arbre.py` |
 | Lint / Typecheck / Tests | `.venv/bin/ruff check worker` · `.venv/bin/pyright -p worker` · `.venv/bin/pytest worker` · `npm --prefix web run lint` · `npm --prefix web run typecheck` · `npm --prefix web test` · `npm --prefix web run build` (détail dans `AGENTS.md`) |
 
 > Claude lance ces commandes pour se valider. Tant que lint et tests unitaires
