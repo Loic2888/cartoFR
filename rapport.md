@@ -445,3 +445,58 @@ Le registre dit qui **dirige** une société, pas qui la **possède**. Les soci�
   - un nom coupé sur deux lignes dont le siège n'est pas dans la ville du document se rabat sur la fin du nom, si elle existe seule dans SIRENE ;
   - « SE » et « SA » en tête de nom sont lus comme des formes juridiques.
 - Tests : 56 nouveaux (`worker/tests/perimetre/`), sur des textes et mini-registres inventés. Suite worker : 466 réussis. Moteur non touché : non-régression sans objet.
+
+## 2026-10-15
+
+Mesures locales, en lecture seule sur `data/registre.duckdb` (photo du 2026-03-04), contre les références Basile. Elles n'affichent que des nombres et des dénominations de sociétés. Les scripts sont jetables (hors dépôt) : T045 en refera un, versionné.
+
+### Pilote du périmètre publié hors des groupes de référence : Fnac Darty et Edenred
+
+- Documents trouvés par recherche web, rangés dans `out/perimetre/pilote/` (hors git). Correspondance par la règle de T042, sans IA :
+
+| Groupe | Lignes en France | Retenues | Refusées | Tête seule | Liste + blocs du registre |
+|---|---|---|---|---|---|
+| Fnac Darty | 36 | 28 | 5 homonymes, 3 introuvables | 1 société | 64 sociétés |
+| Edenred | 8 | 4 | 4 introuvables | 1 société | 11 sociétés |
+
+- L'extraction de T042 lit 0 ligne sur ces deux documents : elle ne connaît que les formats VINCI et LVMH. Les lignes ont été mises au format à la main pour le pilote. Une partie des refus vient de cette mise au format, pas de la règle (pays resté dans un nom, ligne « dissoute en avril 2025 » prise pour une société).
+- Trouver le document prend 5 à 15 minutes par groupe. Pour Bouygues et Eiffage, il faut ouvrir le document d'enregistrement universel.
+- Justesse non mesurable : pas de référence pour ces deux groupes.
+
+### Blocs ou arbres : découper le registre en groupes, sans IA (T045)
+
+Idée de Loïc : calculer une fois la carto de tout le pays, pour qu'une demande ne soit plus qu'une lecture. Première étape : découper le registre en groupes propres.
+
+**1. Les blocs ne marchent pas.** Un bloc regroupe toutes les sociétés reliées par un lien actif, dans n'importe quel sens. Avec tous les liens (1,64 M), on obtient 249 625 blocs, dont un bloc géant. Les commissaires aux comptes relient à eux seuls des milliers de sociétés (KPMG 15 387, Deloitte 11 185, PwC 10 570). Aucun réglage n'en sort :
+
+| Liens gardés | Blocs | Plus gros bloc | LVMH, VINCI, CMAF |
+|---|---|---|---|
+| Rôles forts (président, gérant, associé responsable) | 249 217 | 146 390 | CMAF dans le bloc géant ; VINCI en 26 blocs |
+| Idem, sans parent de plus de 500 enfants | 249 458 | 118 127 | idem |
+| Idem, sans parent de plus de 100 enfants | 250 433 | 94 971 | VINCI en 35 blocs |
+| Président et gérant seuls | 151 327 | 27 509 | LVMH : 32 sociétés sur 172 dans un bloc |
+| Tous rôles sauf commissaires aux comptes | 283 017 | 411 478 | les trois groupes dans le même bloc |
+
+Les plus gros parents sont des gérants de défiscalisation : ECOFIP (11 636 sociétés), ECOGESTION (10 454), FINANC'ILE (7 640), ELVEST (7 414).
+
+**2. Les arbres à une mère marchent.** Règle mesurée :
+- chaque société reçoit **une seule** mère, parmi ses liens actifs ;
+- les commissaires aux comptes (rôles 71, 72, 77) et les parents de plus de 500 enfants sont écartés ;
+- la mère est celle du rôle le plus fort : président (73), puis président du conseil (51) et gérant (30), puis gérants associés et commandité (28, 29, 131), associés responsables (74, 75), 53, administrateur et conseil de surveillance (65, 64), membre (11), autre (99) ;
+- à rôle égal, le parent qui a le plus d'enfants, puis le plus petit SIREN ;
+- on remonte de mère en mère jusqu'au sommet.
+
+Un arbre ne peut pas en fusionner un autre : le plus gros compte 1 333 sociétés (7 759 sans l'écart des parents de plus de 500 enfants).
+
+| Groupe | Arbres touchés par la référence | Plus gros morceaux (sociétés de la référence / taille de l'arbre, sommet) |
+|---|---|---|
+| LVMH (172) | 109 | 21/26 UFIPAR · 16/22 Moët Hennessy · 10/12 Louis Vuitton Malletier · 10/13 LVMH (la tête) |
+| VINCI (1 007) | 395 | 281/351 VINCI Immobilier Promotion · 188/225 VINCI Construction · 30/38 Solarvia · 16/17 Senior Conseil |
+| CMAF (52) | 30 | 14/605 Caisse fédérale du Crédit Mutuel de Maine-Anjou et Basse-Normandie · 4/24 CF Crédit Mutuel Océan · 4/321 CR Crédit Mutuel Nord Europe |
+
+**Lecture.**
+- Les gros arbres sont propres : 80 à 85 % de leurs sociétés sont dans la référence. Le reste ressemble aux oublis de Basile vus le 2026-10-14, sans vérification.
+- Un groupe reste éclaté en beaucoup d'arbres, surtout de petites sociétés dirigées par des personnes. Les recoller est le rôle des listes publiées (T042, T043) : une liste désigne les arbres qui appartiennent au groupe. Un arbre qu'aucune liste ne réclame reste son propre groupe.
+- Le mutualisme ne tient pas dans cette règle : les arbres du Crédit Mutuel mêlent plusieurs fédérations, dont Maine-Anjou et Basse-Normandie, hors CMAF. Il demandera un traitement à part.
+- L'ordre des rôles est un choix, à tester quand une société a deux mères possibles.
+- Une carto du pays calculée sans validation humaine va contre le principe 2. Elle passera par `PRD.md`, `ARCHI.md` et un amendement de `CLAUDE.md`, avec sa raison. T045 ne construit que l'arbre du registre : aucune carto ne s'en sert encore.
