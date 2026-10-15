@@ -17,6 +17,7 @@ dependencies = [
     "psycopg[binary]>=3.2", # base de l'app (file de travaux, cartos)
     "pydantic>=2.10",       # schéma des réglages, partagé avec Zod côté web
     "httpx>=0.28",          # API INPI, API Sirene et OpenRouter (proposition IA, T037)
+    "pypdf>=6.19",          # lecture du périmètre publié d'un groupe (T042)
 ]
 
 [project.optional-dependencies]

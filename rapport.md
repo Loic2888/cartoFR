@@ -414,3 +414,34 @@ Le registre dit qui **dirige** une société, pas qui la **possède**. Les soci�
 - Coût : un document par groupe, aucun appel IA, environ 2 minutes de calcul.
 
 **Lecture.** « Périmètre publié + registre » rend 75 % sur VINCI et LVMH sans réglage humain, avec des « en plus » qui sont surtout des oublis de la référence. Les réglages faits à la main restent devant (81 % et 90 %). L'écart se travaille par une correspondance des noms plus souple, sous confirmation du registre, puis par les signaux secondaires (marques sûres, adresse) et par le recollage IA des seuls gros blocs non couverts. Le travail de l'IA change : trouver l'URL du périmètre, plus seulement des marques. Le principe 2 et SC-007 sont à revoir en conséquence : c'est l'objet de T042.
+
+### Lecture du périmètre publié et correspondance avec le registre (T042)
+
+- Nouveau paquet `cartofr.perimetre` :
+  - `extraction` lit un PDF (pypdf, ajouté aux dépendances du worker ; il était déjà épinglé à la racine), une page HTML ou un texte. Il garde les sociétés situées en France et en outre-mer, aux deux formats mesurés (VINCI, LVMH).
+  - `correspondance` retrouve chaque ligne dans le registre par une règle écrite : porteur unique, puis commune du siège, puis liens du registre, sinon refus avec sa raison.
+  - `worker/scripts/mesure_perimetre.py` rejoue la mesure. Les documents restent dans `out/perimetre/`, hors git.
+- Revue adverse du jour. Deux vraies erreurs de correspondance étaient possibles sur le format LVMH, où nom et ville ne sont pas séparés :
+  - un titre de section (« Vins et Spiritueux ») pouvait être pris pour le nom de la société de la ligne suivante ;
+  - une ville de 2 ou 3 mots pouvait raccourcir « Alphamark Parfums Cosmétiques » en « Alphamark », le nom d'une autre société.
+- Correction : un nom recollé aux lignes d'avant, ou raccourci par une ville de plusieurs mots, n'est retenu que si le siège SIRENE est dans la ville du document. Autres corrections :
+  - une société mise en équivalence ne sert plus à départager des homonymes ;
+  - un SIREN retenu pour deux noms différents n'est retenu pour aucun (« conflit ») ;
+  - les formes juridiques à points (« S.A.S. ») sont retirées, en tête ou en fin de nom seulement ;
+  - les entrepreneurs individuels sont écartés dans la requête elle-même ;
+  - le texte des pages HTML est lu sans expression régulière, qui aurait pris un temps quadratique sur une page mal formée ;
+  - le CSV des refus ne recopie que la ligne de la société, jamais les lignes d'avant.
+- Mesure C3, sur les documents du 2026-10-14 :
+
+| Groupe | Lignes en France | Retenues (unique / commune / registre) | Refusées (homonymes / introuvables / conflit) | Liste seule | Liste + blocs du registre |
+|---|---|---|---|---|---|
+| VINCI | 1 139 | 865 / 0 / 10 | 124 / 140 / 0 | 362 (36 %) · 514 en plus | **764 (76 %)** · 751 en plus |
+| LVMH | 232 | 134 / 34 / 2 | 17 / 45 / 0 | 104 (60 %) · 67 en plus | **128 (74 %)** · 116 en plus |
+
+- Sur LVMH, la règle resserrée retient 170 lignes au lieu de 177. Elle retrouve autant de sociétés de la référence (104), avec 6 en plus de moins. Les 7 lignes perdues étaient donc surtout des fausses correspondances. Avec les blocs, une vraie société est perdue (129 → 128) et 14 sociétés en plus disparaissent.
+- Le seuil de C3 (« LVMH 176 retenues ou plus ») comptait ces erreurs. Décision de Loïc : C3 juge désormais les sociétés de la référence retrouvées (VINCI ≥ 760 avec les blocs, LVMH ≥ 102 avec la liste seule), les « en plus » relevés à côté. Tenu : VINCI 764 (751 en plus contre 748), LVMH 104 (67 en plus contre 74).
+- Limites connues :
+  - la liste VINCI n'a donné aucune ligne en mise en équivalence : sa section B a sans doute un autre format, à voir avec T043 C2 ;
+  - un nom coupé sur deux lignes dont le siège n'est pas dans la ville du document se rabat sur la fin du nom, si elle existe seule dans SIRENE ;
+  - « SE » et « SA » en tête de nom sont lus comme des formes juridiques.
+- Tests : 56 nouveaux (`worker/tests/perimetre/`), sur des textes et mini-registres inventés. Suite worker : 466 réussis. Moteur non touché : non-régression sans objet.
