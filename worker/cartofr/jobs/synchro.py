@@ -18,7 +18,8 @@ Entrées :
 Sorties :
     - le registre mis à jour, et ses lignes `mises_a_jour` (une par jour et source) ;
     - `<CARTOFR_DATA>/synchro/jours.json` : le dernier jour appliqué de chaque source ;
-    - une ligne par source (`rne`, `sirene`) dans `etat_registre`.
+    - une ligne par source (`rne`, `sirene`) dans `etat_registre` ;
+    - la table `arbre` du registre, recalculée après les deux sources (T045).
 
 Règles :
     - Jours lus : du lendemain du dernier jour appliqué (la date du stock,
@@ -47,6 +48,12 @@ Règles :
       anciens par-dessus des plus récents. `mises_a_jour` n'a pas de colonne
       de jour : c'est ce qui oblige à garder le jour ici.
 
+Arbre du registre (T045) : recalculé après RNE et SIRENE quand le RNE a ajouté
+ou fermé au moins une ligne depuis le dernier calcul réussi, ou quand ce calcul
+n'a jamais réussi sur ce registre (`arbre.a_recalculer`). Un échec du calcul
+fait échouer le travail sans défaire la synchro : les jours appliqués restent
+appliqués, et l'arbre garde son état précédent.
+
 Le travail échoue (statut `echec` dans `travaux`) si une source a échoué. Un
 arrêt sur quota n'est pas un échec du travail. Rien n'est journalisé hors
 volumes et types d'erreur.
@@ -70,7 +77,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from cartofr.jobs import Contexte, enregistrer
-from cartofr.registre import inpi_diff, synchro_rne, synchro_sirene
+from cartofr.registre import arbre, inpi_diff, synchro_rne, synchro_sirene
 from cartofr.registre.construire import DATE_STOCK
 from cartofr.registre.construire import SOURCE as SOURCE_CONSTRUCTION
 from cartofr.registre.inpi_diff import ErreurInpi
@@ -91,6 +98,7 @@ JOURS_MAX_DEFAUT = 7
 
 MESSAGE_REGISTRE_ABSENT = "registre introuvable : construire registre.duckdb avant la synchro"
 MESSAGE_REGISTRE_OCCUPE = "registre inaccessible en écriture (ouvert par un autre processus ?)"
+MESSAGE_ARBRE = "arbre du registre en échec (voir mises_a_jour)"
 
 
 class SynchroEnEchec(RuntimeError):
@@ -445,9 +453,33 @@ def travail_synchro(ctx: Contexte) -> None:
             synchro_sirene.Client,
             dossier / "synchro" / "jours.json",
         )
+        arbre_en_echec = not recalculer_arbre(registre)
         registre.execute("checkpoint")
     finally:
         registre.close()
     en_echec = [e.source for e in etats if e.statut == "echec"]
     if en_echec:
         raise SynchroEnEchec(f"synchro en échec : {', '.join(en_echec)} (voir etat_registre)")
+    if arbre_en_echec:
+        raise SynchroEnEchec(MESSAGE_ARBRE)
+
+
+def recalculer_arbre(registre: duckdb.DuckDBPyConnection) -> bool:
+    """Recalcule l'arbre si le passage l'exige (voir l'en-tête). Rend False s'il a échoué.
+
+    L'échec est déjà écrit dans `mises_a_jour` par `arbre.recalculer` ; la synchro reste
+    appliquée.
+    """
+    try:
+        bilan = arbre.recalculer_si_change(registre)
+    except Exception as exc:
+        log.warning("arbre du registre en échec : %s", type(exc).__name__)
+        return False
+    if bilan is not None:
+        log.info(
+            "arbre : %s sociétés avec une mère, %s sommets changés, %.0f s",
+            bilan.lignes,
+            bilan.sommets_changes,
+            bilan.duree_s,
+        )
+    return True

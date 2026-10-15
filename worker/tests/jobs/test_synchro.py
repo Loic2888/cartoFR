@@ -47,7 +47,7 @@ from cartofr.jobs.synchro import (
     jours_max,
     synchroniser,
 )
-from cartofr.registre import inpi_diff, journal, synchro_sirene
+from cartofr.registre import arbre, inpi_diff, journal, synchro_sirene
 from cartofr.registre.inpi_diff import Curseur, ErreurInpi, Page, QuotaAtteint
 from cartofr.registre.schema import creer_tables
 from cartofr.registre.synchro_rne import MESSAGE_QUOTA
@@ -431,14 +431,45 @@ def test_travail_synchro_dans_la_file(conn: Connexion, tmp_path: Path, sans_rese
 
     assert lancer_travail(conn) == {"statut": "termine", "erreur": None}
     assert lire_etat(conn)[RNE]["statut"] == "succes"
-    # Le registre est refermé : un autre processus peut l'ouvrir.
-    duckdb.connect(str(tmp_path / "registre.duckdb"), read_only=True).close()
+    # Le registre est refermé : un autre processus peut l'ouvrir. L'arbre y a été calculé (T045).
+    lecture = duckdb.connect(str(tmp_path / "registre.duckdb"), read_only=True)
+    assert lecture.execute("select statut from mises_a_jour where source = 'arbre'").fetchall() == [
+        ("succes",)
+    ]
+    lecture.close()
 
     # Repartir du stock (registre vide, rien à défaire) avec un refus INPI dès le premier jour.
     (tmp_path / "synchro" / "jours.json").unlink()
     sans_reseau["rne"] = FauxRne({J1: [ErreurInpi("refus")]})
     assert lancer_travail(conn) == {"statut": "echec", "erreur": "échec du travail (SynchroEnEchec)"}
     assert lire_etat(conn)[RNE]["erreur"] == "ErreurInpi pendant la synchro RNE, page 1"
+
+
+@pytest.mark.usefixtures("etat", "sans_reseau")
+def test_arbre_en_echec_fait_echouer_le_travail_sans_defaire_la_synchro(
+    conn: Connexion, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T045 C4 : le calcul de l'arbre échoue, la synchro reste appliquée et publiée."""
+    con = duckdb.connect(str(tmp_path / "registre.duckdb"))
+    creer_tables(con)
+    journal.terminer(con, journal.ouvrir(con, "construction_initiale"), ajoutes=0, fermes=0)
+    con.close()
+
+    def en_panne(*_: object) -> object:
+        raise duckdb.IOException("disque plein")
+
+    monkeypatch.setattr(arbre, "calculer", en_panne)
+    assert lancer_travail(conn) == {"statut": "echec", "erreur": "échec du travail (SynchroEnEchec)"}
+    publie = lire_etat(conn)
+    assert publie[RNE]["statut"] == publie[SIRENE]["statut"] == "succes"
+    assert publie[RNE]["date_donnees"] > DATE_STOCK  # les jours appliqués restent appliqués
+    lecture = duckdb.connect(str(tmp_path / "registre.duckdb"), read_only=True)
+    journal_maj = lecture.execute(
+        "select source, statut from mises_a_jour where source in ('rne_diff', 'arbre') order by id"
+    ).fetchall()
+    lecture.close()
+    assert journal_maj[-1] == ("arbre", "echec")
+    assert set(journal_maj[:-1]) == {("rne_diff", "succes")}
 
 
 @pytest.mark.usefixtures("etat", "sans_reseau")

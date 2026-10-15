@@ -486,7 +486,7 @@ Les plus gros parents sont des gérants de défiscalisation : ECOFIP (11 636 soc
 - à rôle égal, le parent qui a le plus d'enfants, puis le plus petit SIREN ;
 - on remonte de mère en mère jusqu'au sommet.
 
-Un arbre ne peut pas en fusionner un autre : le plus gros compte 1 333 sociétés (7 759 sans l'écart des parents de plus de 500 enfants).
+Un arbre ne peut pas en fusionner un autre : le plus gros compte 1 334 sociétés, sommet compris (7 760 sans l'écart des parents de plus de 500 enfants).
 
 | Groupe | Arbres touchés par la référence | Plus gros morceaux (sociétés de la référence / taille de l'arbre, sommet) |
 |---|---|---|
@@ -500,3 +500,18 @@ Un arbre ne peut pas en fusionner un autre : le plus gros compte 1 333 société
 - Le mutualisme ne tient pas dans cette règle : les arbres du Crédit Mutuel mêlent plusieurs fédérations, dont Maine-Anjou et Basse-Normandie, hors CMAF. Il demandera un traitement à part.
 - L'ordre des rôles est un choix, à tester quand une société a deux mères possibles.
 - Une carto du pays calculée sans validation humaine va contre le principe 2. Elle passera par `PRD.md`, `ARCHI.md` et un amendement de `CLAUDE.md`, avec sa raison. T045 ne construit que l'arbre du registre : aucune carto ne s'en sert encore.
+
+### Arbre à une mère du registre (T045)
+
+- Nouveau module `cartofr.registre.arbre` : la règle mesurée ci-dessus, et la table `arbre` de `registre.duckdb` (`siren`, `mere`, `role_mere`, `sommet`, `profondeur`, `boucle`), sans aucun nom. Table dérivée de `liens`, remplacée dans une transaction à chaque calcul. Une ligne `arbre` dans `mises_a_jour` : son `ajoutes` compte les sociétés dont le sommet a changé.
+- La synchro nocturne la recalcule après RNE et SIRENE dans deux cas : le RNE a ajouté ou fermé une ligne depuis le dernier calcul réussi, même sur une journée arrêtée par le quota, ou ce calcul n'a jamais réussi. Décision de Loïc : un registre construit avant T045 reçoit son arbre à la première nuit. SIRENE ne déclenche rien : il ne touche jamais `liens`. Un échec du calcul fait échouer le travail, sans défaire la synchro.
+- Mesure C5 (`worker/scripts/mesure_arbre.py`, registre du 2026-03-04) : 796 680 sociétés ont une mère, 335 210 arbres de 2 sociétés ou plus, 3 244 sociétés dans une boucle. Plus gros arbre : 1 334 sociétés, sommet compris (la mesure jetable disait 1 333 : elle ne comptait pas le sommet). VINCI Immobilier Promotion 281, VINCI Construction 188, UFIPAR 21 sociétés de la référence : les chiffres du matin, à l'unité.
+- Durée : 5 à 7 s pour le calcul. Recalcul complet avec écriture : 7 s sur une table vide, 31 à 43 s sur une table pleine, où l'effacement et la réinsertion de 796 680 lignes indexées dominent. Environ 1 Go de mémoire.
+- Compter les enfants distincts plutôt que les lignes de `liens` (doublons du RNE compris) ne change presque rien : VINCI Construction 187 au lieu de 188. On garde le compte de la mesure.
+- Revue adverse du jour. Corrigé :
+  - une journée RNE arrêtée par le quota ne déclenchait pas le recalcul ;
+  - un calcul en échec n'était jamais refait si la nuit suivante ne changeait rien ;
+  - SIRENE déclenchait un recalcul complet presque chaque nuit, pour rien ;
+  - le sommet d'une boucle était compté à tort parmi les sommets changés ;
+  - une interruption laissait la ligne de journal `en_cours`.
+- Tests : 54 dans `worker/tests/registre/test_arbre.py`, un de plus dans `worker/tests/jobs/test_synchro.py`. Suite worker avec une base Postgres jetable : 646 réussis, 6 ignorés. Moteur non touché : non-régression sans objet.

@@ -107,7 +107,7 @@ Ouverte le 2026-10-14 (mesures dans `rapport.md`) : sans réglages faits à la m
 
 Ouverte le 2026-10-15 (mesure dans `rapport.md`) : les blocs du registre mêlent les groupes, les arbres à une mère les séparent proprement. La carto du pays elle-même, avec le recollage des arbres par les listes publiées, attend une mise à jour de `PRD.md`, d'`ARCHI.md` et du principe 2.
 
-- [ ] `T045` — Construire l'arbre à une mère du registre
+- [x] `T045` — Construire l'arbre à une mère du registre
 
 ## Carte des dépendances
 

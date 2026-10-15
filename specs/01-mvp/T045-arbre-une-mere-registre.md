@@ -5,7 +5,7 @@
 **Estimé** : 4 à 6 h
 
 ## Contexte
-Mesure du 2026-10-15 (`rapport.md`). Pour calculer un jour la carto de tout le pays, il faut d'abord découper le registre en groupes propres. Les blocs (toutes les sociétés reliées par un lien) ne marchent pas : un bloc géant mêle LVMH, VINCI et CMAF. Les arbres marchent : chaque société reçoit une seule mère, et on remonte jusqu'au sommet. Les gros arbres sont propres (80 à 85 % de leurs sociétés sont dans la référence) et aucun ne dépasse 1 333 sociétés.
+Mesure du 2026-10-15 (`rapport.md`). Pour calculer un jour la carto de tout le pays, il faut d'abord découper le registre en groupes propres. Les blocs (toutes les sociétés reliées par un lien) ne marchent pas : un bloc géant mêle LVMH, VINCI et CMAF. Les arbres marchent : chaque société reçoit une seule mère, et on remonte jusqu'au sommet. Les gros arbres sont propres (80 à 85 % de leurs sociétés sont dans la référence) et aucun ne dépasse 1 334 sociétés, sommet compris.
 
 ## Périmètre
 Le worker calcule, pour chaque société qui a une mère dans le registre, sa mère, le rôle qui l'y relie et son sommet. Il le range dans une table de `registre.duckdb`, recalculée après chaque synchro. Il ne touche pas au moteur. Aucune carto ne se sert de l'arbre dans cette tâche : le recollage par les listes publiées et la carto du pays viendront après une mise à jour de `PRD.md`, d'`ARCHI.md` et du principe 2.
@@ -58,11 +58,11 @@ C'est une table dérivée, recalculée en entier depuis `liens`. L'historique re
 | FR-003 Base dans son dernier état valide | ✅ | Remplacement dans une transaction, une ligne `mises_a_jour` par calcul (C3) |
 
 ## Critères de succès
-- [ ] **C1** : le choix de la mère suit la règle. Tests : ordre des rôles, rôles écartés (commissaires aux comptes, rôle inconnu), parent de plus de 500 enfants, départage par le nombre d'enfants puis par le SIREN, lien fermé ignoré, lien d'une société vers elle-même ignoré
-- [ ] **C2** : le sommet et la profondeur suivent la règle. Tests : chaîne de plusieurs niveaux, boucle de deux, boucle de trois avec une société qui y mène, résultat identique quel que soit l'ordre des liens
-- [ ] **C3** : la table `arbre` est remplacée dans une transaction. Un échec laisse l'ancienne table et une ligne `echec` dans `mises_a_jour`. Un succès écrit une ligne `succes` (source `arbre`) avec le nombre de sociétés dont le sommet a changé. Aucun nom de personne dans la table, la sortie ni le journal (test)
-- [ ] **C4** : le travail de synchro recalcule l'arbre après RNE et SIRENE quand le passage a ajouté ou fermé au moins une ligne. Il ne le recalcule pas sinon. Un échec du calcul fait échouer le travail sans défaire la synchro (tests)
-- [ ] **C5** : `mesure_arbre.py` sur `data/registre.duckdb` retrouve la mesure du 2026-10-15 : plus gros arbre ≤ 1 333 sociétés ; VINCI ≥ 281 sociétés de la référence dans l'arbre de VINCI Immobilier Promotion et ≥ 188 dans celui de VINCI Construction ; LVMH ≥ 21 dans celui d'UFIPAR. La durée du calcul sur tout le registre est relevée dans `rapport.md` et tient sous 10 minutes
+- [x] **C1** : le choix de la mère suit la règle. Tests : ordre des rôles, rôles écartés (commissaires aux comptes, rôle inconnu), parent de plus de 500 enfants, départage par le nombre d'enfants puis par le SIREN, lien fermé ignoré, lien d'une société vers elle-même ignoré
+- [x] **C2** : le sommet et la profondeur suivent la règle. Tests : chaîne de plusieurs niveaux, boucle de deux, boucle de trois avec une société qui y mène, résultat identique quel que soit l'ordre des liens
+- [x] **C3** : la table `arbre` est remplacée dans une transaction. Un échec laisse l'ancienne table et une ligne `echec` dans `mises_a_jour`. Un succès écrit une ligne `succes` (source `arbre`) avec le nombre de sociétés dont le sommet a changé. Aucun nom de personne dans la table, la sortie ni le journal (test)
+- [x] **C4** : le travail de synchro recalcule l'arbre après RNE et SIRENE quand le passage a ajouté ou fermé au moins une ligne, ou quand l'arbre n'a jamais été calculé sur ce registre. SIRENE ne déclenche rien : il ne touche jamais `liens`. Une journée RNE arrêtée par le quota compte, ses pages validées ont changé `liens`. Il ne le recalcule pas sinon. Un échec du calcul fait échouer le travail sans défaire la synchro (tests). *Cas du premier calcul ajouté le 2026-10-15, décision de Loïc : un registre construit avant T045 reçoit son arbre à la première nuit*
+- [x] **C5** : `mesure_arbre.py` sur `data/registre.duckdb` retrouve la mesure du 2026-10-15 : plus gros arbre ≤ 1 334 sociétés, sommet compris ; VINCI ≥ 281 sociétés de la référence dans l'arbre de VINCI Immobilier Promotion et ≥ 188 dans celui de VINCI Construction ; LVMH ≥ 21 dans celui d'UFIPAR. La durée du calcul sur tout le registre est relevée dans `rapport.md` et tient sous 10 minutes. *Tenu le 2026-10-15 : 281, 188 et 21 ; plus gros arbre 1 334 ; recalcul complet en 31 à 43 s*
 
 ## Dépendances
 

@@ -2,7 +2,7 @@
 
 Usage : `creer_tables(con)` sur une connexion DuckDB vide.
 Entrées : aucune. Sorties : les tables `societes`, `liens`, `dirigeants_personnes`,
-`sieges`, `unites_legales` et `mises_a_jour`, vides.
+`sieges`, `unites_legales`, `mises_a_jour` et `arbre`, vides.
 
 Règles portées par le schéma :
 - un lien ou une société n'est jamais effacé, il est fermé : `debut` et `fin`
@@ -101,7 +101,7 @@ create table mises_a_jour (
     debut_le timestamptz not null default current_timestamp,
     fin_le timestamptz,
     statut varchar not null default 'en_cours' check (statut in ('en_cours', 'succes', 'echec')),
-    ajoutes bigint,                     -- lignes ajoutées (sociétés et liens)
+    ajoutes bigint,                     -- lignes ajoutées (sociétés et liens) ; 'arbre' : sommets changés
     fermes bigint,                      -- lignes fermées (date de fin posée)
     erreur varchar                      -- message court, sans donnée personnelle
 );
@@ -116,7 +116,25 @@ comment on table unites_legales is
 comment on table mises_a_jour is 'Journal des constructions et synchros du registre.';
 """
 
+# Table dérivée, recalculée en entier depuis `liens` par `cartofr.registre.arbre` (T045).
+# `if not exists` : elle s'ajoute aussi à un registre construit avant elle.
+DDL_ARBRE = """
+-- Une ligne par société qui a une mère. Une société absente est son propre sommet.
+-- Que des SIREN et un code de rôle : aucun nom, de société ni de personne.
+create table if not exists arbre (
+    siren varchar primary key,
+    mere varchar not null,              -- la seule mère retenue par la règle
+    role_mere varchar not null,         -- code de rôle RNE du lien retenu
+    sommet varchar not null,            -- en remontant de mère en mère
+    profondeur integer not null,        -- liens jusqu'au sommet : 1 enfant direct, 0 sommet de boucle
+    boucle boolean not null             -- la remontée tombe dans une boucle
+);
+comment on table arbre is
+    'Arbre à une mère, dérivé de liens et remplacé à chaque calcul : jamais une source.';
+"""
+
 
 def creer_tables(con: duckdb.DuckDBPyConnection) -> None:
     """Crée toutes les tables du registre, vides."""
     con.execute(DDL)
+    con.execute(DDL_ARBRE)
