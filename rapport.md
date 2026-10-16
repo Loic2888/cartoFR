@@ -553,3 +553,22 @@ Un arbre ne peut pas en fusionner un autre : le plus gros compte 1 334 société
 - un arbre du registre qu'aucune liste publiée ne réclame reste son propre groupe : c'est une carto acceptable ;
 - le mutualisme (les arbres du Crédit Mutuel mêlent plusieurs fédérations) reçoit un traitement à part, dans la V1 ;
 - les documents de périmètre sont cherchés par Loïc lui-même, avec son forfait Claude Code : aucune recherche par OpenRouter, donc aucun coût IA récurrent à plafonner. T044 C3 (l'IA de l'app cherche l'URL du périmètre) est à revoir en conséquence.
+
+### PRD de la carto du pays et amendement du principe 2
+
+Décisions de Loïc, portées dans `PRD.md` et `CLAUDE.md` :
+- la carto du pays devient le parcours principal (US7, P1). Le consultant lit une carto déjà calculée (US2 réécrite). Les réglages écrits à la main deviennent des corrections facultatives (US8, P2). La proposition par l'IA passe en P3 ;
+- tout le pays est cartographié avant la mise en ligne : 100 % des sociétés actives dans une carto, et un document pour 100 % des groupes cotés à Paris qui publient leur liste (SC-008) ;
+- chaque carto a 7 jours de retard au plus sur la base (SC-009) ;
+- le principe 2 est amendé : une carto existe sans validation humaine ; une correction est versionnée, datée, et son effet est affiché ;
+- SC-001 se mesure désormais sans aucune correction, avec les mêmes cibles qu'avant (90, 81 et 83 %). Au 2026-10-16 : LVMH 83 %, VINCI 83 %, CMAF 2 %. SC-007 est retiré, SC-002 devient un temps de lecture (moins de 10 s).
+
+Restent ouverts : la règle du traitement mutualiste, et le volume des cartos du pays dans la base de l'app (environ 800 000 sociétés ont une mère), à trancher dans `ARCHI.md`.
+
+### Architecture de la carto du pays
+
+- Mesure : une carto tête seule + périmètre prend 75 s, mais le moteur lui-même n'en prend que 2 à 3 (LVMH 2 s, VINCI 3 s). La correspondance d'un document en prend 26 à 29, presque tout en lecture des 13 M de noms de SIRENE ; la recherche des marques relit ces noms même sans aucune marque.
+- Conséquence (`ARCHI.md`, ADR-007) : un seul passage sur les noms pour tous les documents, puis le moteur groupe par groupe. Tout le pays se recalcule chaque nuit, en moins d'une heure estimée pour quelques centaines de groupes.
+- La carto du pays vit dans `pays.duckdb`, sur le worker, à côté du registre (ADR-006). L'interface lit un groupe par la route interne `/groupe`. Postgres ne garde que les corrections, les décisions et les cartos corrigées de chaque organisation.
+- Les documents se déposent par une commande du worker, en lot. Le champ de réglage prévu par T044 est abandonné.
+- À écrire dans une tâche : la règle de départage d'une société réclamée par deux groupes, dont les groupes imbriqués (un groupe dont la tête est inscrite dans le document d'un autre).

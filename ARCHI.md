@@ -1,12 +1,12 @@
 # Architecture technique — cartoFR
 
-Date : 2026-10-06. Part de `PRD.md`. Le PRD dit le quoi, ce document dit le comment.
+Date : 2026-10-06, révisé le 2026-10-16 (carto du pays, PRD US7). Part de `PRD.md`. Le PRD dit le quoi, ce document dit le comment.
 
 > La méthode `saas-create-architecture` cite une référence d'outils (`aiblueprint/ai-coding/tools.md`). Ce fichier n'existe plus (404 le 2026-10-06). Les choix ci-dessous partent de la stack visée dans `CLAUDE.md` et des mesures faites sur le prototype.
 
 ## Vue d'ensemble
 
-**Approche** : garder le moteur Python du prototype, qui marche et qui est mesuré, et l'entourer du minimum pour en faire une app. Le registre (lourd, plein de données personnelles) reste à côté du moteur. La base de l'app ne garde que ce qui s'affiche. Un seul serveur, à 20 €/mois au plus.
+**Approche** : garder le moteur Python du prototype, qui marche et qui est mesuré, et l'entourer du minimum pour en faire une app. Le registre (lourd, plein de données personnelles) reste à côté du moteur. Depuis le 2026-10-16, le worker calcule chaque nuit la carto de tout le pays, dans un fichier à côté du registre ; l'interface la lit par une route interne du worker. La base de l'app ne garde que les comptes, les corrections et les décisions de chaque organisation, et les cartos corrigées. Un seul serveur, à 20 €/mois au plus.
 
 **Stack en bref**
 - Interface : Next.js 16 (App Router) + TypeScript, shadcn/ui (Base UI) + Tailwind
@@ -14,16 +14,19 @@ Date : 2026-10-06. Part de `PRD.md`. Le PRD dit le quoi, ce document dit le comm
 - Registre et moteur : worker Python 3.12, DuckDB sur fichiers locaux
 - Hébergement : un VPS Hetzner CX43 (Allemagne, UE), Docker Compose, Caddy pour le HTTPS
 - Connexion : lien magique par e-mail, e-mails envoyés par Brevo (France)
-- IA (P2) : Claude par OpenRouter (décidé le 2026-10-09, T037), pour proposer les réglages seulement
+- IA (P3 depuis le 2026-10-16) : Claude par OpenRouter (décidé le 2026-10-09, T037), pour proposer des corrections seulement. Aucune IA dans le calcul de la carto du pays, ni pour chercher les documents de périmètre (Loïc les cherche lui-même)
 
 ```
                    ┌──────────────────── VPS Hetzner (UE) ─────────────────────┐
  Consultant ──HTTPS─▶ Caddy ─▶ Next.js ──supabase-js──▶ Supabase (Postgres+Auth)  │
-                   │                                         ▲   table travaux     │
-                   │                                         │ psycopg             │
+                   │              │                          ▲   travaux, corrections│
+                   │              │ HTTP interne             │ psycopg             │
+                   │              ▼                          │                     │
                    │   Worker Python (un seul processus) ────┘                    │
                    │     ├─ synchro : API INPI diff, API Sirene ──▶ registre.duckdb │
-                   │     └─ moteur  : lit registre.duckdb, écrit la carto          │
+                   │     ├─ pays    : registre + documents ──▶ pays.duckdb (nuit)   │
+                   │     ├─ moteur  : carto corrigée d'une organisation          │
+                   │     └─ recherche, groupe : lisent registre et pays          │
                    └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -37,13 +40,13 @@ Date : 2026-10-06. Part de `PRD.md`. Le PRD dit le quoi, ce document dit le comm
   - **Compromis** : pas de composant d'arbre. On écrit un arbre maison selon le motif WAI-ARIA `treeview` (flèches, Entrée, `aria-expanded`).
 - **État** : hooks React seulement. Pas de store global.
 - **Données serveur** : Server Components qui lisent Supabase. L'état d'une carto en cours se rafraîchit toutes les 3 s tant qu'elle tourne, sans temps réel.
-- **État dans l'URL** : groupe et carto ouverts (`/groupes/[id]/cartos/[id]`), dépliage de l'arbre non conservé.
+- **État dans l'URL** : groupe et carto ouverts (`/groupes/[id]/cartos/[id]`), dépliage de l'arbre non conservé. Carto du pays : `/pays/[siren de la tête]` (2026-10-16).
 - **Langue** : tout est écrit en français dans le code, sans bibliothèque i18n (une seule langue). Dates au format `jj/mm/aaaa`.
 
 ## Serveur (backend)
 
 ### Couche API
-- **Modèle** : Server Actions pour les écritures (réglages, lancer une carto), lecture directe par Server Components. Pas d'API publique.
+- **Modèle** : Server Actions pour les écritures (corrections, lancer une carto corrigée), lecture directe par Server Components. La carto du pays se lit par la route interne `GET /groupe` du worker (ADR-006). Pas d'API publique.
 - **Validation** : Zod sur chaque Server Action. Les réglages ont un schéma Zod, et le même schéma est vérifié côté Python avec pydantic.
 - **Sécurité** : toutes les pages demandent une session. Inscription fermée : un compte n'existe que sur invitation.
 
@@ -64,20 +67,31 @@ Deux magasins, chacun pour ce qu'il fait bien. C'est la décision centrale (ADR-
 | `sieges` | SIRENE : siège, adresse, nom, forme juridique, activité, tranche d'effectif (les `etablissements` ne sont pas encore chargés) | 7,8 M |
 | `unites_legales` | SIRENE, personnes morales seulement (cj 1000 refusée) : dénominations, sigle, forme juridique, activité, effectif, état. Aucune colonne de personne. Lue par la recherche des marques (T016) | 13,1 M |
 | `mises_a_jour` | date, source, volumes ajoutés et fermés, statut | — |
+| `documents_perimetre` | 2026-10-16 : un document par groupe (SIREN de la tête, fichier, empreinte, date de dépôt), et ses lignes retrouvées et refusées avec leur raison (T042). Le fichier reste dans `data/perimetre/`, en UE | quelques centaines |
 | `arbre` | T045 : une ligne par société qui a une mère (SIREN de la mère, rôle, sommet, profondeur, boucle). Table dérivée de `liens`, remplacée à chaque calcul, jamais une source. Aucun nom. Recalculée par la synchro quand le RNE a changé `liens` ; pour elle, `mises_a_jour.ajoutes` compte les sommets changés | 0,8 M |
 
 Un lien ou une société qui disparaît reçoit une date `fin`. Il n'y a jamais de `DELETE` (principe 4). Construit par `python -m cartofr.registre.construire` (T007) : 1,4 Go, 27 s, 3 Go de mémoire au plus, le 2026-10-06 ; 2,4 Go, 1 min 12 s, 3,4 Go de mémoire au plus avec `unites_legales` (T016, 2026-10-07).
 
-**2. La base de l'app — Postgres (Supabase), cloisonnée par RLS**
+**2. La carto du pays — `pays.duckdb` sur le worker, recalculée chaque nuit (ADR-006, ADR-007)**
+| Table | Contenu | Lignes (estimées) |
+|---|---|---|
+| `pays_groupes` | un groupe par tête : SIREN de la tête (ou de la plus grande société si la tête est un entrepreneur individuel, garde-fou 6), nom, taille, document utilisé, mutualiste ou non, date des données | environ 335 000 groupes de 2 sociétés ou plus |
+| `pays_societes` | une ligne par société d'un groupe de 2 sociétés ou plus : groupe, maison mère, niveau, preuve, confiance, raison d'entrée, ciblable et raison, opposition, non-diffusion | environ 0,8 à 1 M |
+
+Une société absente de `pays_societes` est son propre groupe. Le fichier est **dérivé** : il se reconstruit en entier depuis le registre et les documents, il n'est jamais une source et n'a pas d'historique (principe 4, comme `arbre`). Il est écrit à côté puis renommé : un calcul raté laisse le fichier de la veille (FR-003). Aucune colonne de personne ; le SIREN d'un entrepreneur individuel n'y est jamais une tête.
+
+**3. La base de l'app — Postgres (Supabase), cloisonnée par RLS**
 | Table | Contenu |
 |---|---|
 | `organisations`, `membres` | compte Youno, consultants, rôles |
 | `groupes` | tête (SIREN, nom), `organisation_id` |
-| `reglages` | versions des réglages (JSON validé), auteur, date, `valide_le` |
+| `reglages` | versions des corrections d'un groupe (JSON validé), auteur, date. *Depuis le 2026-10-16 (principe 2 amendé), `valide_le` n'est plus exigé : une version enregistrée s'applique au calcul suivant* |
 | `travaux` | file : type (`carto`, `synchro`), statut, dates, erreur |
-| `cartos` | groupe, version de réglages, date des données, durée |
+| `cartos` | carto **corrigée** d'un groupe pour une organisation : groupe, version de corrections, date des données, durée, effet (sociétés ajoutées et retirées par rapport à la carto du pays) |
 | `carto_societes`, `carto_liens` | résultat : SIREN, nom, niveau, maison mère, preuve, confiance, ciblable et raison, opposition, non-diffusion |
 | `etat_registre` | copie de la dernière ligne de `mises_a_jour`, pour l'écran admin |
+
+La carto du pays n'est pas dans Postgres : elle est commune à toutes les organisations (données publiques dérivées du registre). Tout ce qu'une organisation écrit (corrections, décisions, cartos corrigées) y est.
 
 Chaque table métier porte `organisation_id`, avec une politique RLS `organisation_id in (select organisation_id from membres where user_id = auth.uid())`. Aucun nom de personne physique n'entre dans cette base.
 
@@ -92,6 +106,17 @@ Chaque table métier porte `organisation_id`, avec une politique RLS `organisati
   - SIRENE : API Sirene de l'INSEE (changements par date de traitement), chaque jour. Fichiers stock mensuels de data.gouv.fr pour un rechargement complet.
   - Chaque passage écrit une ligne dans `mises_a_jour`. Un échec laisse la base dans son état précédent (écriture dans une transaction DuckDB).
 - **Recherche de la tête (US2)** : le worker expose une seule route HTTP interne, `GET /recherche?q=` (nom ou SIREN, 20 résultats au plus : SIREN, nom, ville, statut). Elle lit `registre.duckdb` en lecture seule, n'est joignable que depuis le conteneur `web` (réseau Docker, aucun port publié) et ne rend jamais de personne. Ajoutée le 2026-10-06 au découpage des tâches : sans elle, l'interface ne peut pas chercher dans le registre. Le même service sert l'export du skill (T029) ; pour lire les cartos dans Postgres, il se connecte avec le rôle `cartofr_recherche` (T041, migration 0006) : lecture seule, `groupes`, `reglages`, `cartos` et `carto_societes` seulement, et des politiques RLS qui ne lui montrent que l'organisation déclarée par `set_config('cartofr.organisation', …)` pour la transaction. Mot de passe `RECHERCHE_DB_PASSWORD`, posé par `infra/appliquer-migrations.sh`.
+- **Carto du pays (US7, 2026-10-16)** : un travail `pays`, inséré par la boucle après chaque synchro réussie, et au plus tard 7 jours après le précédent (SC-009). Étapes, dans un seul processus :
+  1. l'arbre à une mère (T045), recalculé si le RNE a changé ;
+  2. la correspondance de **tous** les documents en un seul passage sur les noms de SIRENE : la lecture des 13 M de noms coûte 25 s environ, une fois pour tous (mesuré le 2026-10-16 : 26 à 29 s par document s'il est lu seul) ;
+  3. le moteur, tête seule + périmètre, pour chaque groupe à document : 2 à 3 s par groupe sans la recherche des marques (LVMH 2 s, VINCI 3 s, mesuré le 2026-10-16). Pour quelques centaines de groupes, environ 40 min ;
+  4. le traitement mutualiste (règle à mesurer sur CMAF) ;
+  5. les arbres qu'aucun groupe ne réclame deviennent leurs propres groupes, sans passer par le moteur : la preuve est le rôle de la mère (`role_mere`), confiance A ;
+  6. le départage : une société réclamée par deux groupes n'en garde qu'un (FR-012). Règle à écrire et tester dans une tâche : l'inscription directe dans un document passe avant la descente par le registre, et un groupe dont la tête est inscrite dans le document d'un autre (groupes imbriqués) est rangé sous celui-ci ;
+  7. écriture de `pays.duckdb` à côté, puis renommage, et une ligne `pays` dans `mises_a_jour`.
+  Estimation : moins d'une heure par nuit, mémoire au plus d'environ 3 Go. À mesurer sur le pays entier dès la première tâche.
+- **Lecture de la carto du pays** : route interne `GET /groupe?siren=` du même service que `/recherche` : le groupe de cette société, sa tête et son arbre, lus dans `pays.duckdb`. Quelques millisecondes ; SC-002 demande moins de 10 s de bout en bout.
+- **Dépôt des documents (FR-013)** : une commande du worker, `python -m cartofr.perimetre.deposer <SIREN de la tête> <fichier>` ou un dossier entier, lancée par Loïc sur le serveur. Elle copie le fichier dans `data/perimetre/`, lit ses lignes, les retrouve dans le registre et affiche les lignes retrouvées et refusées avec leur raison ; l'écran admin les montre aussi. Choisi le 2026-10-16 : Loïc dépose seul quelques centaines de documents, un dépôt en lot vaut mieux qu'un formulaire. Le champ de réglage prévu par T044 est abandonné.
 - **Planification** (T013, 2026-10-07) : la boucle du worker insère elle-même un travail `synchro` chaque nuit, une seule fois par jour, à `CARTOFR_SYNCHRO_HEURE` (heure de Paris) ; pas de cron (le conteneur n'en a pas). Sans cette variable, aucune synchro ne tourne : elle est posée dans le compose. Chaque passage lit au plus `CARTOFR_SYNCHRO_JOURS_MAX` jours par source (7), dans l'ordre, jusqu'à J-`CARTOFR_SYNCHRO_DECALAGE` (2 en production : un jour appliqué n'est jamais relu, une publication tardive serait perdue). Le dernier jour appliqué par source est gardé dans `data/synchro/jours.json` (à remplacer par une colonne `jour` de `mises_a_jour`).
 
 ### Familles exclues : masquées par empreinte (garde-fou 6)
@@ -103,7 +128,7 @@ Décidé le 2026-10-07. Le réglage `familles_exclues` contient des noms de fami
 - **Écarté** : amender le garde-fou ; garder ce réglage hors de l'app (plus modifiable depuis l'interface).
 - **Limite** : `config/*.json` et le seed, publics dans git, contiennent encore le nom, comme avant.
 
-### IA (P2, US3)
+### IA (P3, US3)
 - **Passerelle** : OpenRouter (`POST /api/v1/chat/completions`, format OpenAI), appelé en `httpx` depuis le worker. Clé `OPENROUTER_API_KEY`. Modèle choisi par `CARTOFR_MODELE_IA`, obligatoire : **pas de modèle par défaut** (T038, 2026-10-09). Le choix se fera sur l'essai comparatif (T038 C4) ; Loïc écarte Sonnet et hésite entre Haiku et des modèles chinois (DeepSeek…), dont l'hébergement serait à examiner (R5). *Décidé le 2026-10-09 (T037, décision de Loïc)* : remplace l'appel direct à l'API Anthropic choisi en T025.
 - **Usage** : lire les pages du site du groupe qui listent ses marques et ses maisons (outils serveur `openrouter:web_search` et `openrouter:web_fetch`, exécutés par OpenRouter), proposer les marques, les maisons et les exclusions, chacune avec sa source. Pas la liste des filiales : le moteur la trouve au registre ; le rapport annuel n'est ouvert que si le site ne donne pas ces listes (T038). Pas de plafond de taille de page : avec un modèle peu cher, une page entière coûte quelques centimes.
 - **Mesure** : chaque proposition journalise ses requêtes, jetons, recherches web et coût (des nombres seulement).
@@ -111,7 +136,7 @@ Décidé le 2026-10-07. Le réglage `familles_exclues` contient des noms de fami
 - **Confidentialité** : chaque requête pose `provider: {zdr: true, data_collection: "deny"}` : seuls les fournisseurs sans conservation ni collecte des données servent la requête.
 - **Compromis** : un sous-traitant de plus (OpenRouter, États-Unis) entre le worker et le fournisseur du modèle. Gagné : un seul compte et une seule facture pour changer de modèle. Perdu : le repli automatique d'Anthropic en cas de refus (`fallbacks`), absent du format OpenAI ; un refus fait échouer le travail avec un message clair. Le routage UE d'OpenRouter est réservé aux comptes entreprise : écarté pour l'instant.
 - **Ce qui part** : le nom du groupe et des noms de sociétés publics. Jamais un nom de personne. La proposition est enregistrée comme `reglages` non validés (principe 1).
-- US3 n'oriente aucun choix de cette architecture : elle s'ajoute comme un type de travail en plus.
+- US3 n'oriente aucun choix de cette architecture : elle s'ajoute comme un type de travail en plus. Depuis le 2026-10-16, elle est en P3 : une proposition devient une correction, sans effet tant qu'elle n'est pas enregistrée.
 
 ## Infrastructure
 
@@ -119,7 +144,7 @@ Décidé le 2026-10-07. Le réglage `familles_exclues` contient des noms de fami
   - **Pourquoi** : budget plafonné à 20 €/mois, tout en UE, et un seul endroit à surveiller.
   - **Compromis** : pas de haute disponibilité. Si le serveur tombe, l'app est arrêtée jusqu'à la restauration. C'est acceptable pour un outil interne.
 - **Mémoire estimée** : Supabase réduit environ 2 Go, Next.js environ 0,3 Go, moteur 2,2 Go au plus. Environ 5 Go en pointe sur 16. La construction complète des tables depuis un stock (`build_links.py`) tourne avec 4 processus au lieu de 14 : environ 1 h, une fois par an au plus.
-- **Disque** : registre environ 5 Go, stock RNE zippé 15 Go (gardé tant qu'un rechargement est probable), Postgres moins de 1 Go. Environ 25 Go sur 160.
+- **Disque** : registre environ 5 Go, stock RNE zippé 15 Go (gardé tant qu'un rechargement est probable), Postgres moins de 1 Go, `pays.duckdb` quelques centaines de Mo (deux exemplaires pendant l'écriture), documents de périmètre moins de 2 Go. Environ 28 Go sur 160.
 - **Région** : une seule, Allemagne (UE).
 - **Tâches de fond** : le worker ci-dessus. Pas de Redis, pas de Celery.
 - **Sauvegardes** : sauvegardes Hetzner du serveur (7 jours glissants, en UE), plus un `pg_dump` quotidien de la base de l'app dans le serveur. Le registre se reconstruit depuis les sources : il n'a pas besoin d'être sauvegardé.
@@ -138,20 +163,21 @@ Décidé le 2026-10-07. Le réglage `familles_exclues` contient des noms de fami
 |---|---|---|
 | G1-G4 Branches, PR, commits, squash | ✅ | Le hook `git-guardrail.py` est actif. La CI GitHub Actions est la condition de merge |
 | G5 Aucun secret dans le code | ⚠️ | Les identifiants INPI, INSEE, Brevo et Supabase sont dans `.env` sur le serveur, et seuls les noms vont dans `.env.example`. **Contrainte** : le `docker-compose.yml` lit `env_file`, jamais une valeur en dur |
-| G6 Licence INPI, dépôt public | ✅ | `dirigeants_personnes` ne quitte jamais `registre.duckdb`. La base de l'app n'a aucune colonne de personne. `data/` est hors git |
+| G6 Licence INPI, dépôt public | ⚠️ | `dirigeants_personnes` ne quitte jamais `registre.duckdb`. La base de l'app et `pays.duckdb` n'ont aucune colonne de personne. `data/` est hors git. **Contrainte (2026-10-16)** : un sommet d'arbre peut être un entrepreneur individuel ; il n'est jamais tête d'un groupe affiché, ni par son nom ni par son SIREN (`pays_groupes`, étape 5 du travail `pays`), avec un test |
 | R1 Français | ✅ | Interface entièrement en français, sans i18n. Les messages d'erreur Supabase sont traduits dans une table de correspondance |
 | R2 Responsive | ⚠️ | **Contrainte** : l'arbre devient une liste indentée et dépliable sous 640 px, et l'écran de réglages est en une colonne. Vérification à 320 px dans les tâches de US2 |
 | R3 Accessibilité | ⚠️ | **Contrainte** : arbre maison au motif WAI-ARIA `treeview`, confiance A/B/C écrite en toutes lettres (pas seulement en couleur), shadcn/ui pour le reste |
 | R4 RGPD | ⚠️ | Dirigeants stockés pour le calcul seulement, sur le worker. **Contraintes** : registre des traitements à rédiger (tâche) ; aucune donnée personnelle dans les journaux ; comptes consultants limités à l'e-mail ; suppression d'un compte possible |
 | R5 Hébergement UE | ⚠️ | VPS, Postgres, journaux et sauvegardes chez Hetzner en Allemagne ✅. Brevo en France ✅. GitHub Actions ne voit que du code ✅. **Condition** : l'IA (P2, par OpenRouter puis le fournisseur du modèle, États-Unis) ne reçoit que des données de sociétés publiques, jamais un nom de personne, et seulement par des fournisseurs sans conservation (`zdr`) ; T037 |
 | R6 Aucune donnée client réelle en dev | ⚠️ | **Contrainte** : les tests utilisent des extraits du registre public. Les références Basile servent seulement à la non-régression locale (`compare.py`), hors git et hors de l'app |
-| R7 Isolation multi-tenant | ✅ | `organisation_id` + RLS sur chaque table métier. Le worker écrit en rôle service, mais copie l'`organisation_id` du travail. Le service `recherche` lit les cartos avec `cartofr_recherche` (T041) : lecture seule, quatre tables, RLS limité à l'organisation déclarée pour la requête. Des tests vérifient qu'un membre de A ne voit rien de B, et que la recherche ne voit que l'organisation déclarée |
+| R7 Isolation multi-tenant | ⚠️ | **Contrainte (2026-10-16)** : la carto du pays est commune, dans `pays.duckdb`, lue par la route `/groupe` pour tout membre connecté ; elle ne contient que des données publiques dérivées du registre. Les corrections, décisions et cartos corrigées restent dans Postgres sous RLS, avec un test « A ne voit pas les corrections de B ». `organisation_id` + RLS sur chaque table métier. Le worker écrit en rôle service, mais copie l'`organisation_id` du travail. Le service `recherche` lit les cartos avec `cartofr_recherche` (T041) : lecture seule, quatre tables, RLS limité à l'organisation déclarée pour la requête. Des tests vérifient qu'un membre de A ne voit rien de B, et que la recherche ne voit que l'organisation déclarée |
 | R8 Tests sur la logique métier | ✅ | Toute la logique (moteur, synchro, fermeture des liens) est dans le paquet Python, testée par `pytest`. Next.js ne décide rien |
 | P1 L'IA ne décide pas | ✅ | Les propositions de l'IA sont des `reglages` sans `valide_le` |
-| P2 Réglages validés | ✅ | Le worker refuse un travail `carto` dont la version de réglages n'est pas validée |
-| P3 Aucun appel extérieur pendant une carto | ✅ | Le moteur ne lit que `registre.duckdb`. Les API ne servent qu'au travail `synchro` |
+| P2 Carto sans validation, correction tracée | ✅ | Amendé le 2026-10-16. La carto du pays se calcule sans aucune entrée humaine hors des documents déposés. Une correction est une version de `reglages` avec auteur et date, et la carto corrigée garde son effet (sociétés ajoutées et retirées). Le refus d'une version non validée est retiré du worker (tâche) |
+| P3 Aucun appel extérieur pendant une carto | ✅ | Le moteur et le travail `pays` ne lisent que `registre.duckdb` et les documents déjà déposés. Les API ne servent qu'au travail `synchro` |
 | P4 Fermer, jamais effacer | ✅ | Colonnes `debut` et `fin`, aucun `DELETE` dans la synchro, avec un test dédié |
-| P5 Pas de régression silencieuse | ✅ | `worker/scripts/non_regression.py` (autrefois `compare.py`) sur LVMH, VINCI et CMAF avant toute PR qui touche le moteur |
+| P5 Pas de régression silencieuse | ✅ | `worker/scripts/non_regression.py` (autrefois `compare.py`) sur LVMH, VINCI et CMAF avant toute PR qui touche le moteur. Depuis le 2026-10-16, la mesure de référence est la carto sans correction (`--perimetre --sans-reglages`, PRD SC-001), lue dans `pays.duckdb` dès qu'il existe |
+| P6 Le registre ne quitte pas le worker | ✅ | `pays.duckdb` reste sur le worker, à côté du registre ; l'interface ne lit qu'un groupe à la fois par la route `/groupe`. Postgres ne reçoit que les cartos corrigées |
 
 Aucun ⛔.
 
@@ -199,6 +225,20 @@ Tranchés ici, et à ne pas rediscuter à chaque tâche. Ils s'ajoutent aux cinq
 - **Décision** : migrations SQL Supabase, types générés pour TypeScript, `psycopg` en Python.
 - **Alternatives** : Prisma ou Drizzle, qui ne savent pas exprimer les politiques RLS et ne servent pas le Python.
 - **Raison** : RLS s'écrit en SQL de toute façon, et le schéma est petit (une dizaine de tables).
+
+### ADR-006 : la carto du pays dans un fichier DuckDB sur le worker, lue par une route interne
+- **Contexte** (2026-10-16, PRD US7) : environ 800 000 sociétés ont une mère au registre ; la carto du pays les range dans environ 335 000 groupes, recalculés chaque nuit. Le consultant lit un groupe à la fois.
+- **Décision** : `pays.duckdb` sur le worker, écrit à côté puis renommé. L'interface lit un groupe par `GET /groupe?siren=`, comme `/recherche`. Postgres ne garde que les cartos corrigées d'une organisation.
+- **Alternatives** : copier toute la carto du pays dans Postgres chaque nuit (environ 1 M de lignes remplacées, une base de l'app 5 à 10 fois plus grosse, une RLS sur des données publiques communes, pour un gain nul en lecture) ; calculer chaque groupe à la demande (1 à 3 min d'attente, contre SC-002).
+- **Raison** : même schéma que le registre (ADR-001) ; le remplacement d'un fichier est atomique ; Postgres reste petit.
+- **Conséquences** : la recherche et la lecture d'un groupe passent par le worker. Si le worker est arrêté, l'app ne montre plus de carto. Acceptable pour un outil interne sans haute disponibilité (ADR-003).
+
+### ADR-007 : tout le pays chaque nuit, correspondance des documents en un seul passage
+- **Contexte** : SC-009 (7 jours de retard au plus). Une carto tête seule + périmètre prend 75 s. La correspondance en prend 26 à 29 et le moteur lui-même 2 à 3 ; le reste part surtout dans la recherche des marques, qui relit tous les noms de SIRENE même quand il n'y a aucune marque (mesuré le 2026-10-16).
+- **Décision** : un seul passage sur les noms pour tous les documents, aucune recherche de marques sans marque, puis le moteur groupe par groupe. Tout le pays est recalculé à chaque passage du travail `pays`.
+- **Alternatives** : un groupe par nuit en tournant sur la semaine (plus compliqué, données de 7 jours) ; recalculer seulement les groupes touchés par la synchro (juste en théorie, mais le départage entre groupes rend le suivi fragile).
+- **Raison** : environ 40 min pour quelques centaines de groupes, bien dans une nuit.
+- **Conséquences** : la recherche de marques sans aucune marque doit sortir tout de suite (aujourd'hui elle lit tous les noms quand même) ; la correspondance doit accepter plusieurs documents. Deux tâches.
 
 ## Arborescence
 
@@ -248,4 +288,11 @@ Les scripts de la racine (`engine.py`, `build_links.py`…) restent en place tan
 ### Phase 3 — P2 et P3
 1. US3 : proposition des réglages par l'IA.
 2. US4 : liste des cas douteux et décisions mémorisées.
+
+### Phase 4 — Carto du pays (P1, ouverte le 2026-10-16)
+1. Dépôt des documents en lot, correspondance de plusieurs documents en un passage, recherche de marques vide sans coût.
+2. Travail `pays` : moteur par groupe à document, arbres non réclamés, départage, `pays.duckdb`, mesure sur le pays entier.
+3. Traitement mutualiste, mesuré sur CMAF (SC-001 : 83 %).
+4. Route `/groupe` et écran de lecture (US2 réécrite) ; corrections sans validation (US8) ; non-régression lue dans `pays.duckdb`.
+5. Couverture : les documents des groupes cotés à Paris (SC-008), par Loïc, en parallèle.
 3. US5 : export des 6 tables du skill. (US6, domaine et LinkedIn, retirée le 2026-10-13 : pas d'enrichissement.)

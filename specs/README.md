@@ -105,7 +105,7 @@ Ouverte le 2026-10-14 (mesures dans `rapport.md`) : sans réglages faits à la m
 
 ## Phase 11 : Arbre du registre — vers la carto du pays (P1)
 
-Ouverte le 2026-10-15 (mesure dans `rapport.md`) : les blocs du registre mêlent les groupes, les arbres à une mère les séparent proprement. La carto du pays elle-même, avec le recollage des arbres par les listes publiées, attend une mise à jour de `PRD.md`, d'`ARCHI.md` et du principe 2.
+Ouverte le 2026-10-15 (mesure dans `rapport.md`) : les blocs du registre mêlent les groupes, les arbres à une mère les séparent proprement. La carto du pays elle-même, avec le recollage des arbres par les listes publiées, attend une mise à jour de `PRD.md`, d'`ARCHI.md` et du principe 2. *`PRD.md` (US7, US8, SC-001 réécrit, SC-008, SC-009) et le principe 2 mis à jour le 2026-10-16 ; `ARCHI.md` et les tâches restent à écrire.*
 
 - [x] `T045` — Construire l'arbre à une mère du registre
 
