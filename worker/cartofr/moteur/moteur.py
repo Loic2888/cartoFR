@@ -23,6 +23,14 @@ règle qui l'a placé là et ses indices pour et contre (`ranger_cas`). Les déc
 retiennent, « retenir » fait entrer une société que le moteur voit encore liée au groupe
 (`appliquer_decision`). Les règles ne changent pas : la carto dit laquelle aurait joué.
 
+Périmètre publié (T043) : la liste des sociétés consolidées publiée par le groupe, déjà lue
+(`cartofr.perimetre`), est retrouvée dans le registre par la règle de T042 sur la même connexion,
+sans réseau. Une société inscrite en intégration globale entre dans le groupe avec sa preuve
+(document, ligne, méthode, taux) ; ses filiales entrent ensuite par les règles du registre. Une
+société inscrite sans contrôle (mise en équivalence, autre méthode) n'entre pas, même si le
+registre l'y ferait entrer : le document l'emporte (décision de Loïc, 2026-10-16). Elle est rangée
+en participation sans contrôle, et le consultant peut la retenir.
+
 Règle de licence INPI : les dirigeants personnes physiques servent seulement de preuve pendant le
 calcul. Aucun nom de personne n'est rendu : la `Carto` n'a aucun champ qui puisse en porter.
 """
@@ -33,7 +41,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import duckdb
 
@@ -52,6 +60,9 @@ from cartofr.moteur.modele import (
     Tour,
     TypeCas,
 )
+
+if TYPE_CHECKING:  # import réel dans `_inscrites` : cartofr.perimetre importe ce module
+    from cartofr.perimetre import LignePerimetre, PerimetrePublie
 
 # Codes de rôle RNE, reconstitués en croisant 195 fiches avec les rôles lus par Basile (role_codes.py).
 STRONG = {
@@ -86,8 +97,17 @@ GARDE_ATTEINTE = (
 # Raison d'entrée d'une société qu'aucune règle ne retient, mais que le consultant a retenue (T027).
 RETENUE_PAR_DECISION = "retenue par décision du consultant"
 
-# Un indice : (type, détail). Types : marque_sure, marque_ambigue, registre, adresse, organigramme.
+# Méthode de consolidation d'une ligne du périmètre publié, en clair pour les preuves.
+METHODES = {"IG": "intégration globale", "MEE": "mise en équivalence", "autre": "autre méthode"}
+
+# Un indice : (type, détail). Types : marque_sure, marque_ambigue, registre, adresse, organigramme,
+# perimetre (inscrite en intégration globale), perimetre_sans_controle (mise en équivalence, autre).
 Indice = tuple[str, Any]
+
+
+def methode(ligne: "LignePerimetre") -> str:
+    """La méthode de consolidation d'une ligne du périmètre, en clair."""
+    return METHODES.get(ligne.methode, ligne.methode)
 
 
 def civile(cj: Any) -> bool:
@@ -120,6 +140,8 @@ class _Moteur:
         con: duckdb.DuckDBPyConnection,
         cle_empreinte: str | None = None,
         decisions: Mapping[str, Decision] | None = None,
+        perimetre: Mapping[str, "LignePerimetre"] | None = None,
+        source_perimetre: str = "",
     ) -> None:
         self.cfg = cfg
         self.db = con
@@ -142,6 +164,11 @@ class _Moteur:
         # le groupe. Une décision s'applique dans `run`, la règle qui aurait joué reste écrite.
         self.decisions: dict[str, Decision] = {s: d for s, d in (decisions or {}).items() if s != cfg["tete"]}
         self.ecartees: dict[str, str] = {}  # siren -> règle qui l'aurait fait entrer
+        # Sociétés du périmètre publié retrouvées au registre (T043), séparées par contrôle.
+        self.source_perimetre = source_perimetre
+        perimetre = perimetre or {}
+        self.perimetre_ig = {s: li for s, li in perimetre.items() if li.methode == "IG"}
+        self.perimetre_sans_controle = {s: li for s, li in perimetre.items() if li.methode != "IG"}
         self.local_done: set[str] = set()
         self.heads: dict[str, str] = {}
         self.tours: list[Tour] = []
@@ -315,9 +342,13 @@ class _Moteur:
         ):
             return None  # associations, fondations, comités d'entreprise : jamais des filiales
         if str(info["cj"]).startswith("3"):
-            if any(k == "marque_sure" for k, _ in self.ev[s]):
+            if any(k in ("marque_sure", "perimetre") for k, _ in self.ev[s]):
                 self.foreign[s] = info["nom"]
             return None
+        if s in self.perimetre_sans_controle:
+            return None  # non contrôlée selon le document du groupe, quoi que dise le registre
+        if s in self.perimetre_ig:
+            return self.raison_perimetre(s)
         ev = self.ev[s]
         v = self.rne.get(s)
         parents = v.parents if v else []
@@ -381,6 +412,14 @@ class _Moteur:
             return "adresse du groupe et second indice"
         return None
 
+    def preuve_perimetre(self, ligne: "LignePerimetre") -> str:
+        """« <document>, ligne « … » (intégration globale, 66 %) » : la preuve d'une inscription."""
+        taux = f"{ligne.taux:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+        return f"{self.source_perimetre}, ligne « {ligne.texte} » ({methode(ligne)}, {taux}\u00a0%)"
+
+    def raison_perimetre(self, s: str) -> str:
+        return f"inscrite au périmètre publié du groupe : {self.preuve_perimetre(self.perimetre_ig[s])}"
+
     def appliquer_decision(self, s: str, why: str | None) -> str | None:
         """La décision du consultant sur `s`, appliquée à ce que les règles ont décidé (T027).
 
@@ -410,6 +449,10 @@ class _Moteur:
         self.retained[tete] = "tête du groupe"
         for c in candidates:
             self.add(c.siren, "marque_" + c.type_marque, c.marque)
+        for s in sorted(self.perimetre_ig):
+            self.add(s, "perimetre", None)
+        for s in sorted(self.perimetre_sans_controle):
+            self.add(s, "perimetre_sans_controle", None)
         self.add_organigramme()
         for rnd in range(1, limite + 1):
             before = len(self.retained)
@@ -448,10 +491,13 @@ class _Moteur:
         if links:
             _, _, p, c = min(links)
             return p, f"Mandat au registre : {ROLE_LABEL.get(c, c)}", "A"
-        n_ev = len({k.split("_")[0] for k, _ in self.ev[s]}) + (
+        # Une inscription sans contrôle ne compte pas : le document dit que la société n'est pas contrôlée.
+        n_ev = len({k.split("_")[0] for k, _ in self.ev[s] if k != "perimetre_sans_controle"}) + (
             1 if self.retained[s].endswith("indice") else 0
         )
         conf: Confiance = "B" if n_ev >= 2 or "second indice" in self.retained[s] else "C"
+        if s in self.perimetre_ig:
+            conf = "B"  # le document du groupe l'inscrit, mais aucun mandat au registre ne la rattache
         for k, brand in self.ev[s]:
             head = self.heads.get(brand) if k.startswith("marque") else None
             if head and head != s:
@@ -550,13 +596,18 @@ class _Moteur:
                 mandats=tuple(
                     Mandat(p, ROLE_LABEL[c])
                     for p, c in self._parents(s)
-                    if p in self.retained and c in MEDIUM
+                    # Non contrôlée selon le document : ses mandats forts aussi, ils n'ont pas suffi.
+                    if p in self.retained
+                    and (c in MEDIUM or (c in STRONG and s in self.perimetre_sans_controle))
                 ),
             )
             for s in self.ev
             if s not in self.retained
             and self.info.get(s)
-            and any(p in self.retained and c in MEDIUM for p, c in self._parents(s))
+            and (
+                any(p in self.retained and c in MEDIUM for p, c in self._parents(s))
+                or s in self.perimetre_sans_controle
+            )
         ]
         return Carto(
             groupe=self.cfg["groupe"],
@@ -608,6 +659,11 @@ class _Moteur:
                 pour.append(f"Siège à une adresse du groupe : {d[1]} sociétés du groupe sur {d[2]}")
             elif kind == "organigramme":
                 pour.append("Tête d'une maison de l'organigramme public du groupe")
+            elif kind == "perimetre":
+                pour.append("Inscrite au périmètre publié du groupe, en intégration globale")
+            elif kind == "perimetre_sans_controle":
+                sans = methode(self.perimetre_sans_controle[s])
+                pour.append(f"Inscrite au périmètre publié du groupe, sans contrôle ({sans})")
         fiche = self.rne.get(s)
         # Dirigeants personnes en commun avec une AUTRE société du groupe : un nombre, jamais un nom.
         communs = sum(1 for k in (fiche.persons if fiche else {}) if pidx.get(k, set()) - {s})
@@ -627,6 +683,9 @@ class _Moteur:
             )
         if "confiance_c" in types:
             contre.append("Un seul indice : rattachement déduit, pas lu au registre")
+        if s in self.perimetre_sans_controle:
+            sans = methode(self.perimetre_sans_controle[s])
+            contre.append(f"Le périmètre publié du groupe la dit non contrôlée : {sans}")
         for p, c in self._exterieurs(s):
             tenu = f"tenu par {self._designation(p)} hors du groupe"
             contre.append(f"Mandat au registre : {ROLE_LABEL[c]}, {tenu}")
@@ -645,6 +704,9 @@ class _Moteur:
         if s in self.ecartees:
             return f"Écartée par le consultant ; règle du moteur qui l'aurait retenue : {self.ecartees[s]}"
         if "participation" in types:
+            if s in self.perimetre_sans_controle:
+                preuve = self.preuve_perimetre(self.perimetre_sans_controle[s])
+                return f"Non retenue : non contrôlée selon le périmètre publié ({preuve})"
             if any(c in STRONG for _, c in self._exterieurs(s)):
                 return "Non retenue : contrôle partagé avec une société hors du groupe (mandat fort)"
             return "Non retenue : participation sans contrôle (mandat moyen sans indice indépendant)"
@@ -751,6 +813,23 @@ def decisions_en_vigueur(lignes: Iterable[tuple[str, str, datetime, int]]) -> di
     return {s: d for s, (_, _, d) in retenues.items()}
 
 
+def _inscrites(
+    con: duckdb.DuckDBPyConnection, tete: str, perimetre: "PerimetrePublie"
+) -> dict[str, "LignePerimetre"]:
+    """SIREN -> ligne du périmètre, pour les lignes que la règle de T042 retient. Une société inscrite
+    deux fois garde sa ligne en intégration globale s'il y en a une, sinon la première."""
+    from cartofr.perimetre import correspondre  # ici : cartofr.perimetre importe ce module
+
+    sortie: dict[str, LignePerimetre] = {}
+    for c in correspondre(con, tete, list(perimetre.lignes)):
+        if not c.retenue or not c.siren or c.siren == tete:
+            continue
+        deja = sortie.get(c.siren)
+        if deja is None or (deja.methode != "IG" and c.ligne.methode == "IG"):
+            sortie[c.siren] = c.ligne
+    return sortie
+
+
 def ouvrir_registre(registre: Path) -> duckdb.DuckDBPyConnection:
     """Ouvre le registre en lecture seule : le moteur n'écrit jamais dedans."""
     if not registre.is_file():
@@ -766,6 +845,7 @@ def cartographier(
     candidates: Callable[[duckdb.DuckDBPyConnection, dict[str, Any]], list[Candidate]] = chercher_candidates,
     cle_empreinte: str | None = None,
     decisions: Mapping[str, Decision] | None = None,
+    perimetre: "PerimetrePublie | None" = None,
 ) -> Carto:
     """Calcule la carto du groupe décrit par `reglages` sur le registre local, sans appel réseau.
 
@@ -774,11 +854,16 @@ def cartographier(
     CARTOFR_CLE_EMPREINTE (CleManquante si elle manque alors que la liste n'est pas vide).
     `decisions` : les décisions du consultant en vigueur pour ce groupe, SIREN -> « retenir » ou
     « écarter » (`decisions_en_vigueur`). Sans elles, les règles décident seules.
+    `perimetre` : le document de périmètre du groupe, déjà lu (T043). Ses lignes sont retrouvées
+    dans le registre par la règle de T042 ; les lignes refusées (homonymes, introuvables) n'ont
+    aucun effet. Sans lui, rien ne change.
     """
     con = ouvrir_registre(registre)
     try:
         trouvees = candidates(con, reglages)
-        moteur = _Moteur(reglages, con, cle_empreinte, decisions).run(trouvees)
+        inscrites = _inscrites(con, reglages["tete"], perimetre) if perimetre else {}
+        source = perimetre.source if perimetre else ""
+        moteur = _Moteur(reglages, con, cle_empreinte, decisions, inscrites, source).run(trouvees)
         carto = moteur.build(date_des_donnees(con))
         return carto if moteur.point_fixe else replace(carto, avertissements=(GARDE_ATTEINTE,))
     finally:

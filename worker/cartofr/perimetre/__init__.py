@@ -7,12 +7,13 @@ lu ni rendu (garde-fou 6).
 """
 
 from cartofr.perimetre.correspondance import Correspondance, cle, correspondre, descendants
-from cartofr.perimetre.extraction import Candidat, LignePerimetre, extraire, texte_document
+from cartofr.perimetre.extraction import Candidat, LignePerimetre, PerimetrePublie, extraire, texte_document
 
 __all__ = [
     "Candidat",
     "Correspondance",
     "LignePerimetre",
+    "PerimetrePublie",
     "cle",
     "correspondre",
     "descendants",

@@ -10,9 +10,9 @@ T042 rend les SIREN d'un périmètre publié. Mesure du 2026-10-14 : la liste se
 ## Périmètre
 Un nouvel indice du moteur, « périmètre publié » : une société retenue par T042 entre dans le groupe avec sa preuve (document, ligne, taux d'intérêt). Le moteur descend ensuite les liens de société depuis elle, avec les règles existantes. Les règles par marques restent et s'ajoutent.
 
-À trancher avec Loïc pendant le plan d'`apex` :
-- La confiance d'une entrée par le périmètre. Proposition : A si le registre la relie aussi au groupe, B sinon (57 cas sur VINCI).
-- Le sort des sociétés mises en équivalence (pas contrôlées) : participations sans contrôle, comme aujourd'hui.
+Tranché avec Loïc le 2026-10-16 :
+- confiance d'une entrée par le périmètre : A si un mandat au registre la rattache au groupe, B sinon ;
+- une société mise en équivalence (pas contrôlée) n'entre pas, même présidée par le groupe : le document l'emporte. Elle est rangée en participation sans contrôle, et le consultant peut la retenir.
 
 ## Mise en œuvre
 
@@ -34,11 +34,11 @@ Un nouvel indice du moteur, « périmètre publié » : une société retenue pa
 | P7 Logique en Python | ✅ | Tout est dans `worker/` |
 
 ## Critères de succès
-- [ ] **C1** : une société du périmètre entre avec l'indice « périmètre publié » et sa preuve. Ses filiales du registre entrent par les règles existantes. Aucun nom de personne dans la preuve
-- [ ] **C2** : une société mise en équivalence n'entre pas comme filiale contrôlée
-- [ ] **C3** : avec les réglages validés plus le périmètre, les scores ne baissent pas : LVMH ≥ 154/172, VINCI ≥ 813/1 007, CMAF ≥ 43/52. Les « en plus » nouveaux sont comptés et expliqués
-- [ ] **C4** : sans aucune marque, périmètre seul, LVMH et VINCI ≥ 75 % chacun. C'est la carto produite sans travail humain
-- [ ] **C5** : `rapport.md` donne les scores, la part des « en plus » reliés au groupe par le registre, et la durée
+- [x] **C1** : une société du périmètre entre avec l'indice « périmètre publié » et sa preuve. Ses filiales du registre entrent par les règles existantes. Aucun nom de personne dans la preuve
+- [x] **C2** : une société mise en équivalence n'entre pas comme filiale contrôlée
+- [x] **C3** : avec les réglages validés plus le périmètre, les scores ne baissent pas : LVMH ≥ 154/172, VINCI ≥ 813/1 007, CMAF ≥ 43/52. Les « en plus » nouveaux sont comptés et expliqués. *Tenu le 2026-10-16 : LVMH 166, VINCI 861, CMAF 43 (sans document)*
+- [x] **C4** : sans aucune marque, périmètre seul, LVMH et VINCI ≥ 75 % chacun. C'est la carto produite sans travail humain. *Tenu le 2026-10-16 : tête seule, sans aucun autre réglage (décision de Loïc), LVMH 142/172 (83 %), VINCI 836/1 007 (83 %)*
+- [x] **C5** : `rapport.md` donne les scores, la part des « en plus » reliés au groupe par le registre, et la durée
 
 ## Dépendances
 

@@ -28,6 +28,15 @@ n'est pas connue (« — »). Le registre n'est pas lu.
     DATABASE_URL=postgresql://… CARTOFR_REFERENCES=basile .venv/bin/python \
         worker/scripts/non_regression.py --depuis-postgres --organisation Youno
 
+Option `--perimetre DOSSIER` (T043) : la carto reçoit aussi le périmètre publié du groupe,
+`DOSSIER/<groupe>.pdf` (documents hors git, dans `out/perimetre/`). Un groupe sans document est
+mesuré sans périmètre, et le tableau le dit. Seuil des retrouvées inchangé ; les « en plus » n'ont
+plus de plafond : ils sont comptés, avec ceux que le document du groupe inscrit lui-même en
+intégration globale (colonne « inscrites ») ; les autres sont entrés par les règles du moteur.
+Option `--sans-reglages` (T043 C4) : des réglages ne reste que la tête, rien de saisi par un
+humain. Avec `--perimetre`, c'est la carto produite sans travail humain : seuils de 75 %
+(LVMH 129/172, VINCI 756/1 007), CMAF sans seuil. Sans `--perimetre`, aucun seuil.
+
 Code de sortie : 0 si chaque groupe atteint ses seuils, 1 sinon, 2 si un fichier manque.
 Les seuils sont les scores du prototype du 2026-10-06 : « 90 % » pour LVMH est l'arrondi de
 154/172, et c'est 154/172 qui est exigé, pas 90 % exact.
@@ -43,7 +52,7 @@ import secrets
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, LiteralString
 
@@ -51,6 +60,7 @@ import psycopg
 
 from cartofr.empreinte import empreinte
 from cartofr.moteur import Carto, cartographier
+from cartofr.perimetre import PerimetrePublie, extraire, texte_document
 
 
 @dataclass(frozen=True)
@@ -69,6 +79,13 @@ SEUILS = {
     "vinci": Seuil(813, 1007, 193),
     "cmaf": Seuil(43, 52, None),  # la référence CMAF agrège des sous-ensembles : « en plus » non mesuré
 }
+# Carto sans travail humain (T043 C4) : tête seule et périmètre publié, 75 % au moins.
+# Les listes des réglages d'un groupe (config/*.json), toutes vides en mode --sans-reglages.
+REGLAGES_LISTES = (
+    "marques_sures", "marques_ambigues", "exclus", "familles_exclues", "marques_sures_homonymes",
+    "marques_sigles", "priorite", "exclus_noms", "organigramme",
+)  # fmt: skip
+SEUILS_SANS_REGLAGES = {"lvmh": Seuil(129, 172, None), "vinci": Seuil(756, 1007, None)}
 
 
 @dataclass(frozen=True)
@@ -85,6 +102,8 @@ class Resultat:
     memoire_go: float | None  # None : carto lue en base, mémoire inconnue
     # --empreintes : éléments qui diffèrent de la carto aux noms, par ensemble ; vide si identiques.
     ecarts_noms: dict[str, int] | None = None
+    # --perimetre : sociétés en plus inscrites par le document du groupe ; None sans périmètre.
+    en_plus_inscrites: int | None = None
 
     @property
     def taux(self) -> float:
@@ -122,27 +141,49 @@ def ecarts(a: Carto, b: Carto) -> dict[str, int]:
     return sortie
 
 
+def document_perimetre(dossier: Path | None, groupe: str) -> Path | None:
+    """Le document de périmètre du groupe dans `dossier`, s'il existe."""
+    chemin = dossier / f"{groupe}.pdf" if dossier else None
+    return chemin if chemin and chemin.is_file() else None
+
+
 def mesurer(
-    groupe: str, registre: Path, references: Path, configs: Path, empreintes: bool = False
+    groupe: str,
+    registre: Path,
+    references: Path,
+    configs: Path,
+    empreintes: bool = False,
+    document_pdf: Path | None = None,
+    sans_reglages: bool = False,
 ) -> Resultat:
     """Lance la carto d'un groupe et la compare à sa référence, comme `compare.py`."""
     reference = _lire_reference(references, groupe)
     reglages = json.loads((configs / f"{groupe}.json").read_text(encoding="utf-8"))
+    if sans_reglages:  # toutes les listes vides : le moteur lit chaque clé
+        reglages = {k: [] for k in REGLAGES_LISTES} | {"groupe": reglages["groupe"], "tete": reglages["tete"]}
+    document = None
+    if document_pdf:
+        document = PerimetrePublie(document_pdf.name, tuple(extraire(texte_document(document_pdf))))
     ecarts_noms = None
     if empreintes:
         cle = secrets.token_hex(32)
-        aux_noms = cartographier(reglages, registre)
+        aux_noms = cartographier(reglages, registre, perimetre=document)
         debut = time.monotonic()
-        carto = cartographier(avec_empreintes(reglages, cle), registre, cle_empreinte=cle)
+        carto = cartographier(avec_empreintes(reglages, cle), registre, cle_empreinte=cle, perimetre=document)
         duree = time.monotonic() - debut
         ecarts_noms = ecarts(carto, aux_noms)
     else:
         debut = time.monotonic()
-        carto = cartographier(reglages, registre)
+        carto = cartographier(reglages, registre, perimetre=document)
         duree = time.monotonic() - debut
     memoire = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 / 1024  # ko -> Go (Linux)
     nous = {s.siren: (s.maison_mere_siren, s.ciblable) for s in carto.societes}
-    return comparer(groupe, reference, nous, duree, memoire, ecarts_noms)
+    r = comparer(groupe, reference, nous, duree, memoire, ecarts_noms)
+    if document is None:
+        return r
+    ref = {_siren(ligne) for ligne in reference}
+    inscrites = sum(1 for s in carto.societes if s.siren not in ref and "perimetre" in s.indices)
+    return replace(r, en_plus_inscrites=inscrites)
 
 
 def comparer(
@@ -244,11 +285,17 @@ def mesurer_depuis_postgres(
     return comparer(groupe, reference, nous, (duree_ms or 0) / 1000, None), str(carto_id)
 
 
-def verdict(r: Resultat) -> list[str]:
-    """Les seuils manqués par `r`, vide si le groupe passe."""
-    seuil = SEUILS.get(r.groupe)
+def verdict(r: Resultat, avec_perimetre: bool = False, sans_reglages: bool = False) -> list[str]:
+    """Les seuils manqués par `r`, vide si le groupe passe. Avec le périmètre, les « en plus » sont
+    comptés sans plafond ; sans réglages, seule la carto avec périmètre a un seuil (C4)."""
+    if sans_reglages:
+        seuil = SEUILS_SANS_REGLAGES.get(r.groupe) if avec_perimetre else None
+    else:
+        seuil = SEUILS.get(r.groupe)
     if seuil is None:
         return []
+    if avec_perimetre:
+        seuil = replace(seuil, en_plus_max=None)
     echecs = []
     if r.taux < seuil.taux:
         echecs.append(f"retrouvées {r.retrouvees}/{r.reference} < {seuil.retrouvees}/{seuil.reference}")
@@ -281,6 +328,12 @@ def main(arguments: list[str] | None = None) -> int:
         action="store_true",
         help="lit la carto calculée par l'app dans DATABASE_URL (lecture seule) au lieu de lancer le moteur",
     )
+    parseur.add_argument(
+        "--perimetre", type=Path, help="dossier des documents de périmètre publié, <groupe>.pdf (T043)"
+    )
+    parseur.add_argument(
+        "--sans-reglages", action="store_true", help="des réglages ne garder que la tête (T043 C4)"
+    )
     parseur.add_argument("--carto", help="avec --depuis-postgres : l'uuid de la carto (un seul groupe)")
     parseur.add_argument(
         "--organisation", help="avec --depuis-postgres : la dernière carto de cette organisation (son nom)"
@@ -292,6 +345,8 @@ def main(arguments: list[str] | None = None) -> int:
         parseur.error("--carto désigne une seule carto : donnez un seul groupe")
     if options.depuis_postgres and options.empreintes:
         parseur.error("--empreintes lance le moteur : il ne va pas avec --depuis-postgres")
+    if options.depuis_postgres and (options.perimetre or options.sans_reglages):
+        parseur.error("--perimetre et --sans-reglages lancent le moteur : pas avec --depuis-postgres")
     url = os.environ.get("DATABASE_URL", "")
     if options.depuis_postgres and not url:
         print("DATABASE_URL manque : --depuis-postgres lit la base de l'app.", file=sys.stderr)
@@ -309,6 +364,7 @@ def main(arguments: list[str] | None = None) -> int:
         f"{'groupe':<7} {'retrouvées':>17} {'en plus':>8} {'manquées':>9} {'même mère':>10}"
         f" {'même ciblable':>14} {'durée':>7} {'mémoire':>8}"
         + (f" {'= noms':>7}" if options.empreintes else "")
+        + (f" {'inscrites':>9} {'document':>9}" if options.perimetre else "")
         + (f" {'carto':>8}" if options.depuis_postgres else "")
         + "  verdict"
     )
@@ -317,6 +373,7 @@ def main(arguments: list[str] | None = None) -> int:
     contexte = multiprocessing.get_context("spawn")
     for groupe in options.groupes:
         carto_id = None
+        document = document_perimetre(options.perimetre, groupe)
         try:
             if options.depuis_postgres:
                 r, carto_id = mesurer_depuis_postgres(
@@ -325,13 +382,20 @@ def main(arguments: list[str] | None = None) -> int:
             else:
                 with ProcessPoolExecutor(max_workers=1, mp_context=contexte) as pool:
                     r = pool.submit(
-                        mesurer, groupe, registre, references, configs, options.empreintes
+                        mesurer,
+                        groupe,
+                        registre,
+                        references,
+                        configs,
+                        options.empreintes,
+                        document,
+                        options.sans_reglages,
                     ).result()
         except (FileNotFoundError, CartoIntrouvable) as erreur:
             print(f"{groupe:<7} {erreur}", file=sys.stderr)
             code = max(code, 2)
             continue
-        echecs = verdict(r)
+        echecs = verdict(r, document is not None, options.sans_reglages)
         code = max(code, 1 if echecs else 0)
         retrouvees = f"{_pourcent(r.taux)} ({r.retrouvees}/{r.reference})"
         print(
@@ -339,6 +403,12 @@ def main(arguments: list[str] | None = None) -> int:
             f" {_pourcent(r.meme_maison_mere):>10} {_pourcent(r.meme_ciblable):>14}"
             f" {r.duree_s:>6.0f}s {_memoire(r.memoire_go):>8}"
             + (f" {'oui' if not r.ecarts_noms else 'NON':>7}" if r.ecarts_noms is not None else "")
+            + (
+                f" {'—' if r.en_plus_inscrites is None else r.en_plus_inscrites:>9}"
+                f" {'oui' if document else 'aucun':>9}"
+                if options.perimetre
+                else ""
+            )
             + (f" {carto_id[:8]:>8}" if carto_id else "")
             + f"  {'OK' if not echecs else 'RÉGRESSION : ' + ' ; '.join(echecs)}",
             flush=True,
