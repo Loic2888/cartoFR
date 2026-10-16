@@ -137,6 +137,8 @@ def construire(dossier: Path | None = None, remplacer: bool = False) -> dict[str
         if manquants:
             raise ErreurConstruction("fichiers sources manquants : " + ", ".join(manquants))
         comptes = _construire_dans(temporaire, chemins)
+        if cible.exists():
+            _reprendre_documents(cible, temporaire)
         _publier(temporaire, cible, remplacer)
         return comptes
     except BaseException as erreur:
@@ -163,6 +165,27 @@ def _construire_dans(chemin: Path, sources: dict[str, Path]) -> dict[str, int]:
         )
         con.execute("checkpoint")
         return comptes
+    finally:
+        con.close()
+
+
+def _reprendre_documents(ancien: Path, nouveau: Path) -> None:
+    """Recopie les documents de périmètre déposés (T046) de l'ancien registre dans le nouveau.
+
+    Ils ne viennent pas des sources : les perdre effacerait l'historique des dépôts (principe 4).
+    """
+    con = duckdb.connect(str(nouveau))
+    try:
+        chemin = str(ancien).replace("'", "''")  # attach ne prend pas de paramètre
+        con.execute(f"attach '{chemin}' as ancien (read_only)")
+        existe = con.execute(
+            "select count(*) from duckdb_tables() where database_name = 'ancien'"
+            " and table_name = 'documents_perimetre'"
+        ).fetchone()
+        if existe and existe[0]:
+            con.execute("insert into documents_perimetre select * from ancien.documents_perimetre")
+        con.execute("detach ancien")
+        con.execute("checkpoint")
     finally:
         con.close()
 

@@ -18,14 +18,18 @@ Les candidats d'une ligne sont essayés dans l'ordre : le premier qui retient un
 Usage :
     con = duckdb.connect(str(registre), read_only=True)
     resultats = correspondre(con, tete_siren, extraire(texte))
+    par_document = correspondre_plusieurs(con, [(tete_a, lignes_a), (tete_b, lignes_b)])
 Entrées : une connexion au registre, le SIREN de la tête, les lignes d'`extraction`.
 Sorties : une `Correspondance` par ligne, retenue ou non, avec sa raison.
+`correspondre_plusieurs` lit les noms de SIRENE une seule fois pour tous les documents (T046) :
+c'est cette lecture qui coûte, 25 s environ ; le résultat est celui de `correspondre` document par
+document.
 Seules les dénominations des sociétés sont lues : jamais `dirigeants_personnes` (garde-fou 6).
 """
 
 import collections
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal
 
@@ -188,9 +192,25 @@ def correspondre(
     con: duckdb.DuckDBPyConnection, tete: str, lignes: list[LignePerimetre]
 ) -> list[Correspondance]:
     """Applique la règle à chaque ligne du périmètre ; rend une `Correspondance` par ligne, dans l'ordre."""
-    voulues = {k for ligne in lignes for c in ligne.candidats if (k := cle(c.nom))}
-    porteurs = _porteurs(con, voulues) if voulues else {}
+    return correspondre_plusieurs(con, [(tete, lignes)])[0]
 
+
+def correspondre_plusieurs(
+    con: duckdb.DuckDBPyConnection, documents: Sequence[tuple[str, list[LignePerimetre]]]
+) -> list[list[Correspondance]]:
+    """`correspondre` pour plusieurs documents (tête, lignes), avec une seule lecture des noms."""
+    voulues = {k for _, lignes in documents for ligne in lignes for c in ligne.candidats if (k := cle(c.nom))}
+    porteurs = _porteurs(con, voulues) if voulues else {}
+    return [_document(con, tete, lignes, porteurs) for tete, lignes in documents]
+
+
+def _document(
+    con: duckdb.DuckDBPyConnection,
+    tete: str,
+    lignes: list[LignePerimetre],
+    porteurs: dict[str, list[tuple[str, str]]],
+) -> list[Correspondance]:
+    """Les étapes 1 à 5 pour un document, sur les porteurs déjà lus."""
     sortie: list[Correspondance] = []
     en_attente: dict[int, list[str]] = {}  # rang de la ligne -> SIREN des homonymes
     for ligne in lignes:

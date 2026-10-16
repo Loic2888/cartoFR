@@ -93,10 +93,13 @@ def chercher_candidates(con: duckdb.DuckDBPyConnection, reglages: dict[str, Any]
     Une société qui répond à plusieurs marques garde la plus longue (la plus précise) ;
     à longueur égale, la première dans l'ordre des réglages.
     """
+    liste = marques(reglages)
+    if not liste:
+        return []  # sans marque, rien à chercher : ne pas relire les 13 M de noms (T046)
     preparer_noms(con)
     prefixe = "(?:(?:" + "|".join(PREFIXES) + ") )*"
     lignes: list[tuple[str, str, str]] = []
-    for marque, type_marque in marques(reglages):
+    for marque, type_marque in liste:
         motif = "^" + prefixe + re.escape(marque) + "( |$)"
         for (siren,) in con.execute(
             f"select siren from {TABLE_NOMS}"
