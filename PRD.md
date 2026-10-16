@@ -48,11 +48,12 @@ L'app tient sa propre copie du registre français (SIRENE et RNE), avec tous les
 **Testable seule** : sur le registre du 2026-03-04 et les documents de LVMH et VINCI, on calcule la carto du pays sans interface, puis on compare les cartos de LVMH et VINCI à leurs références avec la non-régression, et on compte les sociétés actives rangées.
 
 **Scénarios d'acceptation**
-1. **Étant donné** le registre, **quand** la carto du pays est calculée, **alors** chaque société active appartient à exactement une carto : celle de son groupe à document, ou celle de l'arbre du registre dont elle fait partie. Un arbre qu'aucune liste publiée ne réclame est son propre groupe.
+1. **Étant donné** le registre, **quand** la carto du pays est calculée, **alors** chaque société active est rangée dans exactement un groupe, le plus proche d'elle : son groupe à document, ou l'arbre du registre dont elle fait partie. Un arbre qu'aucune liste publiée ne réclame est son propre groupe.
 2. **Étant donné** le document de périmètre d'un groupe, déposé par le responsable, **quand** la carto du pays est calculée, **alors** les arbres des sociétés inscrites en intégration globale sont recollés dans la carto de ce groupe. Chaque société inscrite porte sa preuve (document, ligne, méthode, taux) ; une société mise en équivalence n'entre pas comme filiale (règles de T043).
 3. **Étant donné** un groupe mutualiste (Crédit Mutuel), **quand** la carto du pays est calculée, **alors** il reçoit son traitement à part : ses fédérations ne sont pas mêlées dans une même carto, comme le fait la règle de l'arbre.
 4. **Étant donné** une base mise à jour, **quand** 7 jours sont passés, **alors** chaque carto a été recalculée sur la base à jour, et elle affiche la date des données utilisées.
 5. **Étant donné** un document déposé, **quand** il est lu, **alors** le responsable voit combien de lignes ont été retrouvées dans le registre, et les lignes refusées avec leur raison (homonymes, introuvables).
+6. **Étant donné** un groupe dont la tête est inscrite dans le document d'un autre (LVMH dans celui de Christian Dior), **quand** la carto du pays est calculée, **alors** les deux groupes gardent leur carto, emboîtées : la carto de LVMH dit que LVMH est une filiale de Dior, et la carto de Dior comprend LVMH et ses filiales. *Décidé le 2026-10-16 (Loïc).*
 
 ### US2 — Lire la carto d'un groupe (Priorité : P1) 🎯 MVP
 *Réécrite le 2026-10-16 : le consultant lit une carto déjà calculée (US7) ; il n'écrit plus de réglages avant d'avoir une carto.*
@@ -63,7 +64,7 @@ L'app tient sa propre copie du registre français (SIRENE et RNE), avec tous les
 **Testable seule** : sur une carto du pays déjà calculée (stock de mars 2026), on cherche LVMH, on exporte le CSV et on le compare à la référence.
 
 **Scénarios d'acceptation**
-1. **Étant donné** un consultant connecté, **quand** il saisit « LVMH », une filiale ou un SIREN, **alors** l'app lui montre le groupe auquel cette société appartient, avec sa tête et son SIREN.
+1. **Étant donné** un consultant connecté, **quand** il saisit « LVMH », une filiale ou un SIREN, **alors** l'app lui montre le groupe auquel cette société appartient, avec sa tête et son SIREN. Si ce groupe est lui-même la filiale d'un autre groupe (LVMH sous Dior), l'app le dit et propose d'ouvrir la carto du groupe entier.
 2. **Étant donné** un groupe trouvé, **quand** il l'ouvre, **alors** il voit un arbre dépliable, sans attendre de calcul. Chaque société porte son SIREN, son niveau et sa maison mère directe. Chaque lien porte sa preuve en clair, sa confiance A/B/C, l'indication ciblable Oui ou Non avec la raison, et le marquage d'opposition à la prospection.
 3. **Étant donné** un arbre affiché, **quand** il le regarde, **alors** il voit la date des données et si la carto a été corrigée à la main ou calculée seule.
 4. **Étant donné** un arbre affiché, **quand** il exporte, **alors** il obtient un CSV. Ce fichier ne contient aucun nom de dirigeant personne physique et indique la date des données utilisées.
@@ -127,7 +128,7 @@ L'app tient sa propre copie du registre français (SIRENE et RNE), avec tous les
 - **FR-001** : la base DOIT intégrer les changements du registre RNE (INPI) et de SIRENE (INSEE) automatiquement, 7 jours au plus après leur publication. — *US1*
 - **FR-002** : chaque société et chaque lien DOIVENT porter une date de début et une date de fin. Un lien disparu est fermé, jamais supprimé. — *US1*
 - **FR-003** : chaque mise à jour DOIT être tracée (date, source, volumes, succès ou échec). Un échec DOIT être visible dans l'app, et la base DOIT rester dans son dernier état valide. — *US1*
-- **FR-012** : le système DOIT ranger chaque société active dans exactement une carto, à partir du registre seul (arbre à une mère, T045) et des documents de périmètre déposés, sans validation humaine et sans appel extérieur. Chaque carto DOIT avoir 7 jours de retard au plus sur la base. — *US7*
+- **FR-012** : le système DOIT ranger chaque société active dans exactement un groupe, le plus proche d'elle, les groupes pouvant s'emboîter (US7, scénario 6), à partir du registre seul (arbre à une mère, T045) et des documents de périmètre déposés, sans validation humaine et sans appel extérieur. Chaque carto DOIT avoir 7 jours de retard au plus sur la base. — *US7*
 - **FR-013** : le système DOIT accepter un document de périmètre par groupe (PDF ou page déposés), le garder, et rendre les lignes retrouvées et refusées avec leur raison. — *US7*
 - **FR-014** : le système DOIT traiter les groupes mutualistes à part, sans mêler leurs fédérations. — *US7*
 - **FR-004** : l'app DOIT trouver le groupe d'une société par son nom ou son SIREN. — *US2*

@@ -8,9 +8,9 @@
 US2 réécrite le 2026-10-16 : le consultant cherche une société et lit l'arbre de son groupe, déjà calculé dans `pays.duckdb` (ARCHI, ADR-006). Aujourd'hui, l'app demande de choisir une tête, d'écrire des réglages, puis de lancer une carto.
 
 ## Périmètre
-- Une route interne `GET /groupe?siren=` dans le service de recherche : le groupe de la société, sa tête, sa date des données, et l'arbre (sociétés, maisons mères, preuves, confiance, ciblable, opposition, non-diffusion). Elle lit `pays.duckdb` en lecture seule.
+- Une route interne `GET /groupe?siren=` dans le service de recherche : le groupe de la société, sa tête, son groupe parent s'il y en a un, sa date des données, et l'arbre ; `&entier=1` rend le groupe avec tous ses sous-groupes. L'arbre porte les sociétés, maisons mères, preuves, confiance, ciblable, opposition et non-diffusion. La route lit `pays.duckdb` en lecture seule.
 - La recherche (`/recherche`) rend, pour chaque société trouvée, son groupe et la taille de ce groupe.
-- Une page `/pays/[siren de la tête]` : l'arbre, avec le composant d'arbre existant (T022), la date des données, et la mention « calculée sans correction » ou « corrigée » (si l'organisation a une carto corrigée, lien vers elle).
+- Une page `/pays/[siren de la tête]` : si le groupe est la filiale d'un autre (LVMH sous Christian Dior), la page le dit en tête, avec un lien « Voir le groupe Christian Dior en entier » ; puis l'arbre, avec le composant d'arbre existant (T022), la date des données, et la mention « calculée sans correction » ou « corrigée » (si l'organisation a une carto corrigée, lien vers elle).
 - L'export CSV (T023) depuis cette page.
 
 ## Mise en œuvre
@@ -38,6 +38,7 @@ US2 réécrite le 2026-10-16 : le consultant cherche une société et lit l'arbr
 - [ ] **C2** : sur le registre réel, la route rend le groupe de VINCI en moins d'1 s, et la page s'affiche en moins de 10 s après la recherche (SC-002), mesuré et relevé dans `rapport.md`
 - [ ] **C3** : aucun nom de personne ni SIREN d'entrepreneur individuel dans la réponse de la route ni dans le CSV (test)
 - [ ] **C4** : la page fonctionne au clavier et à 320 px ; la date des données et « calculée sans correction » sont visibles
+- [ ] **C6** : la page d'un groupe emboîté dit de quel groupe il est la filiale et ouvre la carto de ce groupe entier, sous-groupes compris (tests de la route et de la page)
 - [ ] **C5** : le CSV exporté depuis la page a les mêmes colonnes que celui de T023 et la date des données
 
 ## Dépendances

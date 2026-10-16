@@ -41,7 +41,7 @@ Les étapes du travail `pays` (ARCHI, « Carto du pays ») :
 | FR-003 Dernier état valide | ✅ | Écriture à côté puis renommage ; un échec laisse le fichier précédent (C5) |
 
 ## Critères de succès
-- [ ] **C1** : sur un mini-registre, chaque société active est soit dans exactement un groupe de `pays_societes`, soit absente (son propre groupe) ; un groupe à document recolle les arbres de ses sociétés inscrites ; un arbre non réclamé est son propre groupe avec la preuve du rôle (tests)
+- [ ] **C1** : sur un mini-registre, chaque société active est soit dans exactement un groupe de `pays_societes`, soit absente (son propre groupe) ; un groupe emboîté porte son groupe parent dans `pays_groupes` ; un groupe à document recolle les arbres de ses sociétés inscrites ; un arbre non réclamé est son propre groupe avec la preuve du rôle (tests)
 - [ ] **C2** : le travail est inséré après chaque synchro réussie, et au plus tard 7 jours après le dernier calcul réussi, même sans synchro (tests de planification)
 - [ ] **C3** : un arbre dont le sommet est un entrepreneur individuel n'a jamais ce SIREN comme tête ; aucun nom de personne dans `pays.duckdb` ni dans le journal (tests)
 - [ ] **C4** : sur le registre réel, les groupes de LVMH et VINCI dans `pays.duckdb` contiennent les mêmes sociétés que `non_regression.py --perimetre --sans-reglages` (142/172 et 836/1 007 au 2026-10-16)
