@@ -100,7 +100,7 @@ Date : 2026-10-06. Sources : `PRD.md`, `ARCHI.md`.
 Ouverte le 2026-10-14 (mesures dans `rapport.md`) : sans réglages faits à la main, le moteur retrouve 1 à 16 % d'un groupe ; la liste des sociétés consolidées publiée par le groupe, croisée avec le registre, en donne 75 % pour VINCI et LVMH. Jamais en parallèle : chaque tâche part de la précédente.
 
 - [x] `T042` — Lire le périmètre publié d'un groupe et retrouver ses sociétés dans le registre
-- [ ] `T043` — Faire entrer dans la carto les sociétés du périmètre publié et leurs blocs *(après T042)*
+- [x] `T043` — Faire entrer dans la carto les sociétés du périmètre publié et leurs blocs *(après T042)*
 - [ ] `T044` — Mettre le périmètre publié dans les réglages du groupe, et le faire trouver par l'IA *(après T043)*
 
 ## Phase 11 : Arbre du registre — vers la carto du pays (P1)

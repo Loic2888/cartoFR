@@ -28,7 +28,7 @@ Avec T042 et T043, une carto se construit à partir d'un document : la liste des
 ## Critères de succès
 - [ ] **C1** : un consultant donne une URL ou dépose un PDF. Le worker le garde et la carto suivante l'utilise sans réseau
 - [ ] **C2** : un téléchargement refusé (403, page HTML au lieu d'un PDF) donne un message français qui propose le dépôt
-- [ ] **C3** : la proposition IA rend l'URL du périmètre pour VINCI et LVMH, avec sa source. Coût par proposition relevé
+- [ ] **C3** : la proposition IA rend l'URL du périmètre pour VINCI et LVMH, avec sa source. Coût par proposition relevé. *À revoir (2026-10-16, décision de Loïc) : il cherche lui-même les documents avec son forfait Claude Code, aucune recherche par OpenRouter*
 - [ ] **C4** : SC-007 réécrit dans `PRD.md`, une fois la décision de Loïc prise
 
 ## Dépendances

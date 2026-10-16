@@ -515,3 +515,41 @@ Un arbre ne peut pas en fusionner un autre : le plus gros compte 1 334 société
   - le sommet d'une boucle était compté à tort parmi les sommets changés ;
   - une interruption laissait la ligne de journal `en_cours`.
 - Tests : 54 dans `worker/tests/registre/test_arbre.py`, un de plus dans `worker/tests/jobs/test_synchro.py`. Suite worker avec une base Postgres jetable : 646 réussis, 6 ignorés. Moteur non touché : non-régression sans objet.
+
+## 2026-10-16
+
+### Le périmètre publié entre dans le moteur (T043)
+
+- Nouvel indice du moteur, `perimetre`. `cartographier(..., perimetre=PerimetrePublie(source, lignes))` retrouve les lignes dans le registre par la règle de T042, sur la même connexion, sans réseau.
+  - Une société inscrite en intégration globale entre avec sa preuve : « inscrite au périmètre publié du groupe : <document>, ligne « … » (intégration globale, 66 %) ». Ses filiales entrent ensuite par les règles du registre.
+  - Confiance A si un mandat au registre la rattache à une société du groupe, B sinon. Jamais C.
+  - Une société inscrite en mise en équivalence (ou autre méthode) n'entre pas, même présidée par le groupe. Décision de Loïc : le document l'emporte. Elle est rangée en participation sans contrôle (avec ses mandats, forts compris) et dans les cas douteux. Le consultant peut la retenir ; l'inscription ne compte alors pas comme indice de confiance.
+  - Les exclusions des réglages, les décisions du consultant et la règle des associations s'appliquent avant le périmètre. Une société étrangère inscrite va dans les sociétés étrangères. Sans document, le moteur ne change pas.
+- Mesure par le moteur, non-régression (`worker/scripts/non_regression.py --perimetre out/perimetre`, documents du 2026-10-14) :
+
+| Groupe | Réglages validés seuls | Réglages validés + périmètre (C3) | Tête seule + périmètre (C4) |
+|---|---|---|---|
+| LVMH (172) | 155 (90 %) · 15 en plus | **166 (97 %)** · 69 en plus, dont 60 inscrites | **142 (83 %)** · 67 en plus, dont 60 inscrites |
+| VINCI (1 007) | 813 (81 %) · 176 en plus | **861 (86 %)** · 679 en plus, dont 513 inscrites | **836 (83 %)** · 620 en plus, dont 513 inscrites |
+| CMAF (52) | 43 (83 %) | 43, pas de document | 1, pas de document |
+
+- Les « en plus » sont de deux sortes :
+  - les sociétés que le document du groupe inscrit lui-même en intégration globale (« inscrites ») : 60 sur LVMH, 513 sur VINCI. Le 2026-10-14, 89 % des sociétés de la liste VINCI absentes de la référence étaient reliées au groupe par le registre : ce sont surtout des oublis de la référence Basile ;
+  - les autres (9 et 166 avec les réglages, 7 et 107 sans) sont entrées par les règles du registre, sous une société du groupe : mandat fort surtout. Non vérifiées une à une.
+- Le moteur fait mieux que la mesure jetable du 2026-10-14 (75 %, liste + blocs) : ses autres règles (adresse du groupe, dirigeants communs, mandat et indice indépendant) ajoutent des sociétés que la descente brute ne voit pas. Variante mesurée à part (script jetable) : liste + sous-arbres de l'arbre à une mère (T045), LVMH 130 (76 %) · 85 en plus, VINCI 727 (72 %) · 855 en plus. Elle ne fait pas mieux que les blocs ni que le moteur : on garde les règles du moteur.
+- Une colonne « reliés au groupe par le registre seul » a été essayée puis retirée : depuis la tête seule, le registre n'atteint presque aucun « en plus » (0 et 1), pour la raison connue du 2026-10-14 (le groupe est coupé en blocs).
+- Durée : une carto avec périmètre prend 75 s tête seule et 165 à 180 s avec les réglages (75 à 135 s sans périmètre, selon la charge de la machine). La correspondance relit tous les noms de SIRENE, comme la recherche des marques : les deux lectures pourraient être fusionnées. Mémoire au plus : 3,0 Go au lieu de 2,0. Reste sous les 5 minutes de SC-004.
+- Revue adverse du jour. Corrigé :
+  - le mode « tête seule » plantait : le moteur lit chaque liste des réglages ;
+  - une inscription sans contrôle comptait comme un indice et pouvait monter une société retenue par le consultant de C en B ;
+  - une participation sans contrôle perdait le mandat fort qui la reliait au groupe ;
+  - le taux s'écrivait « 33,3333 % ».
+  Gardés tels quels, notés : une association inscrite au périmètre disparaît sans être rangée en cas douteux (comme pour une marque) ; une mauvaise correspondance de T042 fait entrer une société et ses filiales (les « en plus » n'ont plus de plafond avec le périmètre, ils sont comptés) ; les sociétés exclues servent encore à départager des homonymes dans T042.
+- Tests : 13 dans `worker/tests/moteur/test_perimetre_moteur.py`, sur des mini-registres inventés. Suite worker : 533 réussis sans base Postgres (132 ignorés, aucun ne touche le moteur).
+
+### Carto du pays : réponses de Loïc pour la mise à jour du PRD
+
+À reprendre dans `PRD.md`, `ARCHI.md` et l'amendement du principe 2 :
+- un arbre du registre qu'aucune liste publiée ne réclame reste son propre groupe : c'est une carto acceptable ;
+- le mutualisme (les arbres du Crédit Mutuel mêlent plusieurs fédérations) reçoit un traitement à part, dans la V1 ;
+- les documents de périmètre sont cherchés par Loïc lui-même, avec son forfait Claude Code : aucune recherche par OpenRouter, donc aucun coût IA récurrent à plafonner. T044 C3 (l'IA de l'app cherche l'URL du périmètre) est à revoir en conséquence.

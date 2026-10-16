@@ -30,7 +30,8 @@ class Societe:
     preuve: str  # pourquoi ce rattachement : « Mandat au registre : Président », « Déduit : … »
     confiance: Confiance  # A : mandat au registre ; B : deux indices ; C : un seul indice
     pourquoi_dans_le_groupe: str  # règle qui l'a fait entrer
-    indices: tuple[str, ...]  # types d'indices : marque_sure, registre, adresse, organigramme…
+    indices: tuple[str, ...]  # types d'indices : marque_sure, registre, adresse, organigramme, perimetre,
+    # perimetre_sans_controle (société sans contrôle retenue par le consultant)…
     ciblable: bool
     raison_ciblable: str
     naf: str | None
@@ -65,7 +66,8 @@ class Mandat:
 
 @dataclass(frozen=True)
 class Participation:
-    """Société hors du groupe où une société du groupe tient un mandat sans contrôle."""
+    """Société hors du groupe où une société du groupe tient un mandat sans contrôle, ou que le
+    périmètre publié du groupe dit non contrôlée (mise en équivalence ; `mandats` peut être vide)."""
 
     siren: str
     nom: str | None

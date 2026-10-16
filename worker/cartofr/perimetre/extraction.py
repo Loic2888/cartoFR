@@ -78,6 +78,14 @@ class LignePerimetre:
     texte: str  # la ligne de la société telle que lue, sans les lignes d'avant : la preuve
 
 
+@dataclass(frozen=True)
+class PerimetrePublie:
+    """Un document de périmètre déjà lu, tel que le moteur le reçoit (T043)."""
+
+    source: str  # le document, nommé pour la preuve : « Liste des sociétés consolidées 2025 »
+    lignes: tuple[LignePerimetre, ...]
+
+
 class _Texte(HTMLParser):
     """Le texte d'une page HTML : une ligne par bloc, sans scripts ni styles. Pas d'expression
     régulière ici : sur une page mal formée, elle prendrait un temps quadratique."""
