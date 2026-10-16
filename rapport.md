@@ -572,3 +572,10 @@ Restent ouverts : la règle du traitement mutualiste, et le volume des cartos du
 - La carto du pays vit dans `pays.duckdb`, sur le worker, à côté du registre (ADR-006). L'interface lit un groupe par la route interne `/groupe`. Postgres ne garde que les corrections, les décisions et les cartos corrigées de chaque organisation.
 - Les documents se déposent par une commande du worker, en lot. Le champ de réglage prévu par T044 est abandonné.
 - À écrire dans une tâche : la règle de départage d'une société réclamée par deux groupes, dont les groupes imbriqués (un groupe dont la tête est inscrite dans le document d'un autre).
+
+### Départage d'une société réclamée par deux groupes (T047)
+
+- Nouveau paquet `cartofr.pays`, fonction pure `departager(reclamations, groupes)`. Règle : un groupe dont la tête est inscrite dans le document d'un autre devient son sous-groupe et garde sa carto (décision de Loïc : chercher LVMH rend LVMH, filiale de Christian Dior) ; une société réclamée par les deux va au sous-groupe, le plus proche d'elle. Hors emboîtement : inscription avant descente ; entre inscriptions, taux, puis taille, puis plus petite tête ; entre descentes, niveau, puis plus petite tête ; un arbre non réclamé perd toujours.
+- Écrite par un agent, relue : les parents se calculaient en comparant chaque tête à chaque autre, soit de l'ordre de 10^11 tours pour les 335 000 groupes du pays. Corrigé : parents calculés depuis les seuls documents ; test à 100 000 arbres en 1,5 s.
+- Choix faits sans la spec, à confirmer par Loïc : quand plusieurs documents inscrivent la même tête, le parent est le document le plus proche (A inscrit B et C, B inscrit C : C sous B) ; une boucle de plusieurs groupes se casse à sa plus petite tête ; les arbres sont écartés avant l'emboîtement, et l'emboîtement passe avant les autres règles (une descente dans B bat une inscription de A si B est sous A).
+- Tests : 31 dans `worker/tests/pays/test_departage.py`, dont 720 permutations de six réclamations et 300 graphes d'inscriptions tirés au hasard, sans boucle de parents.
