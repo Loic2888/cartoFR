@@ -186,7 +186,7 @@ L'app tient sa propre copie du registre français (SIRENE et RNE), avec tous les
 ## Questions ouvertes
 
 - **Traitement des groupes mutualistes** : quelle règle sépare les fédérations du Crédit Mutuel (document par fédération, caisse fédérale comme tête, autre) ? À mesurer sur CMAF avant d'écrire la tâche.
-- **Taille des cartos du pays dans la base de l'app** : environ 800 000 sociétés ont une mère au registre. Les copier toutes dans Postgres, ou servir les petits arbres depuis le worker ? À trancher dans l'architecture.
+- ~~**Taille des cartos du pays dans la base de l'app**~~ : tranché le 2026-10-16 dans `ARCHI.md` (ADR-006) : la carto du pays reste sur le worker, dans `pays.duckdb` ; Postgres ne garde que les cartos corrigées.
 
 ## Contrôle constitutionnel
 
