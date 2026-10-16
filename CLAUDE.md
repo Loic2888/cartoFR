@@ -15,9 +15,13 @@ Youno (missions clients), commercialisable ensuite.
    automatiquement avec l'INPI et l'INSEE, **7 jours de retard au plus** sur
    le registre (décidé le 2026-10-06, PRD SC-003) : nouvelles sociétés à
    ajouter, nouveaux liens à créer, liens et sociétés disparus à fermer.
-2. **Cartographie** : l'utilisateur donne le nom d'une entreprise, l'app rend
-   l'arbre du groupe en France (maison mère, filiales, sous-filiales), avec pour
-   chaque lien sa preuve, une confiance A/B/C et si la société est ciblable.
+2. **Cartographie** : l'app calcule à l'avance la carto de tout le pays (décidé
+   le 2026-10-16, PRD US7) : chaque société active rangée dans un groupe, à partir
+   du registre et des listes de sociétés consolidées publiées par les groupes.
+   L'utilisateur donne le nom d'une entreprise, l'app rend l'arbre de son groupe
+   en France (maison mère, filiales, sous-filiales), avec pour chaque lien sa
+   preuve, une confiance A/B/C et si la société est ciblable. Tout le pays est
+   cartographié avant la mise en ligne (PRD SC-008).
    V1 : une carto qui affiche la date de ses données, 7 jours au plus. Pas d'alertes, pas de
    poussée CRM, pas d'enrichissement (site web, LinkedIn : décidé le 2026-10-13, la
    prospection est le travail d'un autre outil).
@@ -199,7 +203,7 @@ principes 6 et 7 par `ARCHI.md` (2026-10-06).
 | | Principe |
 |---|---|
 | 1 | **L'IA ne décide jamais qu'une société est une filiale.** Elle propose les réglages et explique les cas douteux ; la décision vient de règles écrites, reproductibles, et chaque lien retenu porte sa preuve. |
-| 2 | **Les réglages d'un groupe sont validés par un humain** avant d'être utilisés. Une seule marque fausse peut ajouter 150 fausses sociétés (Equans dans VINCI). |
+| 2 | **Une carto existe sans validation humaine ; une correction humaine laisse une trace.** Les cartos se calculent par des règles écrites, sur le registre et les documents publiés par les groupes. Une correction écrite à la main (marque, exclusion, organigramme) est versionnée, avec son auteur et sa date, et son effet (sociétés ajoutées, retirées) est affiché : une seule marque fausse peut ajouter 150 fausses sociétés (Equans dans VINCI). *Amendé le 2026-10-16 (décision de Loïc). Avant : « les réglages d'un groupe sont validés par un humain avant d'être utilisés ». Raison : sans réglages, le périmètre publié et le registre retrouvent 83 % de LVMH et de VINCI (T043), et le but est la carto de tout le pays sans travail humain ; une validation par groupe ne tient pas à cette échelle.* |
 | 3 | **Une cartographie ne fait aucun appel extérieur** : elle lit la base locale. Les API (INPI, Annuaire, BODACC) servent à la mise à jour de la base, pas au calcul d'une carto. |
 | 4 | **Un lien n'est jamais effacé, il est fermé** : chaque lien et chaque société portent une date de début et de fin, pour savoir ce qui a changé et quand. |
 | 5 | **Pas de régression silencieuse** : tout changement du moteur est mesuré sur LVMH, VINCI et CMAF avant d'être rendu. |
