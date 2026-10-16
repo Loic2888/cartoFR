@@ -294,3 +294,23 @@ def test_parents_sans_boucle_sur_des_inscriptions_tirees_au_hasard():
 def test_chaque_groupe_reclamant_porte_son_parent_ou_aucun():
     resultat = departager(RECLAMATIONS, GROUPES)
     assert parents(resultat) == {A: None, B: A, C: None, D: C, S3: None}
+
+
+def test_a_l_echelle_du_pays() -> None:
+    """100 000 arbres et quelques documents : les parents se calculent depuis les documents seuls.
+    Comparer chaque tête à chaque autre prendrait des heures (revue du 2026-10-16)."""
+    import time
+
+    arbres = [f"{800_000_000 + i}" for i in range(100_000)]
+    a, b, c = "900000001", "900000002", "900000003"
+    groupes = [Groupe(a, 10, frozenset({b})), Groupe(b, 5, frozenset({c})), Groupe(c, 2)]
+    groupes += [Groupe(t, 2) for t in arbres]
+    reclamations = [Reclamation(t, t, "arbre") for t in arbres] + [
+        Reclamation(c, arbres[0], "descente", niveau=1)
+    ]
+    debut = time.monotonic()
+    resultat = departager(reclamations, groupes)
+    assert time.monotonic() - debut < 10
+    parents = {g.tete: g.parent for g in resultat.groupes}
+    assert (parents[b], parents[c], parents[arbres[1]]) == (a, b, None)
+    assert {r.societe: r.groupe for r in resultat.societes}[arbres[0]] == c

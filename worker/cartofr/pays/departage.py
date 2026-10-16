@@ -117,10 +117,15 @@ def _parents(tetes: set[str], par_tete: Mapping[str, Groupe]) -> dict[str, str |
     lui-même, directement ou non (trois niveaux : C inscrit par A et B, B inscrit par A → B). Puis la
     plus petite tête. Une boucle se casse à sa plus petite tête, qui n'y prend pas de parent.
     """
-    candidats = {
-        b: {a for a in tetes if a != b and a in par_tete and b in par_tete[a].tetes_inscrites} for b in tetes
-    }
-    atteint = {a: _atteignables(a, tetes, par_tete) for a in tetes}
+    # Depuis les documents seulement : le pays compte environ 335 000 groupes, dont quelques centaines
+    # ont un document. Comparer chaque tête à chaque autre coûterait des dizaines de milliards de tours.
+    candidats: dict[str, set[str]] = {t: set() for t in tetes}
+    for a, g in par_tete.items():
+        for b in g.tetes_inscrites:
+            if b != a and b in candidats:
+                candidats[b].add(a)
+    inscrivants = {a for c in candidats.values() for a in c}
+    atteint = {a: _atteignables(a, tetes, par_tete) for a in inscrivants}
     exclus: dict[str, set[str]] = {t: set() for t in tetes}
 
     def choisir(b: str) -> str | None:
