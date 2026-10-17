@@ -2,7 +2,7 @@
 
 Usage : `creer_tables(con)` sur une connexion DuckDB vide.
 Entrées : aucune. Sorties : les tables `societes`, `liens`, `dirigeants_personnes`,
-`sieges`, `unites_legales`, `mises_a_jour` et `arbre`, vides.
+`sieges`, `unites_legales`, `mises_a_jour`, `arbre` et `documents_perimetre`, vides.
 
 Règles portées par le schéma :
 - un lien ou une société n'est jamais effacé, il est fermé : `debut` et `fin`
@@ -134,7 +134,29 @@ comment on table arbre is
 """
 
 
+# Documents de périmètre publiés par les groupes, déposés par `cartofr.perimetre.deposer` (T046).
+# Un document remplacé n'est jamais effacé : sa ligne est fermée (`fin`), son fichier reste.
+# `if not exists` : la table s'ajoute aussi à un registre construit avant elle. Pas de séquence :
+# le dépôt, seul à écrire, numérote lui-même, et la reconstruction recopie les lignes telles quelles.
+DDL_DOCUMENTS = """
+create table if not exists documents_perimetre (
+    id bigint primary key,              -- numéro du dépôt, croissant
+    tete varchar not null,              -- SIREN de la tête du groupe qui publie le document
+    fichier varchar not null,           -- nom du fichier dans <CARTOFR_DATA>/perimetre/
+    empreinte varchar not null,         -- SHA-256 du fichier
+    debut timestamptz not null default current_timestamp,  -- déposé le
+    fin timestamptz,                    -- remplacé le ; vide = en vigueur
+    lignes integer not null,            -- lignes en France lues dans le document
+    retenues integer not null,          -- lignes retrouvées dans le registre
+    refusees integer not null           -- homonymes, introuvables, conflits
+);
+comment on table documents_perimetre is
+    'Documents de périmètre déposés, un en vigueur par tête. Fermés, jamais effacés.';
+"""
+
+
 def creer_tables(con: duckdb.DuckDBPyConnection) -> None:
     """Crée toutes les tables du registre, vides."""
     con.execute(DDL)
     con.execute(DDL_ARBRE)
+    con.execute(DDL_DOCUMENTS)
