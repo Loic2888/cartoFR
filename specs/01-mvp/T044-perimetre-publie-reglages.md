@@ -1,5 +1,7 @@
 # T044 — Mettre le périmètre publié dans les réglages du groupe, et le faire trouver par l'IA
 
+> **Abandonnée le 2026-10-16.** Le dépôt des documents passe par une commande du worker (T046) ; Loïc cherche lui-même les documents, sans IA ; SC-007 est retiré du PRD. Gardée pour l'historique.
+
 **Story** : US2 et US3 · **Phase** : 10, périmètre publié · **Parallèle** : —
 **Couvre** : FR-005 · FR-008 · SC-007 · R1 · R2 · R3 · R5 · P1 · P2 · P3 · P7
 **Estimé** : 5 à 7 h

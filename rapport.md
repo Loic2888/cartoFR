@@ -573,9 +573,22 @@ Restent ouverts : la règle du traitement mutualiste, et le volume des cartos du
 - Les documents se déposent par une commande du worker, en lot. Le champ de réglage prévu par T044 est abandonné.
 - À écrire dans une tâche : la règle de départage d'une société réclamée par deux groupes, dont les groupes imbriqués (un groupe dont la tête est inscrite dans le document d'un autre).
 
+### Dépôt des documents en lot, correspondance en un seul passage (T046)
+
+- Nouvelle commande `python -m cartofr.perimetre.deposer <tête> <fichier>` ou `--dossier <dossier>` (avec `index.csv` : `tete,fichier`). Chaque document est copié dans `data/perimetre/` sous un nom neuf (`<tête>-<horodatage UTC>`), jamais écrasé ni effacé, et enregistré dans la table `documents_perimetre` du registre. Un nouveau dépôt pour la même tête ferme le précédent ; un document identique ne change rien. Les anciens fichiers restent dans `data/perimetre/`, pas dans un sous-dossier `ancien/` comme l'écrivait la spec : un nom horodaté suffit à ne rien écraser.
+- `correspondre_plusieurs` lit les noms de SIRENE une seule fois pour tous les documents. Mesure (C3), LVMH et VINCI ensemble : 39 s groupés contre 70 s un par un, résultat identique ligne par ligne. La lecture des noms coûte 31 à 36 s selon la charge ; chaque document ensuite 0,1 à 0,2 s. Quelques centaines de documents tiennent donc en une à deux minutes. Les documents du pilote (Fnac Darty, Edenred) ne donnent toujours aucune ligne à l'extraction : ils n'ont pas servi à la mesure.
+- La recherche des marques sort tout de suite quand le groupe n'a aucune marque, sans relire les noms. Non-régression avec les réglages de `config/` inchangée : LVMH 155/172, VINCI 813/1 007, CMAF 43/52.
+- Revue adverse du jour. Corrigé :
+  - un document qui ne donne aucune ligne (PDF scanné, format inconnu) remplaçait le bon document en vigueur : il est refusé, rien n'est écrit ;
+  - `construire --remplacer` effaçait l'historique des dépôts : la reconstruction recopie `documents_perimetre` de l'ancien registre (le test a aussi trouvé que DuckDB refuse un paramètre dans `attach`) ;
+  - le registre restait verrouillé en écriture pendant toute la correspondance (25 à 40 s) : la correspondance se fait en lecture, l'écriture ne dure que la transaction finale ;
+  - une tête absente du registre était acceptée ; un index d'Excel (marque d'ordre des octets), un index mal formé, en cp1252 ou au point-virgule, un PDF abîmé sortaient en trace Python : tous refusés avec un message en français ;
+  - un `commit` raté laissait des copies orphelines ; une copie interrompue n'était pas retirée ; les noms horodatés pouvaient se heurter au changement d'heure (UTC désormais) ; le nom du fichier d'origine n'est plus affiché.
+- Tests : 21 dans `worker/tests/perimetre/test_deposer.py`, sur des documents et registres inventés. Suite worker : 553 réussis sans base Postgres.
+
 ### Départage d'une société réclamée par deux groupes (T047)
 
 - Nouveau paquet `cartofr.pays`, fonction pure `departager(reclamations, groupes)`. Règle : un groupe dont la tête est inscrite dans le document d'un autre devient son sous-groupe et garde sa carto (décision de Loïc : chercher LVMH rend LVMH, filiale de Christian Dior) ; une société réclamée par les deux va au sous-groupe, le plus proche d'elle. Hors emboîtement : inscription avant descente ; entre inscriptions, taux, puis taille, puis plus petite tête ; entre descentes, niveau, puis plus petite tête ; un arbre non réclamé perd toujours.
 - Écrite par un agent, relue : les parents se calculaient en comparant chaque tête à chaque autre, soit de l'ordre de 10^11 tours pour les 335 000 groupes du pays. Corrigé : parents calculés depuis les seuls documents ; test à 100 000 arbres en 1,5 s.
-- Choix faits sans la spec, à confirmer par Loïc : quand plusieurs documents inscrivent la même tête, le parent est le document le plus proche (A inscrit B et C, B inscrit C : C sous B) ; une boucle de plusieurs groupes se casse à sa plus petite tête ; les arbres sont écartés avant l'emboîtement, et l'emboîtement passe avant les autres règles (une descente dans B bat une inscription de A si B est sous A).
+- Choix faits sans la spec, confirmés par Loïc le 2026-10-17 : quand plusieurs documents inscrivent la même tête, le parent est le document le plus proche (A inscrit B et C, B inscrit C : C sous B) ; une boucle de plusieurs groupes se casse à sa plus petite tête ; les arbres sont écartés avant l'emboîtement, et l'emboîtement passe avant les autres règles (une descente dans B bat une inscription de A si B est sous A).
 - Tests : 31 dans `worker/tests/pays/test_departage.py`, dont 720 permutations de six réclamations et 300 graphes d'inscriptions tirés au hasard, sans boucle de parents.

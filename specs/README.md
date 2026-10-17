@@ -101,13 +101,28 @@ Ouverte le 2026-10-14 (mesures dans `rapport.md`) : sans réglages faits à la m
 
 - [x] `T042` — Lire le périmètre publié d'un groupe et retrouver ses sociétés dans le registre
 - [x] `T043` — Faire entrer dans la carto les sociétés du périmètre publié et leurs blocs *(après T042)*
-- [ ] `T044` — Mettre le périmètre publié dans les réglages du groupe, et le faire trouver par l'IA *(après T043)*
+- [ ] ~~`T044` — Mettre le périmètre publié dans les réglages du groupe, et le faire trouver par l'IA~~ *abandonnée le 2026-10-16 : le dépôt passe par T046, la recherche des documents est faite par Loïc, SC-007 est réécrit dans le PRD*
 
 ## Phase 11 : Arbre du registre — vers la carto du pays (P1)
 
 Ouverte le 2026-10-15 (mesure dans `rapport.md`) : les blocs du registre mêlent les groupes, les arbres à une mère les séparent proprement. La carto du pays elle-même, avec le recollage des arbres par les listes publiées, attend une mise à jour de `PRD.md`, d'`ARCHI.md` et du principe 2. *`PRD.md` (US7, US8, SC-001 réécrit, SC-008, SC-009) et le principe 2 mis à jour le 2026-10-16 ; `ARCHI.md` et les tâches restent à écrire.*
 
 - [x] `T045` — Construire l'arbre à une mère du registre
+
+## Phase 12 : Carto du pays (P1, sauf T051 en P2)
+
+Ouverte le 2026-10-16, après la révision de `PRD.md` (US7, US2 réécrite, US8) et d'`ARCHI.md` (ADR-006, ADR-007). Tout le pays est cartographié avant la mise en ligne.
+
+- [ ] `T046` [P] — Déposer les documents de périmètre en lot et les retrouver en un seul passage
+- [ ] `T047` [P] — Ranger une société réclamée par deux groupes dans un seul
+- [ ] `T048` — Calculer chaque nuit la carto du pays *(après T045, T046, T047)*
+- [ ] `T049` — Ranger les groupes mutualistes sans mêler leurs fédérations *(après T048 ; préalable : le DEU de CMAF déposé par Loïc)*
+- [ ] `T050` [P] — Lire la carto du groupe d'une société, sans attendre de calcul *(après T048)*
+- [ ] `T052` [P] — Mesurer la carto du pays : justesse sans correction, fraîcheur, couverture *(après T048)*
+- [ ] `T051` — Corriger la carto d'un groupe sans étape de validation, et en montrer l'effet *(P2, après T050)*
+- [ ] `T053` — Retrouver 90 % de LVMH sans correction *(après T052)*
+
+En parallèle, hors code : Loïc cherche et dépose les documents des groupes cotés à Paris (SC-008), dès que T046 est là.
 
 ## Carte des dépendances
 
@@ -129,6 +144,10 @@ T021 ─┬─ T025 ── T026        T021 ── T027 ── T028
       └─ T029 (+T019)        T009 ── T031
 T042 ── T043 ── T044 (+T020, T026)
 T007, T013 ── T045
+T042, T043 ── T046 ─┐
+              T047 ─┼─ T048 (+T045) ─┬─ T049
+                    │                ├─ T050 ── T051
+                    │                └─ T052 ── T053
 ```
 
 ## Tâches parallèles
@@ -139,20 +158,25 @@ Vérifié par fichiers partagés : deux tâches `[P]` d'une même phase ne touch
 - **Foundational** : T006 ∥ T007, puis T008 ∥ T009 (T009 touche `infra/docker-compose.yml`, qu'aucune autre tâche de la phase ne modifie).
 - **US1** : T011 ∥ T012 (`synchro_rne.py` et `synchro_sirene.py`, tests séparés).
 - **US2** : T016 ∥ T018, puis T019 ∥ T020, puis T022 ∥ T023.
+- **Carto du pays** : T046 ∥ T047 (aucun fichier commun), puis T050 ∥ T052 (`api_recherche.py` et `web/` contre `non_regression.py` et `fraicheur.py`).
 - **Jamais en parallèle**, parce qu'elles partagent des fichiers :
   - `worker/cartofr/jobs/__init__.py` : T008, T013, T021, T025 ;
   - `worker/tests/test_rls.py` : T006, T018 ;
   - `infra/docker-compose.yml` : T004, T009, T019 ;
   - `worker/cartofr/moteur/moteur.py` : T016, T027 ;
   - `rapport.md` : T010, T015, T024, T026.
+  - `worker/cartofr/pays/calcul.py` : T048, T049.
+  - `worker/cartofr/perimetre/correspondance.py` : T042, T046, T053.
 
 ## Couverture du PRD
 
 | Story | Priorité | Tâches | Exigences | Critères de succès |
 |---|---|---|---|---|
 | US1 | P1 | T010–T015 (+ T007) | FR-001, FR-002, FR-003 | SC-003 |
-| US2 | P1 | T016–T024 (+ T019 recherche) | FR-004, FR-005, FR-006, FR-007 | SC-001, SC-002, SC-004, SC-005 |
-| US3 | P2 | T025, T026 | FR-008 | SC-007 |
+| US2 | P1 | T016–T024 (+ T019 recherche), T050 (lecture de la carto du pays, 2026-10-16) | FR-004, FR-006, FR-007 | SC-001, SC-002, SC-004, SC-005 |
+| US7 | P1 | T045–T049, T052, T053 | FR-012, FR-013, FR-014 | SC-001, SC-004, SC-008, SC-009 |
+| US8 | P2 | T051 (+ T020, T021) | FR-005 | — |
+| US3 | P3 depuis le 2026-10-16 | T025, T026 | FR-008 | ~~SC-007~~ retiré |
 | US4 | P2 | T027, T028 | FR-009 | — |
 | US5 | P3 | T029 | FR-010 | — |
 | ~~US6~~ | — | retirée le 2026-10-13 | ~~FR-011~~ | — |
@@ -163,23 +187,28 @@ Vérifié par fichiers partagés : deux tâches `[P]` d'une même phase ne touch
 | FR-002 | T007, T011 |
 | FR-003 | T006, T007, T013, T014 |
 | FR-004 | T019 |
-| FR-005 | T008, T018, T020, T021 |
+| FR-005 | T008, T018, T020, T021, T051 (sans validation) |
 | FR-006 | T016, T017, T021 |
 | FR-007 | T018, T022, T023 |
 | FR-008 | T025, T026 |
 | FR-009 | T027, T028 |
 | FR-010 | T029 |
 | ~~FR-011~~ | retirée le 2026-10-13 |
+| FR-012 | T045, T047, T048 |
+| FR-013 | T046 |
+| FR-014 | T049 |
 
 | Critère | Tâches |
 |---|---|
-| SC-001 Justesse | T016 (non-régression du moteur), T024 (depuis l'app) |
-| SC-002 Moins de 30 min | T024 — **non mesuré** : chronométrage abandonné le 2026-10-13 (décision de Loïc) |
+| SC-001 Justesse, sans correction (réécrit le 2026-10-16) | T043 (mesure), T048 C4, T049 C3 (CMAF), T052 (depuis `pays.duckdb`), T053 (LVMH) ; avant : T016, T024 |
+| SC-002 Lecture en moins de 10 s (réécrit le 2026-10-16) | T050 C2 |
 | SC-003 Fraîcheur ≤ 7 jours | T011, T012, T015 |
 | SC-004 Moins de 5 min | T021 (durée enregistrée), T024 |
 | SC-005 Aucun nom de personne | T023 |
 | SC-006 Adoption à 3 mois | **Aucune tâche** : c'est une mesure faite 3 mois après la livraison du MVP, en comptant les missions. À noter dans `rapport.md` à cette date. |
-| SC-007 IA | T026 — **non tenu** le 2026-10-13 (64,7 corrections en moyenne au moins, cible < 5). Réécriture proposée par T044 : mesurer la carto obtenue sans correction |
+| ~~SC-007 IA~~ | Retiré le 2026-10-16 : la carto se juge sans correction (SC-001) |
+| SC-008 Couverture du pays | T048 C6 (sociétés rangées), T052 C3 (groupes cotés avec document) ; documents déposés par Loïc |
+| SC-009 Fraîcheur des cartos | T048 C2 (recalcul), T052 C2 (contrôle) |
 
 ## Contrôle constitutionnel
 
@@ -197,7 +226,9 @@ Vérifié par fichiers partagés : deux tâches `[P]` d'une même phase ne touch
 | R7 Isolation multi-tenant | ✅ | T006 C2, T018 C2 (A ne voit pas B), T021 C2 (`organisation_id` copié) |
 | R8 Tests sur la logique métier | ✅ | T017 (règles du moteur), T011 et T012 (synchro), T027 (cas douteux) |
 | P1 L'IA ne décide pas | ✅ | T025 C1 (proposition non validée) |
-| P2 Réglages validés par un humain | ✅ | T020, T021 C1 (refus d'une version non validée) |
+| P2 Carto sans validation, correction tracée (amendé le 2026-10-16) | ✅ | T048 (carto sans entrée humaine hors des documents), T051 (plus de validation ; auteur, date et effet gardés). Avant : T020, T021 C1 |
+| G6 Sommet entrepreneur individuel (2026-10-16) | ✅ | T048 C3, T050 C3 |
+| R7 Carto du pays commune, corrections cloisonnées (2026-10-16) | ✅ | T050 (lecture commune), T051 C4 (test RLS) |
 | P3 Aucun appel extérieur pendant une carto | ✅ | T016 C2 (moteur avec le réseau coupé) |
 | P4 Fermer, jamais effacer | ✅ | T011 C2 et C4 |
 | P5 Pas de régression silencieuse | ✅ | T016 C1, T024 C1, T027 C4, T032 C3. La non-régression a besoin de `data/` (19 Go) : elle tourne en local avant chaque PR qui touche le moteur, pas dans la CI |
