@@ -585,3 +585,10 @@ Restent ouverts : la règle du traitement mutualiste, et le volume des cartos du
   - une tête absente du registre était acceptée ; un index d'Excel (marque d'ordre des octets), un index mal formé, en cp1252 ou au point-virgule, un PDF abîmé sortaient en trace Python : tous refusés avec un message en français ;
   - un `commit` raté laissait des copies orphelines ; une copie interrompue n'était pas retirée ; les noms horodatés pouvaient se heurter au changement d'heure (UTC désormais) ; le nom du fichier d'origine n'est plus affiché.
 - Tests : 21 dans `worker/tests/perimetre/test_deposer.py`, sur des documents et registres inventés. Suite worker : 553 réussis sans base Postgres.
+
+### Départage d'une société réclamée par deux groupes (T047)
+
+- Nouveau paquet `cartofr.pays`, fonction pure `departager(reclamations, groupes)`. Règle : un groupe dont la tête est inscrite dans le document d'un autre devient son sous-groupe et garde sa carto (décision de Loïc : chercher LVMH rend LVMH, filiale de Christian Dior) ; une société réclamée par les deux va au sous-groupe, le plus proche d'elle. Hors emboîtement : inscription avant descente ; entre inscriptions, taux, puis taille, puis plus petite tête ; entre descentes, niveau, puis plus petite tête ; un arbre non réclamé perd toujours.
+- Écrite par un agent, relue : les parents se calculaient en comparant chaque tête à chaque autre, soit de l'ordre de 10^11 tours pour les 335 000 groupes du pays. Corrigé : parents calculés depuis les seuls documents ; test à 100 000 arbres en 1,5 s.
+- Choix faits sans la spec, confirmés par Loïc le 2026-10-17 : quand plusieurs documents inscrivent la même tête, le parent est le document le plus proche (A inscrit B et C, B inscrit C : C sous B) ; une boucle de plusieurs groupes se casse à sa plus petite tête ; les arbres sont écartés avant l'emboîtement, et l'emboîtement passe avant les autres règles (une descente dans B bat une inscription de A si B est sous A).
+- Tests : 31 dans `worker/tests/pays/test_departage.py`, dont 720 permutations de six réclamations et 300 graphes d'inscriptions tirés au hasard, sans boucle de parents.
