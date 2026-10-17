@@ -35,11 +35,11 @@ La carto du pays recolle les arbres du registre grâce aux listes publiées par 
 | P7 | ✅ | Tout dans `worker/` |
 
 ## Critères de succès
-- [ ] **C1** : `deposer` sur un fichier ou un dossier copie les documents dans `data/perimetre/`, écrit une ligne par document dans `documents_perimetre` et affiche, par document, le nombre de lignes retrouvées et refusées par raison. Un nouveau dépôt pour la même tête remplace le document et garde l'ancien (tests)
-- [ ] **C2** : `correspondre_plusieurs` rend, pour chaque ligne, le même résultat que `correspondre` sur son document seul (test sur trois documents inventés, homonymes départagés par le registre compris)
-- [ ] **C3** : sur LVMH, VINCI, Fnac Darty et Edenred ensemble, la correspondance groupée prend moins de 40 s, contre environ 110 s document par document. Mesure relevée dans `rapport.md`
-- [ ] **C4** : la sortie de la commande ne contient que des lignes de sociétés et des nombres : jamais les lignes d'avant ni un nom de dirigeant (test)
-- [ ] **C5** : `chercher_candidates` sans aucune marque rend une liste vide sans lire `unites_legales` (test) ; la non-régression avec les réglages de `config/` est inchangée
+- [x] **C1** : `deposer` sur un fichier ou un dossier copie les documents dans `data/perimetre/`, écrit une ligne par document dans `documents_perimetre` et affiche, par document, le nombre de lignes retrouvées et refusées par raison. Un nouveau dépôt pour la même tête remplace le document et garde l'ancien (tests)
+- [x] **C2** : `correspondre_plusieurs` rend, pour chaque ligne, le même résultat que `correspondre` sur son document seul (test sur trois documents inventés, homonymes départagés par le registre compris)
+- [x] **C3** : sur LVMH, VINCI, Fnac Darty et Edenred ensemble, la correspondance groupée prend moins de 40 s, contre environ 110 s document par document. Mesure relevée dans `rapport.md`. *Tenu le 2026-10-17 sur LVMH et VINCI seuls : 39 s groupés contre 70 s un par un. Fnac Darty et Edenred ne donnent toujours aucune ligne à l'extraction, ils n'ont pas pu servir*
+- [x] **C4** : la sortie de la commande ne contient que des lignes de sociétés et des nombres : jamais les lignes d'avant ni un nom de dirigeant (test)
+- [x] **C5** : `chercher_candidates` sans aucune marque rend une liste vide sans lire `unites_legales` (test) ; la non-régression avec les réglages de `config/` est inchangée
 
 ## Dépendances
 **À finir avant** : T042, T043

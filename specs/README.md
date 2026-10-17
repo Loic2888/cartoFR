@@ -113,8 +113,8 @@ Ouverte le 2026-10-15 (mesure dans `rapport.md`) : les blocs du registre mêlent
 
 Ouverte le 2026-10-16, après la révision de `PRD.md` (US7, US2 réécrite, US8) et d'`ARCHI.md` (ADR-006, ADR-007). Tout le pays est cartographié avant la mise en ligne.
 
-- [ ] `T046` [P] — Déposer les documents de périmètre en lot et les retrouver en un seul passage
-- [ ] `T047` [P] — Ranger une société réclamée par deux groupes dans un seul
+- [x] `T046` [P] — Déposer les documents de périmètre en lot et les retrouver en un seul passage
+- [x] `T047` [P] — Ranger une société réclamée par deux groupes dans un seul
 - [ ] `T048` — Calculer chaque nuit la carto du pays *(après T045, T046, T047)*
 - [ ] `T049` — Ranger les groupes mutualistes sans mêler leurs fédérations *(après T048 ; préalable : le DEU de CMAF déposé par Loïc)*
 - [ ] `T050` [P] — Lire la carto du groupe d'une société, sans attendre de calcul *(après T048)*

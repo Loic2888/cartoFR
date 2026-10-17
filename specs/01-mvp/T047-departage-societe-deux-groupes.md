@@ -30,10 +30,10 @@ Une fonction pure, sans registre : elle reçoit les réclamations (groupe, soci�
 | P7 | ✅ | Paquet Python |
 
 ## Critères de succès
-- [ ] **C1** : chaque étape de la règle est testée seule : groupes emboîtés (une société de B réclamée aussi par A reste dans B ; trois niveaux ; une boucle A inscrit B, B inscrit A, où le parent est la plus petite tête), inscription contre descente, taux, taille, niveau, SIREN
-- [ ] **C2** : le résultat ne dépend pas de l'ordre des réclamations (test sur des permutations), et chaque société en entrée sort une fois et une seule
-- [ ] **C3** : chaque société rangée porte la raison du choix quand il y a eu départage (« inscrite au document de … », « dans le sous-groupe … de … »), sans nom de personne
-- [ ] **C4** : chaque groupe rendu porte son groupe parent ou aucun, et les parents ne forment jamais de boucle (test)
+- [x] **C1** : chaque étape de la règle est testée seule : groupes emboîtés (une société de B réclamée aussi par A reste dans B ; trois niveaux ; une boucle A inscrit B, B inscrit A, où le parent est la plus petite tête), inscription contre descente, taux, taille, niveau, SIREN
+- [x] **C2** : le résultat ne dépend pas de l'ordre des réclamations (test sur des permutations), et chaque société en entrée sort une fois et une seule
+- [x] **C3** : chaque société rangée porte la raison du choix quand il y a eu départage (« inscrite au document de … », « dans le sous-groupe … de … »), sans nom de personne
+- [x] **C4** : chaque groupe rendu porte son groupe parent ou aucun, et les parents ne forment jamais de boucle (test)
 
 ## Dépendances
 **À finir avant** : —
