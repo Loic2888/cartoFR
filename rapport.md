@@ -592,3 +592,15 @@ Restent ouverts : la règle du traitement mutualiste, et le volume des cartos du
 - Écrite par un agent, relue : les parents se calculaient en comparant chaque tête à chaque autre, soit de l'ordre de 10^11 tours pour les 335 000 groupes du pays. Corrigé : parents calculés depuis les seuls documents ; test à 100 000 arbres en 1,5 s.
 - Choix faits sans la spec, confirmés par Loïc le 2026-10-17 : quand plusieurs documents inscrivent la même tête, le parent est le document le plus proche (A inscrit B et C, B inscrit C : C sous B) ; une boucle de plusieurs groupes se casse à sa plus petite tête ; les arbres sont écartés avant l'emboîtement, et l'emboîtement passe avant les autres règles (une descente dans B bat une inscription de A si B est sous A).
 - Tests : 31 dans `worker/tests/pays/test_departage.py`, dont 720 permutations de six réclamations et 300 graphes d'inscriptions tirés au hasard, sans boucle de parents.
+
+## 2026-10-18
+
+### La carto d'une société descend, elle ne remonte pas
+
+Décision de Loïc. La carto d'une société, c'est cette société et tout ce qui descend d'elle : ses filiales, puis leurs filiales. On ne remonte jamais à sa mère ou à ses actionnaires pour prendre leurs autres filiales.
+
+- Avant : `PRD.md` (US7, FR-012) et `ARCHI.md` rangeaient chaque société dans l'arbre entier de son sommet (T045). Chercher une filiale rendait aussi ses sœurs, et les filiales du holding qui la préside.
+- Après : chaque société garde au plus une mère (document du groupe, sinon arbre du registre). La lecture (`/groupe?siren=`) part de la société cherchée et descend. Une société inscrite au document d'un groupe y entre avec ses filiales, sans les autres filiales de sa mère au registre.
+- La carto d'une filiale nomme sa mère directe au-dessus de l'arbre, avec un lien vers la carto de la mère, sans ses autres filiales (décision de Loïc, même jour). Une mère entrepreneur individuel n'est pas affichée (garde-fou 6).
+- S'accorde avec les groupes emboîtés (2026-10-16, T047) : le rangement d'une société dans un seul groupe ne change pas, seule la lecture change. La carto de la tête d'un groupe reste le groupe entier. T048 (C1) et T050 (route `/groupe`, page) sont réécrites en ce sens.
+- Aucun code à changer : la table `arbre` porte déjà la mère de chaque société, et le moteur (T043) descend depuis la tête et les sociétés inscrites. Les scores de LVMH et VINCI (83 %, 2026-10-16) viennent du moteur : ils ne bougent pas.

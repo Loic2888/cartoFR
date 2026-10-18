@@ -18,8 +18,9 @@ Youno (missions clients), commercialisable ensuite.
 2. **Cartographie** : l'app calcule à l'avance la carto de tout le pays (décidé
    le 2026-10-16, PRD US7) : chaque société active rangée dans un groupe, à partir
    du registre et des listes de sociétés consolidées publiées par les groupes.
-   L'utilisateur donne le nom d'une entreprise, l'app rend l'arbre de son groupe
-   en France (maison mère, filiales, sous-filiales), avec pour chaque lien sa
+   L'utilisateur donne le nom d'une entreprise, l'app rend l'arbre sous cette
+   entreprise en France (elle, ses filiales, sous-filiales), jamais les autres
+   filiales de ses actionnaires (décidé le 2026-10-18), avec pour chaque lien sa
    preuve, une confiance A/B/C et si la société est ciblable. Tout le pays est
    cartographié avant la mise en ligne (PRD SC-008).
    V1 : une carto qui affiche la date de ses données, 7 jours au plus. Pas d'alertes, pas de
