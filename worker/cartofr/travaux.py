@@ -36,6 +36,10 @@ c'est la boucle qui planifie. La planification n'est active que si
 CARTOFR_SYNCHRO_HEURE est définie (ou `planifier=True`) : un test ou un outil
 qui lance la boucle ne déclenche jamais de synchro, donc aucun appel INPI ou
 INSEE. En production : CARTOFR_SYNCHRO_HEURE=02:00.
+
+Carto du pays (T048) : quand la planification est active, chaque tour appelle aussi
+`planifier_pays`, qui insère un travail `pays` après chaque synchro terminée, et au plus tard
+7 jours après le dernier calcul réussi, même sans synchro.
 """
 
 import logging
@@ -260,6 +264,68 @@ def planifier_synchro(conn: Connexion, maintenant: datetime, heure: time = HEURE
     return int(ligne[0])
 
 
+# Clé du verrou de transaction qui sérialise la planification de la carto du pays.
+CLE_PLANIFICATION_PAYS = 7_048_000_001
+
+# Un travail `pays` est inséré si aucun n'attend ni ne tourne, et :
+# (un `en_cours` commencé depuis plus de 6 h est un travail orphelin, processus mort pendant le
+# calcul : il ne bloque plus la planification, sinon plus aucun calcul ne serait jamais planifié)
+# - qu'une synchro s'est terminée depuis la création du dernier travail `pays` (ou qu'il n'y en a
+#   jamais eu) ;
+# - ou qu'aucun calcul n'a réussi depuis 7 jours, et qu'aucun travail `pays` n'a été créé depuis
+#   un jour (un calcul qui échoue est réessayé une fois par jour, pas à chaque tour).
+_PLANIFIER_PAYS: LiteralString = """
+with dernier as (select max(cree_le) as le from public.travaux where type = 'pays')
+insert into public.travaux (type, parametres, cree_le)
+select 'pays', %(parametres)s, %(maintenant)s
+ where not exists (
+         select 1 from public.travaux
+          where type = 'pays'
+            and (statut = 'en_attente'
+                 or (statut = 'en_cours'
+                     and coalesce(debut_le, cree_le) > %(maintenant)s - interval '6 hours'))
+       )
+   and (
+         exists (
+           select 1 from public.travaux s, dernier
+            where s.type = 'synchro' and s.statut = 'termine'
+              and (dernier.le is null or s.fin_le > dernier.le)
+         )
+         or (
+           not exists (
+             select 1 from public.travaux
+              where type = 'pays' and statut = 'termine' and fin_le > %(maintenant)s - interval '7 days'
+           )
+           and not exists (
+             select 1 from public.travaux
+              where type = 'pays' and cree_le > %(maintenant)s - interval '1 day'
+           )
+         )
+       )
+returning id
+"""
+
+
+def planifier_pays(conn: Connexion, maintenant: datetime) -> int | None:
+    """Insère un travail `pays` s'il le faut (voir `_PLANIFIER_PAYS`). Rend l'id inséré, ou None.
+
+    Deux appels simultanés sont sérialisés par un verrou de transaction : le second voit le travail
+    du premier en attente. `cree_le` vaut `maintenant`.
+    """
+    try:
+        conn.execute("select pg_advisory_xact_lock(%s)", (CLE_PLANIFICATION_PAYS,))
+        parametres = {"parametres": Jsonb({"planifie_le": maintenant.isoformat()}), "maintenant": maintenant}
+        ligne = conn.execute(_PLANIFIER_PAYS, parametres).fetchone()
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise
+    if ligne is None:
+        return None
+    log.info("travail %s (pays) planifié", ligne[0])
+    return int(ligne[0])
+
+
 def _fermer(conn: Connexion | None) -> None:
     if conn is None or conn.closed:
         return
@@ -281,8 +347,8 @@ def boucle(
     (nom de classe seulement) et la boucle continue ; une connexion perdue
     est rouverte au tour suivant.
 
-    `planifier` : insérer le travail `synchro` de chaque nuit. None (défaut) :
-    seulement si CARTOFR_SYNCHRO_HEURE est définie.
+    `planifier` : insérer le travail `synchro` de chaque nuit et les travaux `pays`. None
+    (défaut) : seulement si CARTOFR_SYNCHRO_HEURE est définie.
     """
     arret = arret or threading.Event()
     if planifier is None:
@@ -305,6 +371,7 @@ def boucle(
                     if local.date() != planifie_pour and local.time() >= heure:
                         planifier_synchro(conn, maintenant, heure)
                         planifie_pour = local.date()
+                    planifier_pays(conn, maintenant)
                 if not traiter_un(conn):
                     arret.wait(intervalle)
             except Exception as exc:

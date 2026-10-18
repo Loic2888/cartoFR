@@ -13,7 +13,7 @@ Les étapes du travail `pays` (ARCHI, « Carto du pays ») :
 2. la correspondance de tous les documents déposés (T046) ;
 3. le moteur, tête seule + périmètre, pour chaque groupe à document ;
 4. *(le traitement mutualiste viendra avec T049)* ;
-5. les arbres qu'aucun groupe ne réclame deviennent leurs propres groupes : preuve « Mandat au registre : <rôle> », confiance A. Un sommet entrepreneur individuel n'est jamais une tête : le groupe est présenté par sa plus grande société, la tête est dite « personne physique, non affichée » ;
+5. les arbres qu'aucun groupe ne réclame deviennent leurs propres groupes : preuve « Mandat au registre : <rôle> », confiance A. Un entrepreneur individuel n'est jamais écrit : chacune de ses sociétés est la tête de son propre groupe, comme une société dont la mère est fermée ou prise par un groupe à document (décision de Loïc, 2026-10-18) ;
 6. le départage (T047) ;
 7. l'écriture de `pays.duckdb` à côté, puis le renommage, et une ligne `pays` dans `mises_a_jour`.
 
@@ -41,12 +41,12 @@ Les étapes du travail `pays` (ARCHI, « Carto du pays ») :
 | FR-003 Dernier état valide | ✅ | Écriture à côté puis renommage ; un échec laisse le fichier précédent (C5) |
 
 ## Critères de succès
-- [ ] **C1** : sur un mini-registre, chaque société active est soit dans exactement un groupe de `pays_societes`, soit absente (son propre groupe) ; un groupe emboîté porte son groupe parent dans `pays_groupes` ; un groupe à document reçoit ses sociétés inscrites et ce qui descend d'elles, jamais les autres filiales de leur mère au registre (2026-10-18) ; un arbre non réclamé est son propre groupe avec la preuve du rôle (tests)
-- [ ] **C2** : le travail est inséré après chaque synchro réussie, et au plus tard 7 jours après le dernier calcul réussi, même sans synchro (tests de planification)
-- [ ] **C3** : un arbre dont le sommet est un entrepreneur individuel n'a jamais ce SIREN comme tête ; aucun nom de personne dans `pays.duckdb` ni dans le journal (tests)
-- [ ] **C4** : sur le registre réel, les groupes de LVMH et VINCI dans `pays.duckdb` contiennent les mêmes sociétés que `non_regression.py --perimetre --sans-reglages` (142/172 et 836/1 007 au 2026-10-16)
-- [ ] **C5** : un calcul qui échoue laisse le `pays.duckdb` précédent et une ligne `echec` dans `mises_a_jour` ; un succès écrit une ligne `succes` avec le nombre de groupes et de sociétés rangées (tests)
-- [ ] **C6** : `mesure_pays.py` sur le registre réel relève la durée totale (cible : moins d'une heure pour les documents déposés), la mémoire au plus, le nombre de groupes et la part des sociétés actives rangées (SC-008, première moitié : 100 %). Chiffres dans `rapport.md`
+- [x] **C1** : sur un mini-registre, chaque société active est soit dans exactement un groupe de `pays_societes`, soit absente (son propre groupe) ; un groupe emboîté porte son groupe parent dans `pays_groupes` ; un groupe à document reçoit ses sociétés inscrites et ce qui descend d'elles, jamais les autres filiales de leur mère au registre (2026-10-18) ; un arbre non réclamé est son propre groupe avec la preuve du rôle (tests)
+- [x] **C2** : le travail est inséré après chaque synchro réussie, et au plus tard 7 jours après le dernier calcul réussi, même sans synchro (tests de planification)
+- [x] **C3** : un arbre dont le sommet est un entrepreneur individuel n'a jamais ce SIREN comme tête ; aucun nom de personne dans `pays.duckdb` ni dans le journal (tests)
+- [x] **C4** : sur le registre réel, les groupes de LVMH et VINCI dans `pays.duckdb` contiennent les mêmes sociétés que `non_regression.py --perimetre --sans-reglages` (142/172 et 836/1 007 au 2026-10-16)
+- [x] **C5** : un calcul qui échoue laisse le `pays.duckdb` précédent et une ligne `echec` dans `mises_a_jour` ; un succès écrit une ligne `succes` avec le nombre de groupes et de sociétés rangées (tests)
+- [x] **C6** : `mesure_pays.py` sur le registre réel relève la durée totale (cible : moins d'une heure pour les documents déposés), la mémoire au plus, le nombre de groupes et la part des sociétés actives rangées (SC-008, première moitié : 100 %). Chiffres dans `rapport.md`
 
 ## Dépendances
 **À finir avant** : T045, T046, T047

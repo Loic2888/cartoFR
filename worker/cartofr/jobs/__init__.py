@@ -59,5 +59,6 @@ def ping(ctx: Contexte) -> None:
 
 # Types de travaux enregistrés par leur module (import en bas : ils importent ce module).
 from cartofr.jobs import carto as carto  # noqa: E402
+from cartofr.jobs import pays as pays  # noqa: E402
 from cartofr.jobs import proposition as proposition  # noqa: E402
 from cartofr.jobs import synchro as synchro  # noqa: E402

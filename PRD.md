@@ -114,7 +114,7 @@ L'app tient sa propre copie du registre français (SIRENE et RNE), avec tous les
 ### Cas limites
 - **Société introuvable** : message « Aucune société trouvée », avec la possibilité de saisir directement un SIREN.
 - **Société seule, sans aucun lien au registre** : elle est son propre groupe ; la carto la montre seule, avec un avertissement qui explique pourquoi.
-- **Sommet d'arbre qui est une personne** (entrepreneur individuel qui préside des sociétés) : la carto n'affiche ni son nom ni son SIREN. Le groupe est présenté par sa plus grande société, et la tête est dite « personne physique, non affichée » (garde-fou 6).
+- **Sommet d'arbre qui est une personne** (entrepreneur individuel qui préside des sociétés) : la carto n'affiche ni son nom ni son SIREN. Chacune de ses sociétés est la tête de son propre groupe : on ne regroupe pas les sociétés d'une même personne, comme on ne prend pas les filiales des actionnaires (décidé le 2026-10-18 ; avant, elles formaient un groupe présenté par la plus grande). Même règle pour une mère fermée (garde-fou 6).
 - **Document de périmètre ancien ou d'un autre groupe** : les lignes retrouvées et refusées sont montrées au dépôt (US7, scénario 5) ; un document se remplace, l'ancien est conservé.
 - **Site d'un groupe qui refuse le téléchargement** (BFCM, 403) : le document est déposé à la main, en PDF.
 - **Mise à jour en cours pendant un calcul** : le calcul utilise une photo cohérente de la base et affiche sa date.
