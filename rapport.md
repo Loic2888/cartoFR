@@ -581,4 +581,5 @@ Décision de Loïc. La carto d'une société, c'est cette société et tout ce q
 
 - Avant : `PRD.md` (US7, FR-012) et `ARCHI.md` rangeaient chaque société dans l'arbre entier de son sommet (T045). Chercher une filiale rendait aussi ses sœurs, et les filiales du holding qui la préside.
 - Après : chaque société garde au plus une mère (document du groupe, sinon arbre du registre). La lecture (`/groupe?siren=`) part de la société cherchée et descend. Une société inscrite au document d'un groupe y entre avec ses filiales, sans les autres filiales de sa mère au registre.
+- La carto d'une filiale nomme sa mère directe au-dessus de l'arbre, avec un lien vers la carto de la mère, sans ses autres filiales (décision de Loïc, même jour). Une mère entrepreneur individuel n'est pas affichée (garde-fou 6).
 - Aucun code à changer : la table `arbre` porte déjà la mère de chaque société, et le moteur (T043) descend depuis la tête et les sociétés inscrites. Les scores de LVMH et VINCI (83 %, 2026-10-16) viennent du moteur : ils ne bougent pas.
