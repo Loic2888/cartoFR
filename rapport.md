@@ -572,3 +572,13 @@ Restent ouverts : la règle du traitement mutualiste, et le volume des cartos du
 - La carto du pays vit dans `pays.duckdb`, sur le worker, à côté du registre (ADR-006). L'interface lit un groupe par la route interne `/groupe`. Postgres ne garde que les corrections, les décisions et les cartos corrigées de chaque organisation.
 - Les documents se déposent par une commande du worker, en lot. Le champ de réglage prévu par T044 est abandonné.
 - À écrire dans une tâche : la règle de départage d'une société réclamée par deux groupes, dont les groupes imbriqués (un groupe dont la tête est inscrite dans le document d'un autre).
+
+## 2026-10-18
+
+### La carto d'une société descend, elle ne remonte pas
+
+Décision de Loïc. La carto d'une société, c'est cette société et tout ce qui descend d'elle : ses filiales, puis leurs filiales. On ne remonte jamais à sa mère ou à ses actionnaires pour prendre leurs autres filiales.
+
+- Avant : `PRD.md` (US7, FR-012) et `ARCHI.md` rangeaient chaque société dans l'arbre entier de son sommet (T045). Chercher une filiale rendait aussi ses sœurs, et les filiales du holding qui la préside.
+- Après : chaque société garde au plus une mère (document du groupe, sinon arbre du registre). La lecture (`/groupe?siren=`) part de la société cherchée et descend. Une société inscrite au document d'un groupe y entre avec ses filiales, sans les autres filiales de sa mère au registre.
+- Aucun code à changer : la table `arbre` porte déjà la mère de chaque société, et le moteur (T043) descend depuis la tête et les sociétés inscrites. Les scores de LVMH et VINCI (83 %, 2026-10-16) viennent du moteur : ils ne bougent pas.
