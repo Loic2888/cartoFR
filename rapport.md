@@ -604,3 +604,20 @@ Décision de Loïc. La carto d'une société, c'est cette société et tout ce q
 - La carto d'une filiale nomme sa mère directe au-dessus de l'arbre, avec un lien vers la carto de la mère, sans ses autres filiales (décision de Loïc, même jour). Une mère entrepreneur individuel n'est pas affichée (garde-fou 6).
 - S'accorde avec les groupes emboîtés (2026-10-16, T047) : le rangement d'une société dans un seul groupe ne change pas, seule la lecture change. La carto de la tête d'un groupe reste le groupe entier. T048 (C1) et T050 (route `/groupe`, page) sont réécrites en ce sens.
 - Aucun code à changer : la table `arbre` porte déjà la mère de chaque société, et le moteur (T043) descend depuis la tête et les sociétés inscrites. Les scores de LVMH et VINCI (83 %, 2026-10-16) viennent du moteur : ils ne bougent pas.
+
+### Carto du pays calculée chaque nuit (T048)
+
+- Nouveau paquet `cartofr.pays.calcul` et travail `pays` : arbre, documents en vigueur retrouvés en un seul passage, moteur tête seule + périmètre par groupe à document, départage (T047), groupes des arbres, puis `pays.duckdb` écrit à côté et renommé. Une ligne `pays` dans `mises_a_jour` (`ajoutes` : sociétés rangées, `fermes` : groupes).
+- Règle appliquée (décision de Loïc du jour) : un groupe est la descente depuis sa tête. Une société dont la mère est un entrepreneur individuel, une société fermée ou une société prise par un groupe à document est la tête de son propre groupe. Les sociétés d'une même personne ne sont plus regroupées (PRD, cas limite, mis à jour).
+- Planification : un travail `pays` après chaque synchro terminée, et au plus tard 7 jours après le dernier calcul réussi ; un calcul en échec est réessayé une fois par jour ; un travail resté `en_cours` plus de 6 h (processus mort) ne bloque plus.
+- Le moteur accepte des correspondances déjà calculées (`cartographier(..., correspondances=)`) : sans cela, chaque groupe relisait les 13 M de noms (30 s par groupe). Non-régression inchangée : LVMH 155/172, VINCI 813/1 007, CMAF 43/52.
+- Mesure sur le registre réel, LVMH et VINCI déposés (`worker/scripts/mesure_pays.py`) : 114 s au total, 2,3 Go de mémoire au plus. 288 449 groupes de 2 sociétés ou plus, 937 396 sociétés dans ces groupes (12,0 % des 7 827 096 sociétés actives), les autres seules ; aucune ligne hors des sociétés actives. C4 : les cartos de LVMH (209 sociétés, 142/172 de la référence) et de VINCI (1 456, 836/1 007) sont identiques à celles de `non_regression.py --perimetre --sans-reglages`.
+- 288 449 groupes contre 335 210 arbres de T045 : les sociétés d'un entrepreneur individuel ou d'une mère fermée ne sont plus réunies, et celles qui restent seules ne forment plus de groupe.
+- Revue adverse du jour. Corrigé :
+  - le départage pouvait ranger la tête d'un groupe à document dans un autre groupe (deux documents qui s'inscrivent l'un l'autre, ou deux documents qui inscrivent la même tête) : groupe sans tête et mères en boucle. La tête reste désormais dans son groupe ;
+  - un travail `pays` resté `en_cours` après la mort du processus bloquait toute planification future ;
+  - la preuve de la tête d'un sous-groupe nommait le mauvais groupe quand sa mère directe était prise par un troisième ;
+  - un PDF abîmé pouvait faire échouer toute la carto (pypdf lève d'autres erreurs que `PyPdfError`) : il est compté en échec ;
+  - la ligne du journal pouvait rester `en_cours` si le registre était occupé à la fin ; un vieux WAL de `pays.duckdb` aurait été rejoué sur le nouveau fichier ; la mesure affichait 100 % de sociétés rangées sans le mesurer.
+- Tests : 24 dans `worker/tests/pays/test_calcul.py` et 6 dans `test_planification.py`, sur des registres et documents inventés. Suite worker : 740 réussis.
+- Limite : le travail `pays` tient la file pendant son calcul ; une carto lancée par un consultant attend derrière lui (2 min aujourd'hui, à mesurer quand des centaines de documents seront déposés, T052).

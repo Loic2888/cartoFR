@@ -622,10 +622,14 @@ def test_boucle_planifie_seulement_si_l_heure_est_reglee(
             arret.set()
         return False
 
+    pays: list[datetime] = []
     monkeypatch.setattr(travaux, "planifier_synchro", lambda _c, m, _h: appels.append(m))
+    monkeypatch.setattr(travaux, "planifier_pays", lambda _c, m: pays.append(m))
     monkeypatch.setattr(travaux, "traiter_un", traiter)
     travaux.boucle(arret, 0.0, connecteur=lambda: cast(Connexion, FausseConnexion()))
     assert tours["n"] == 5 and len(appels) == attendu  # une seule vérification pour le jour en cours
+    # La carto du pays (T048) se vérifie à chaque tour, seulement si la planification est active.
+    assert len(pays) == (5 if attendu else 0)
 
 
 @pytest.mark.parametrize(("brut", "attendu"), [("", 1), ("2", 2), ("0", 1), ("x", 1)])

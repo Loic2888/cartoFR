@@ -115,7 +115,7 @@ Ouverte le 2026-10-16, après la révision de `PRD.md` (US7, US2 réécrite, US8
 
 - [x] `T046` [P] — Déposer les documents de périmètre en lot et les retrouver en un seul passage
 - [x] `T047` [P] — Ranger une société réclamée par deux groupes dans un seul
-- [ ] `T048` — Calculer chaque nuit la carto du pays *(après T045, T046, T047)*
+- [x] `T048` — Calculer chaque nuit la carto du pays *(après T045, T046, T047)*
 - [ ] `T049` — Ranger les groupes mutualistes sans mêler leurs fédérations *(après T048 ; préalable : le DEU de CMAF déposé par Loïc)*
 - [ ] `T050` [P] — Lire la carto du groupe d'une société, sans attendre de calcul *(après T048)*
 - [ ] `T052` [P] — Mesurer la carto du pays : justesse sans correction, fraîcheur, couverture *(après T048)*

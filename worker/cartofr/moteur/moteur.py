@@ -37,7 +37,7 @@ calcul. Aucun nom de personne n'est rendu : la `Carto` n'a aucun champ qui puiss
 
 import collections
 import re
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 from pathlib import Path
@@ -62,7 +62,7 @@ from cartofr.moteur.modele import (
 )
 
 if TYPE_CHECKING:  # import réel dans `_inscrites` : cartofr.perimetre importe ce module
-    from cartofr.perimetre import LignePerimetre, PerimetrePublie
+    from cartofr.perimetre import Correspondance, LignePerimetre, PerimetrePublie
 
 # Codes de rôle RNE, reconstitués en croisant 195 fiches avec les rôles lus par Basile (role_codes.py).
 STRONG = {
@@ -766,17 +766,23 @@ class _Moteur:
             return True, "Société mère du groupe"
         if any(k == "organigramme" for k, _ in self.ev[s]):
             return True, "Tête de maison"
-        cj, naf, tr, sal = i.get("cj"), i.get("naf"), i.get("tranche"), (v.salaries if v else None)
-        big = (tr not in SMALL_TRANCHES) or bool(sal and sal >= 10)
-        if civile(cj) and not big:
-            return False, "Société civile ou SCI"
-        if gie(cj) and not big:
-            return False, "GIE de moyens"
-        if naf in HOLDING_NAF and not big:
-            return False, "Holding ou société immobilière sans salarié déclaré"
-        if tr == "00" and not sal:
-            return False, "Aucun salarié"
-        return True, "Société opérationnelle"
+        return ciblable_par_fiche(i.get("cj"), i.get("naf"), i.get("tranche"), v.salaries if v else None)
+
+
+def ciblable_par_fiche(cj: Any, naf: Any, tranche: Any, salaries: int | None) -> tuple[bool, str]:
+    """La règle « ciblable » d'une société qui n'est ni tête de groupe ni tête de maison, d'après sa
+    fiche : catégorie juridique, NAF, tranche INSEE et salariés RNE. Sert aussi aux arbres de la
+    carto du pays (T048), qui ne passent pas par le moteur."""
+    big = (tranche not in SMALL_TRANCHES) or bool(salaries and salaries >= 10)
+    if civile(cj) and not big:
+        return False, "Société civile ou SCI"
+    if gie(cj) and not big:
+        return False, "GIE de moyens"
+    if naf in HOLDING_NAF and not big:
+        return False, "Holding ou société immobilière sans salarié déclaré"
+    if tranche == "00" and not salaries:
+        return False, "Aucun salarié"
+    return True, "Société opérationnelle"
 
 
 def date_des_donnees(con: duckdb.DuckDBPyConnection) -> date | None:
@@ -814,14 +820,21 @@ def decisions_en_vigueur(lignes: Iterable[tuple[str, str, datetime, int]]) -> di
 
 
 def _inscrites(
-    con: duckdb.DuckDBPyConnection, tete: str, perimetre: "PerimetrePublie"
+    con: duckdb.DuckDBPyConnection,
+    tete: str,
+    perimetre: "PerimetrePublie",
+    correspondances: "Sequence[Correspondance] | None" = None,
 ) -> dict[str, "LignePerimetre"]:
     """SIREN -> ligne du périmètre, pour les lignes que la règle de T042 retient. Une société inscrite
-    deux fois garde sa ligne en intégration globale s'il y en a une, sinon la première."""
-    from cartofr.perimetre import correspondre  # ici : cartofr.perimetre importe ce module
+    deux fois garde sa ligne en intégration globale s'il y en a une, sinon la première.
+    `correspondances` : celles du document, déjà calculées (`correspondre_plusieurs`) ; sans elles,
+    elles sont calculées ici."""
+    if correspondances is None:
+        from cartofr.perimetre import correspondre  # ici : cartofr.perimetre importe ce module
 
+        correspondances = correspondre(con, tete, list(perimetre.lignes))
     sortie: dict[str, LignePerimetre] = {}
-    for c in correspondre(con, tete, list(perimetre.lignes)):
+    for c in correspondances:
         if not c.retenue or not c.siren or c.siren == tete:
             continue
         deja = sortie.get(c.siren)
@@ -846,6 +859,7 @@ def cartographier(
     cle_empreinte: str | None = None,
     decisions: Mapping[str, Decision] | None = None,
     perimetre: "PerimetrePublie | None" = None,
+    correspondances: "Sequence[Correspondance] | None" = None,
 ) -> Carto:
     """Calcule la carto du groupe décrit par `reglages` sur le registre local, sans appel réseau.
 
@@ -857,11 +871,14 @@ def cartographier(
     `perimetre` : le document de périmètre du groupe, déjà lu (T043). Ses lignes sont retrouvées
     dans le registre par la règle de T042 ; les lignes refusées (homonymes, introuvables) n'ont
     aucun effet. Sans lui, rien ne change.
+    `correspondances` : les correspondances de ce document, déjà calculées pour plusieurs documents
+    d'un coup (`correspondre_plusieurs`, carto du pays, T048). Sans elles, la correspondance relit
+    tous les noms de SIRENE (25 à 35 s). Le résultat est le même.
     """
     con = ouvrir_registre(registre)
     try:
         trouvees = candidates(con, reglages)
-        inscrites = _inscrites(con, reglages["tete"], perimetre) if perimetre else {}
+        inscrites = _inscrites(con, reglages["tete"], perimetre, correspondances) if perimetre else {}
         source = perimetre.source if perimetre else ""
         moteur = _Moteur(reglages, con, cle_empreinte, decisions, inscrites, source).run(trouvees)
         carto = moteur.build(date_des_donnees(con))
