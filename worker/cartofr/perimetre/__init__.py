@@ -6,7 +6,13 @@ situ√©es en France (`extraction`), puis les retrouve dans le registre par une r√
 lu ni rendu (garde-fou 6).
 """
 
-from cartofr.perimetre.correspondance import Correspondance, cle, correspondre, descendants
+from cartofr.perimetre.correspondance import (
+    Correspondance,
+    cle,
+    correspondre,
+    correspondre_plusieurs,
+    descendants,
+)
 from cartofr.perimetre.extraction import Candidat, LignePerimetre, PerimetrePublie, extraire, texte_document
 
 __all__ = [
@@ -16,6 +22,7 @@ __all__ = [
     "PerimetrePublie",
     "cle",
     "correspondre",
+    "correspondre_plusieurs",
     "descendants",
     "extraire",
     "texte_document",
