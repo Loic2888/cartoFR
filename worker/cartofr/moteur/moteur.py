@@ -98,7 +98,12 @@ GARDE_ATTEINTE = (
 RETENUE_PAR_DECISION = "retenue par décision du consultant"
 
 # Méthode de consolidation d'une ligne du périmètre publié, en clair pour les preuves.
-METHODES = {"IG": "intégration globale", "MEE": "mise en équivalence", "autre": "autre méthode"}
+METHODES = {
+    "IG": "intégration globale",
+    "MEE": "mise en équivalence",
+    "NC": "non consolidée",
+    "autre": "autre méthode",
+}
 
 # Un indice : (type, détail). Types : marque_sure, marque_ambigue, registre, adresse, organigramme,
 # perimetre (inscrite en intégration globale), perimetre_sans_controle (mise en équivalence, autre).
@@ -167,8 +172,8 @@ class _Moteur:
         # Sociétés du périmètre publié retrouvées au registre (T043), séparées par contrôle.
         self.source_perimetre = source_perimetre
         perimetre = perimetre or {}
-        self.perimetre_ig = {s: li for s, li in perimetre.items() if li.methode == "IG"}
-        self.perimetre_sans_controle = {s: li for s, li in perimetre.items() if li.methode != "IG"}
+        self.perimetre_ig = {s: li for s, li in perimetre.items() if li.controlee}
+        self.perimetre_sans_controle = {s: li for s, li in perimetre.items() if not li.controlee}
         self.local_done: set[str] = set()
         self.heads: dict[str, str] = {}
         self.tours: list[Tour] = []
@@ -417,6 +422,14 @@ class _Moteur:
         taux = f"{ligne.taux:.2f}".rstrip("0").rstrip(".").replace(".", ",")
         return f"{self.source_perimetre}, ligne « {ligne.texte} » ({methode(ligne)}, {taux}\u00a0%)"
 
+    def _controle(self, s: str) -> str:
+        """« en intégration globale », ou « non consolidée, détenue à 100 % »."""
+        ligne = self.perimetre_ig[s]
+        if ligne.methode == "IG":
+            return "en intégration globale"
+        taux = f"{ligne.taux:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+        return f"{methode(ligne)}, détenue à {taux}\u00a0%"
+
     def raison_perimetre(self, s: str) -> str:
         return f"inscrite au périmètre publié du groupe : {self.preuve_perimetre(self.perimetre_ig[s])}"
 
@@ -660,7 +673,7 @@ class _Moteur:
             elif kind == "organigramme":
                 pour.append("Tête d'une maison de l'organigramme public du groupe")
             elif kind == "perimetre":
-                pour.append("Inscrite au périmètre publié du groupe, en intégration globale")
+                pour.append(f"Inscrite au périmètre publié du groupe, {self._controle(s)}")
             elif kind == "perimetre_sans_controle":
                 sans = methode(self.perimetre_sans_controle[s])
                 pour.append(f"Inscrite au périmètre publié du groupe, sans contrôle ({sans})")
@@ -819,6 +832,11 @@ def decisions_en_vigueur(lignes: Iterable[tuple[str, str, datetime, int]]) -> di
     return {s: d for s, (_, _, d) in retenues.items()}
 
 
+def _rang(ligne: "LignePerimetre") -> int:
+    """Quelle ligne garder quand une société est inscrite deux fois : la plus contrôlée."""
+    return 2 if ligne.methode == "IG" else int(ligne.controlee)
+
+
 def _inscrites(
     con: duckdb.DuckDBPyConnection,
     tete: str,
@@ -826,7 +844,8 @@ def _inscrites(
     correspondances: "Sequence[Correspondance] | None" = None,
 ) -> dict[str, "LignePerimetre"]:
     """SIREN -> ligne du périmètre, pour les lignes que la règle de T042 retient. Une société inscrite
-    deux fois garde sa ligne en intégration globale s'il y en a une, sinon la première.
+    deux fois garde sa ligne en intégration globale s'il y en a une, puis sa ligne contrôlée non
+    consolidée, sinon la première.
     `correspondances` : celles du document, déjà calculées (`correspondre_plusieurs`) ; sans elles,
     elles sont calculées ici."""
     if correspondances is None:
@@ -838,7 +857,7 @@ def _inscrites(
         if not c.retenue or not c.siren or c.siren == tete:
             continue
         deja = sortie.get(c.siren)
-        if deja is None or (deja.methode != "IG" and c.ligne.methode == "IG"):
+        if deja is None or _rang(c.ligne) > _rang(deja):
             sortie[c.siren] = c.ligne
     return sortie
 

@@ -191,7 +191,7 @@ def _taux_integration_globale(correspondances: Iterable[Correspondance], tete: s
     le moteur sans y être inscrite en intégration globale est réclamée comme une descente."""
     sortie: dict[str, float] = {}
     for c in correspondances:
-        if c.retenue and c.siren and c.siren != tete and c.ligne.methode == "IG":
+        if c.retenue and c.siren and c.siren != tete and c.ligne.controlee:
             sortie[c.siren] = max(sortie.get(c.siren, 0.0), c.ligne.taux)
     return sortie
 

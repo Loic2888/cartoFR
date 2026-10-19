@@ -18,6 +18,16 @@ noms candidats, et c'est la correspondance avec le registre qui choisit. Ordre d
   finit pas en « Alphamark », le nom d'une autre société (revue du 2026-10-14). Limite : un nom
   coupé dont le siège n'est pas dans la ville du document se rabat sur la fin du nom, s'il
   existe seul dans SIRENE.
+  Ajouts du 2026-10-19 (T053), essayés après les autres, et seulement si aucun candidat d'avant,
+  hors ces ajouts, n'a d'homonymes à départager par le registre (`secours`) :
+  4. la ligne entière, ville comprise, si le siège est dans cette ville : « Hôtel Inventé
+     Courchevel » est le nom d'une société de Courchevel ;
+  5. chaque côté d'un nom double « MH Inventé – Moët Inventé » (tiret long), de deux mots au moins, pour les
+     seuls candidats qui n'exigent pas la commune (la ligne seule, ville d'un mot).
+  Une ligne qui finit par une virgule (« <nom> <ville>, ») attend la suite de la ligne : le pays
+  et la méthode viennent sur les une ou deux lignes suivantes. La ligne recollée n'est gardée que
+  si sa virgule est celle d'avant le pays ; une ligne qui se lit seule passe toujours d'abord, et
+  ce qui attendait redevient du texte d'avant. Une ligne coupée en fin de texte est perdue.
 
 Usage :
     lignes = extraire(texte_document(Path("out/perimetre/vinci.pdf")))
@@ -34,7 +44,7 @@ from pathlib import Path
 # Outre-mer présent dans SIRENE. La Nouvelle-Calédonie et la Polynésie ont leurs propres registres.
 OUTRE_MER = (
     "Guadeloupe", "Martinique", "Guyane", "La Réunion", "Réunion", "Mayotte",
-    "Saint-Martin", "Saint-Barthélemy", "Saint-Pierre-et-Miquelon",
+    "Saint-Martin", "Saint-Barthélemy", "Saint-Pierre-et-Miquelon", "Antilles françaises",
 )  # fmt: skip
 METHODES_LONGUES = {
     "Intégration globale": "IG",
@@ -43,7 +53,12 @@ METHODES_LONGUES = {
     "Intégration proportionnelle": "autre",
 }
 METHODES_COURTES = {"IG": "IG", "MEE": "MEE", "ME": "MEE", "IP": "autre", "JV": "autre"}
+NON_CONSOLIDEE = "NC"
 LIGNES_AVANT = 2  # lignes non terminées gardées pour recoller un nom coupé
+LIGNES_SUITE = 2  # lignes lues au plus pour finir une ligne coupée après la virgule
+# « MH Inventé – Moët Inventé » : deux noms de la même société. Le tiret long seul : « Hôtel -
+# Restaurant Inventé » est un seul nom, son côté « Restaurant Inventé » serait trop vague (revue T053).
+_DOUBLE = re.compile(r" – ")
 TAILLE_MAX = 50 * 1024 * 1024  # un document de périmètre fait quelques Mo : au-delà, on refuse
 
 _FR = r"(?:(?:" + "|".join(re.escape(o) for o in OUTRE_MER) + r"), )?France"
@@ -56,6 +71,10 @@ _COURTE = "|".join(METHODES_COURTES)
 _LVMH = re.compile(
     rf"^(?P<avant>.+), (?P<pays>[^,]+) (?P<meth>{_COURTE}) (?P<taux>\d{{1,3}}(?:[.,]\d+)?) ?%$"
 )
+# Liste des sociétés non incluses dans la consolidation (LVMH) : « <nom> <ville>, <pays> <taux> % »,
+# sans méthode. Lue seulement après son titre : ailleurs, ce format serait trop proche du texte courant.
+_NC = re.compile(r"^(?P<avant>.+), (?P<pays>[^,]+) (?P<taux>\d{1,3}(?:[.,]\d+)?) ?%$")
+_TITRE_NC = re.compile(r"(?i)non (?:incluses dans la|comprises dans la) consolidation|non consolidées")
 _INVISIBLES = dict.fromkeys(map(ord, "​‌‍⁠﻿"))
 
 
@@ -66,6 +85,7 @@ class Candidat:
     nom: str
     ville: str | None  # None : le document ne donne pas la ville (format VINCI)
     commune_exigee: bool = False  # retenu seulement si le siège SIRENE est dans `ville`
+    secours: bool = False  # essayé seulement si aucun candidat d'avant n'a d'homonymes
 
 
 @dataclass(frozen=True)
@@ -73,9 +93,15 @@ class LignePerimetre:
     """Une société du périmètre, située en France. `candidats` : du plus probable au moins probable."""
 
     candidats: tuple[Candidat, ...]
-    methode: str  # « IG » (intégration globale), « MEE » (mise en équivalence) ou « autre »
+    methode: str  # « IG » (intégration globale), « MEE » (mise en équivalence), « NC » (non
+    # consolidée) ou « autre »
     taux: float  # taux d'intérêt du groupe, en %
     texte: str  # la ligne de la société telle que lue, sans les lignes d'avant : la preuve
+
+    @property
+    def controlee(self) -> bool:
+        """Le groupe contrôle la société : intégration globale, ou non consolidée à plus de 50 % (T053)."""
+        return self.methode == "IG" or (self.methode == NON_CONSOLIDEE and self.taux > 50)
 
 
 @dataclass(frozen=True)
@@ -161,7 +187,22 @@ def _candidats_lvmh(avant: list[str], debut: str) -> list[Candidat]:
     for k in (2, 3):
         if len(mots) > k:
             sortie.append(Candidat(" ".join(mots[:-k]), " ".join(mots[-k:]), True))
+    if len(mots) > 1:
+        sortie.append(Candidat(debut, mots[-1], True, secours=True))
     return sortie
+
+
+def _noms_doubles(candidats: list[Candidat]) -> list[Candidat]:
+    """Les candidats, puis chaque côté de leurs noms doubles, de deux mots au moins. Un candidat qui
+    exige la commune n'est pas coupé : son nom est déjà une hypothèse."""
+    cotes = [
+        Candidat(cote, c.ville, secours=True)
+        for c in candidats
+        if not c.commune_exigee and _DOUBLE.search(c.nom)
+        for cote in _DOUBLE.split(c.nom)
+        if len(cote.split()) > 1
+    ]
+    return candidats + cotes
 
 
 def _unique(candidats: list[Candidat]) -> tuple[Candidat, ...]:
@@ -172,10 +213,32 @@ def extraire(texte: str) -> list[LignePerimetre]:
     """Les sociétés situées en France ou en outre-mer, dans l'ordre du document."""
     sortie: list[LignePerimetre] = []
     avant: list[str] = []
+    coupee: list[str] = []  # une ligne finie par une virgule, et ce qui l'a suivie
+    non_consolidees = False  # le titre de la liste des sociétés non consolidées est passé
     for brute in texte.splitlines():
         ligne = _propre(brute)
         if not ligne or ligne.isdigit():  # ligne vide ou numéro de page
             continue
+        if coupee:
+            seule = _VINCI_FR.match(ligne) or _LVMH.match(ligne) or _VINCI_FIN.search(ligne)
+            recollee = None if seule else _LVMH.match(" ".join([*coupee, ligne]))
+            if recollee and recollee["avant"] == coupee[0][:-1]:
+                ligne = " ".join([*coupee, ligne])
+                coupee = []
+            elif seule or len(coupee) >= LIGNES_SUITE:
+                avant = (avant + coupee)[-LIGNES_AVANT:]  # pas une ligne coupée : du texte
+                coupee = []
+                if not seule:
+                    avant = (avant + [ligne])[-LIGNES_AVANT:]
+                    continue
+            else:
+                coupee.append(ligne)
+                continue
+        elif ligne.endswith(","):
+            coupee = [ligne]
+            continue
+        if not non_consolidees and _TITRE_NC.search(ligne):
+            non_consolidees = True
         if m := _VINCI_FR.match(ligne):
             candidats = _candidats_vinci(avant, m["avant"])
             sortie.append(
@@ -183,10 +246,14 @@ def extraire(texte: str) -> list[LignePerimetre]:
             )
         elif m := _LVMH.match(ligne):
             if m["pays"] == "France" or m["pays"] in OUTRE_MER:
-                candidats = _candidats_lvmh(avant, m["avant"])
+                candidats = _noms_doubles(_candidats_lvmh(avant, m["avant"]))
                 sortie.append(
                     LignePerimetre(_unique(candidats), METHODES_COURTES[m["meth"]], _taux(m["taux"]), ligne)
                 )
+        elif non_consolidees and (m := _NC.match(ligne)):
+            if m["pays"] == "France" or m["pays"] in OUTRE_MER:
+                candidats = _noms_doubles(_candidats_lvmh(avant, m["avant"]))
+                sortie.append(LignePerimetre(_unique(candidats), NON_CONSOLIDEE, _taux(m["taux"]), ligne))
         elif not _VINCI_FIN.search(ligne):
             avant = (avant + [ligne])[-LIGNES_AVANT:]
             continue

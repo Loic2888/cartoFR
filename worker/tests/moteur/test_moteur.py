@@ -229,10 +229,19 @@ def test_registre_absent(tmp_path: Path) -> None:
         "",
         "ﬁnance ①",
         "日本 SA",
+        "Château d’Inventé",
+        "L‘Inventée ʼ´`",
+        "Æther Œuvre",
     ],
 )
 def test_normalisation_vectorisee_identique(nom: str) -> None:
     assert norm_arrow(pa.array([nom])).to_pylist() == [norm(nom)]
+
+
+def test_apostrophe_typographique_comme_l_apostrophe_droite() -> None:
+    """T053 : « D’Inventé » ne devient pas « DINVENTE », le nom du registre s'écrit « D'INVENTE »."""
+    assert norm("Château d’Inventé") == norm("CHATEAU D'INVENTE") == "CHATEAU D INVENTE"
+    assert norm("Œuvre Æther Straße") == "OEUVRE AETHER STRASSE"
 
 
 def test_normalisation_vide() -> None:
