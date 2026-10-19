@@ -232,7 +232,7 @@ def _document(
 
     if en_attente:
         # Une société mise en équivalence n'est pas contrôlée : ses filiales ne sont pas du groupe.
-        depart = {tete} | {c.siren for c in sortie if c.siren and c.ligne.methode == "IG"}
+        depart = {tete} | {c.siren for c in sortie if c.siren and c.ligne.controlee}
         groupe = descendants(con, depart)
         for rang, sirens in en_attente.items():
             dedans = [s for s in sirens if s in groupe]

@@ -53,6 +53,7 @@ METHODES_LONGUES = {
     "Intégration proportionnelle": "autre",
 }
 METHODES_COURTES = {"IG": "IG", "MEE": "MEE", "ME": "MEE", "IP": "autre", "JV": "autre"}
+NON_CONSOLIDEE = "NC"
 LIGNES_AVANT = 2  # lignes non terminées gardées pour recoller un nom coupé
 LIGNES_SUITE = 2  # lignes lues au plus pour finir une ligne coupée après la virgule
 # « MH Inventé – Moët Inventé » : deux noms de la même société. Le tiret long seul : « Hôtel -
@@ -70,6 +71,10 @@ _COURTE = "|".join(METHODES_COURTES)
 _LVMH = re.compile(
     rf"^(?P<avant>.+), (?P<pays>[^,]+) (?P<meth>{_COURTE}) (?P<taux>\d{{1,3}}(?:[.,]\d+)?) ?%$"
 )
+# Liste des sociétés non incluses dans la consolidation (LVMH) : « <nom> <ville>, <pays> <taux> % »,
+# sans méthode. Lue seulement après son titre : ailleurs, ce format serait trop proche du texte courant.
+_NC = re.compile(r"^(?P<avant>.+), (?P<pays>[^,]+) (?P<taux>\d{1,3}(?:[.,]\d+)?) ?%$")
+_TITRE_NC = re.compile(r"(?i)non (?:incluses dans la|comprises dans la) consolidation|non consolidées")
 _INVISIBLES = dict.fromkeys(map(ord, "​‌‍⁠﻿"))
 
 
@@ -88,9 +93,15 @@ class LignePerimetre:
     """Une société du périmètre, située en France. `candidats` : du plus probable au moins probable."""
 
     candidats: tuple[Candidat, ...]
-    methode: str  # « IG » (intégration globale), « MEE » (mise en équivalence) ou « autre »
+    methode: str  # « IG » (intégration globale), « MEE » (mise en équivalence), « NC » (non
+    # consolidée) ou « autre »
     taux: float  # taux d'intérêt du groupe, en %
     texte: str  # la ligne de la société telle que lue, sans les lignes d'avant : la preuve
+
+    @property
+    def controlee(self) -> bool:
+        """Le groupe contrôle la société : intégration globale, ou non consolidée à plus de 50 % (T053)."""
+        return self.methode == "IG" or (self.methode == NON_CONSOLIDEE and self.taux > 50)
 
 
 @dataclass(frozen=True)
@@ -203,6 +214,7 @@ def extraire(texte: str) -> list[LignePerimetre]:
     sortie: list[LignePerimetre] = []
     avant: list[str] = []
     coupee: list[str] = []  # une ligne finie par une virgule, et ce qui l'a suivie
+    non_consolidees = False  # le titre de la liste des sociétés non consolidées est passé
     for brute in texte.splitlines():
         ligne = _propre(brute)
         if not ligne or ligne.isdigit():  # ligne vide ou numéro de page
@@ -225,6 +237,8 @@ def extraire(texte: str) -> list[LignePerimetre]:
         elif ligne.endswith(","):
             coupee = [ligne]
             continue
+        if not non_consolidees and _TITRE_NC.search(ligne):
+            non_consolidees = True
         if m := _VINCI_FR.match(ligne):
             candidats = _candidats_vinci(avant, m["avant"])
             sortie.append(
@@ -236,6 +250,10 @@ def extraire(texte: str) -> list[LignePerimetre]:
                 sortie.append(
                     LignePerimetre(_unique(candidats), METHODES_COURTES[m["meth"]], _taux(m["taux"]), ligne)
                 )
+        elif non_consolidees and (m := _NC.match(ligne)):
+            if m["pays"] == "France" or m["pays"] in OUTRE_MER:
+                candidats = _noms_doubles(_candidats_lvmh(avant, m["avant"]))
+                sortie.append(LignePerimetre(_unique(candidats), NON_CONSOLIDEE, _taux(m["taux"]), ligne))
         elif not _VINCI_FIN.search(ligne):
             avant = (avant + [ligne])[-LIGNES_AVANT:]
             continue

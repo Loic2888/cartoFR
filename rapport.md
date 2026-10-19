@@ -659,7 +659,7 @@ Au 2026-10-18, sans correction, LVMH était à 142/172 dans la carto du pays (ci
 | Filiale d'une société inscrite que la lecture ratait : sous M H C S (Société Viticole Champenoise, SCE des Côtes de Saint-Michel, SC de Villedovignes), sous Château d'Esclans (SCEA du Domaine du Jas d'Esclans) | 4 | oui, 4 |
 | Filiale d'une société au nom trop différent : Le Bon Marché (au registre « Le Bon Marché Maison Aristide Boucicaut », et 3 homonymes « Le Bon Marché ») et ses filiales (Grande Épicerie, Franck et Fils), Jas Hennessy (« Jas Hennessy & Co. » contre « Société Jas Hennessy & C° », reliée à M H C S par un mandat d'administrateur seulement) et Revico | 5 | non |
 | Nom trop différent, sans filiale manquée : SC du Château d’Yquem (« Ste Civile Château Yquem »), Parfums Francis Kurkdjian (« Parfum » au registre) | 2 | non |
-| Liste des « sociétés non incluses dans la consolidation » du document, sans méthode : Moët Hennessy Wines & Spirits, MS 33 Expansion | 2 | non, à trancher |
+| Liste des « sociétés non incluses dans la consolidation » du document, sans méthode : Moët Hennessy Wines & Spirits, MS 33 Expansion | 2 | oui, 2 |
 | Mise en équivalence (Château Cheval Blanc, 50 %) : non contrôlée, exclue par la règle de T043 | 1 | non, voulu |
 | Absente du document, aucun lien au registre vers le groupe : Dior Expériences, Moynat, Hublot France, Moët Hennessy UDV-Krug, Galoupet Distribution, Samaritaine SAS | 6 | non |
 
@@ -667,23 +667,23 @@ Règles changées, chacune avec ses tests sur des mini-registres inventés :
 - `norm` (moteur et correspondance) : les apostrophes typographiques valent l'apostrophe droite, Œ, Æ et ß sont développés. Avant, NFKD les retirait et collait les mots.
 - `cle` : un sigle espacé est recollé (« M H C S » → « MHCS ») ; « ST » se lit « SAINT ».
 - Extraction : une ligne qui finit par une virgule attend la suite (pays et méthode sur une ou deux lignes de plus) ; « Antilles françaises » compte comme outre-mer. Deux candidats de secours, essayés en dernier : la ligne entière, ville comprise, si le siège est dans cette ville ; chaque côté d'un nom double « A – B ». Un candidat de secours ne passe jamais devant des homonymes que le registre peut départager : sans cela, « L . P. M . Paris » retenait « LPM PARIS » au lieu de la société L.P.M. du groupe (vu pendant la mesure).
+- Liste des sociétés non incluses dans la consolidation (décision de Loïc du jour) : lue après son titre seulement, au format « <nom> <ville>, <pays> <taux> % » (méthode « non consolidée »). Une société détenue à plus de 50 % est contrôlée : elle entre comme une société en intégration globale, avec sa preuve « (non consolidée, 100 %) ». À 50 % ou moins, elle est inscrite sans contrôle, comme une mise en équivalence. Raison : une filiale non consolidée parce qu'elle pèse peu reste une filiale.
 
 Mesure du jour, registre réel, `pays.duckdb` recalculé :
 
 | | Avant | Après |
 |---|---|---|
-| LVMH sans correction (`--depuis-pays`) | 142/172, 7 en plus hors document | **156/172**, 9 en plus hors document (63 inscrites) |
+| LVMH sans correction (`--depuis-pays`) | 142/172, 7 en plus hors document | **158/172**, 9 en plus hors document (66 inscrites) |
 | VINCI sans correction | 836/1 007, 107 hors document | 836/1 007, 106 hors document (518 inscrites) |
 | CMAF sans correction | 1/52 | 1/52 (T049) |
 | Avec les réglages de `config/` | LVMH 155/172 (15), VINCI 813/1 007 (176), CMAF 43/52 | identique |
 
 - Correspondance LVMH : 184 lignes retenues au lieu de 170 ; une ligne fausse corrigée (« MHCS » menait à une autre société MHCS, hors d'Épernay). VINCI : 7 lignes de plus, toutes justes (« I T E I S » pour Iteis, « Sogea Est B T P »…) ; 2 de moins, devenues homonymes après le recollage des sigles (T.M.S.I., encore dans la carto par le registre ; BC.N, hors référence).
-- `mesure_pays.py` : 288 448 groupes, 937 413 sociétés rangées ; cartos de LVMH (228) et de VINCI (1 460) identiques entre `pays.duckdb` et la non-régression.
-- Reste à trancher par Loïc : lire la liste des sociétés non incluses dans la consolidation (35 lignes en France, dont 15 « SOFPAR » sans activité) comme des filiales contrôlées quand le taux dépasse 50 %. Gain : 2 sociétés de la référence.
+- `mesure_pays.py` : 937 418 sociétés rangées ; cartos de LVMH (233) et de VINCI (1 460) identiques entre `pays.duckdb` et la non-régression. Sans la liste des non consolidées : 156/172.
 - Revue adverse du jour. Corrigé :
   - une ligne finie par une virgule avalait les lignes de société suivantes (format VINCI compris) et salissait les noms : une ligne qui se lit seule passe désormais d'abord, et la ligne recollée n'est gardée que si sa virgule est celle d'avant le pays ;
   - les formes avec points étaient reconnues avant le recollage du sigle (« S.N.C.F. » donnait la clé « F ») : le sigle entier est recollé d'abord. Limite : « M H C S S A » donne « MHCSSA » ;
   - un nom double se coupait aussi sur un tiret court (« Hôtel - Restaurant Inventé » donnait le candidat vague « Restaurant Inventé ») : seul le tiret long « – » coupe ;
   - le prime « ′ » et « ẞ » sont ajoutés aux remplacements de `norm`.
   - Essayé puis retiré : ignorer les clés d'une lettre. « S+ SAS », filiale de Sephora, a la clé « S » et sortait de la carto (155/172).
-- Tests : nouveaux cas dans `worker/tests/perimetre/` (extraction, clé, correspondance) et `test_moteur.py` (`norm`), sur des noms inventés. Suite worker : 696 réussis, 138 sautés (sans Postgres).
+- Tests : nouveaux cas dans `worker/tests/perimetre/` (extraction, clé, correspondance) et `test_moteur.py` (`norm`), sur des noms inventés. Suite worker : 704 réussis, 138 sautés (sans Postgres).

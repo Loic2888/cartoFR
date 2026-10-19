@@ -174,6 +174,35 @@ def test_nom_avec_un_tiret_court_n_est_pas_un_nom_double():
     assert "Restaurant Inventé" not in [c.nom for c in ligne.candidats]
 
 
+def test_liste_des_non_consolidees_lue_apres_son_titre_seulement():
+    texte = (
+        "Alphamark Paris, France 100 %\n"
+        "LISTE DES SOCIÉTÉS NON INCLUSES DANS LA CONSOLIDATION\n"
+        "Sociétés Siège social Taux\n"
+        "Betamark Paris, France 100 %\n"
+        "Gammamark Londres, Royaume Uni 100 %\n"
+        "Deltamark Lyon, France 40 %"
+    )
+    betamark, deltamark = extraire(texte)
+    assert Candidat("Betamark", "Paris") in betamark.candidats
+    assert (betamark.methode, betamark.taux, betamark.controlee) == ("NC", 100.0, True)
+    assert (deltamark.methode, deltamark.taux, deltamark.controlee) == ("NC", 40.0, False)
+
+
+@pytest.mark.parametrize(
+    ("methode", "taux", "controlee"),
+    [
+        ("IG", 30.0, True),
+        ("NC", 50.5, True),
+        ("NC", 50.0, False),
+        ("MEE", 100.0, False),
+        ("autre", 60.0, False),
+    ],
+)
+def test_controlee(methode: str, taux: float, controlee: bool):
+    assert extraction.LignePerimetre((), methode, taux, "").controlee is controlee
+
+
 def test_format_lvmh_outre_mer():
     (ligne,) = extraire("Deltamark Antilles Fort-de-France, Martinique IG 100 %")
     assert ligne.candidats[0] == Candidat("Deltamark Antilles", "Fort-de-France")

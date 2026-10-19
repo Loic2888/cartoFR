@@ -168,3 +168,27 @@ def test_aucun_nom_de_personne_dans_la_carto(mini: MiniRegistre, tmp_path: Path)
     mini.lien(X, F1, PRESIDENT)
     carto = lancer(mini, tmp_path, ligne("Alphamark Inventée"), ligne("Filiale Un Inventée", "MEE", 20.0))
     assert "PERSONNE INVENTEE" not in repr(carto) and "PRENOM" not in repr(carto)
+
+
+def test_non_consolidee_a_plus_de_50_pourcent_entre_comme_controlee(
+    mini: MiniRegistre, tmp_path: Path
+) -> None:
+    """T053 : une société détenue à plus de 50 % mais non consolidée est une filiale contrôlée."""
+    mini.societe(X, "ALPHAMARK INVENTEE")
+    nc = LignePerimetre(
+        (Candidat("Alphamark Inventée", "Paris"),), "NC", 100.0, "Alphamark Inventée Paris, France 100 %"
+    )
+    x = societes(lancer(mini, tmp_path, nc))[X]
+    assert x.pourquoi_dans_le_groupe == (
+        f"inscrite au périmètre publié du groupe : {SOURCE}, ligne « Alphamark Inventée Paris, France "
+        "100 % » (non consolidée, 100\u00a0%)"
+    )
+
+
+def test_non_consolidee_a_50_pourcent_ou_moins_n_entre_pas(mini: MiniRegistre, tmp_path: Path) -> None:
+    mini.societe(X, "ALPHAMARK INVENTEE")
+    mini.lien(TETE, X, PRESIDENT)
+    nc = LignePerimetre(
+        (Candidat("Alphamark Inventée", "Paris"),), "NC", 50.0, "Alphamark Inventée Paris, France 50 %"
+    )
+    assert X not in societes(lancer(mini, tmp_path, nc))
