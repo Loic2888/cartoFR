@@ -28,6 +28,16 @@ const societe = z.object({
   sigle: z.string().nullable(),
   ville: z.string().nullable(),
   statut: z.enum(STATUTS),
+  // Son groupe dans la carto du pays (T050) : null si elle est seule, ou avant
+  // le premier calcul du pays. Absent d'un worker plus ancien : null.
+  groupe: z
+    .object({
+      tete: z.string().regex(/^[0-9]{9}$/),
+      nom: z.string().nullable(),
+      taille: z.number().int().nonnegative(),
+    })
+    .nullable()
+    .default(null),
 });
 export type Societe = z.infer<typeof societe>;
 

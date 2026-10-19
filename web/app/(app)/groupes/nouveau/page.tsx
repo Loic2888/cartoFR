@@ -5,9 +5,11 @@ import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
 
+import { FormulaireRecherche } from "@/components/formulaire-recherche";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { sirenFr } from "@/lib/cartos/arbre";
 import { LIBELLES_STATUT, chercherSocietes, type Societe } from "@/lib/recherche";
 import { utilisateurCourant } from "@/lib/session";
 
@@ -24,33 +26,6 @@ const PASTILLE: Record<Societe["statut"], string> = {
   cessee: "border-amber-700/50 text-amber-900 dark:text-amber-200",
   radiee: "border-destructive/50 text-destructive",
 };
-
-function Recherche({ q, id, libelle, aide }: { q: string; id: string; libelle: string; aide: string }) {
-  return (
-    <Form action="/groupes/nouveau" noValidate className="flex flex-col gap-2 md:max-w-xl">
-      <Label htmlFor={id}>{libelle}</Label>
-      <p id={`${id}-aide`} className="text-sm text-muted-foreground">
-        {aide}
-      </p>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Input
-          id={id}
-          name="q"
-          type="search"
-          defaultValue={q}
-          autoComplete="off"
-          minLength={2}
-          maxLength={100}
-          required
-          aria-describedby={`${id}-aide`}
-        />
-        <Button type="submit" className="w-full sm:w-auto">
-          Chercher
-        </Button>
-      </div>
-    </Form>
-  );
-}
 
 export default async function NouveauGroupe({ searchParams }: PageProps<"/groupes/nouveau">) {
   const { supabase, user } = await utilisateurCourant();
@@ -96,7 +71,8 @@ export default async function NouveauGroupe({ searchParams }: PageProps<"/groupe
         </p>
       </div>
 
-      <Recherche
+      <FormulaireRecherche
+        action="/groupes/nouveau"
         q={q}
         id="recherche-tete"
         libelle="Nom ou SIREN de la société de tête"
@@ -172,6 +148,18 @@ export default async function NouveauGroupe({ searchParams }: PageProps<"/groupe
                         {LIBELLES_STATUT[s.statut]}
                       </span>
                     </p>
+                    {s.groupe ? (
+                      <p className="text-sm break-words">
+                        {s.groupe.tete === s.siren ? "Tête du groupe" : "Dans le groupe"}{" "}
+                        {s.groupe.nom ?? `SIREN ${sirenFr(s.groupe.tete)}`} ·{" "}
+                        {s.groupe.taille.toLocaleString("fr-FR")} sociétés
+                      </p>
+                    ) : null}
+                    {s.statut === "active" ? (
+                      <Link href={`/pays/${s.siren}`} className={`${LIEN} self-start text-sm`}>
+                        Voir la carto du pays
+                      </Link>
+                    ) : null}
                   </div>
                   {groupeId ? (
                     <p className="text-sm">

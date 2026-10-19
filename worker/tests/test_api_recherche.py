@@ -3,7 +3,9 @@
 Vérifie : la recherche par nom et par SIREN (C1), l'absence de tout champ de
 personne dans la réponse (C2), 503 quand la synchro tient le verrou
 d'écriture, 400 sur une saisie trop courte, et le classement (actives et
-grosses sociétés d'abord).
+grosses sociétés d'abord). Et la route `/groupe` de T050 : la carto d'une
+société lue dans une petite carto du pays écrite à la main, et le groupe de
+chaque résultat de la recherche.
 
 Registre généré dans tmp_path avec le schéma du worker ; noms de sociétés et
 de personnes inventés (règle produit 6).
@@ -31,10 +33,11 @@ from cartofr.api_recherche import (
     normaliser,
     rechercher,
 )
+from cartofr.pays.schema import DDL as DDL_PAYS
 from cartofr.registre.schema import creer_tables
 
 JOUR = date(2026, 3, 4)
-CHAMPS = {"siren", "nom", "sigle", "ville", "statut"}
+CHAMPS = {"siren", "nom", "sigle", "ville", "statut", "groupe"}
 
 # Une personne inventée : dirigeante, et entrepreneur individuel sous son nom.
 PERSONNE = "ZORGLUB"
@@ -279,3 +282,102 @@ def test_journal_sans_la_saisie(registre: Path, serveur: str, caplog: pytest.Log
 def test_normaliser() -> None:
     assert normaliser("  Société   Générale ") == "SOCIETE GENERALE"
     assert normaliser("Crédit Mutuel") == "CREDIT MUTUEL"
+
+
+# --- T050 : la carto d'une société, lue dans la carto du pays -----------------------------
+
+TETE, FILLE, SEULE, EI = "100000006", "100000001", "100000002", "100000009"
+
+
+def _pays(dossier: Path) -> Path:
+    """Une carto du pays minimale : BOULONNERIE QUANTIQUE dirige FROMAGERIE ETHEREE."""
+    chemin = dossier / "pays.duckdb"
+    con = duckdb.connect(str(chemin))
+    con.execute(DDL_PAYS)
+    con.execute(
+        "insert into pays_groupes values (?, 'BOULONNERIE QUANTIQUE', 2, null, false, null, ?)", [TETE, JOUR]
+    )
+    for siren, nom, mere, niveau, preuve, confiance in (
+        (TETE, "BOULONNERIE QUANTIQUE", None, 0, "Tête du groupe", "A"),
+        (FILLE, "FROMAGERIE ETHEREE", TETE, 1, "Mandat au registre : Président", "A"),
+    ):
+        con.execute(
+            "insert into pays_societes values (?, ?, ?, ?, ?, ?, ?, 'arbre du registre', 'arbre', null,"
+            " true, 'Société opérationnelle', false, false)",
+            [siren, TETE, nom, mere, niveau, preuve, confiance],
+        )
+    con.execute("insert into pays_bilan values (now(), ?, 1, 2, 0, 0, 1.0)", [JOUR])
+    con.close()
+    return chemin
+
+
+def test_groupe_rend_la_societe_et_sa_descendance(registre: Path, serveur: str) -> None:
+    _pays(registre.parent)
+    statut, corps = _get(f"{serveur}/groupe?siren={TETE}")
+    assert statut == 200
+    assert corps["date_donnees"] == JOUR.isoformat()
+    assert corps["groupe"] == {"tete": TETE, "nom": "BOULONNERIE QUANTIQUE", "taille": 2}
+    assert corps["groupe_entier"] is None and corps["mere"] is None
+    assert [s["siren"] for s in corps["societes"]] == [TETE, FILLE]
+    assert corps["societes"][1]["maison_mere_siren"] == TETE
+
+    statut, corps = _get(f"{serveur}/groupe?siren={FILLE[:3]}%20{FILLE[3:]}")
+    assert statut == 200
+    assert corps["mere"] == {"siren": TETE, "nom": "BOULONNERIE QUANTIQUE"}
+    assert corps["groupe_entier"]["tete"] == TETE
+    assert [s["siren"] for s in corps["societes"]] == [FILLE]
+    assert corps["societes"][0]["maison_mere_siren"] is None
+
+
+def test_groupe_societe_absente_de_la_carto_du_pays(registre: Path, serveur: str) -> None:
+    _pays(registre.parent)
+    statut, corps = _get(f"{serveur}/groupe?siren={SEULE}")
+    assert statut == 200
+    assert [s["siren"] for s in corps["societes"]] == [SEULE]
+    assert corps["groupe"] is None
+
+
+@pytest.mark.parametrize("siren", ["999999999", EI, "100000004"])
+def test_groupe_404_inconnu_individuel_ou_cessee(registre: Path, serveur: str, siren: str) -> None:
+    _pays(registre.parent)
+    assert _get(f"{serveur}/groupe?siren={siren}") == (404, {"erreur": "societe_inconnue"})
+
+
+def test_groupe_404_fermee_au_rne_meme_avec_un_siege(registre: Path, serveur: str) -> None:
+    # Radiée au RNE (`fin` posée) mais encore dans les sièges SIRENE : la recherche la dit radiée.
+    con = duckdb.connect(str(registre))
+    con.execute("insert into sieges (siren, nom, cj) values ('100000005', 'FROMAGERIE ANCIENNE', 5710)")
+    con.close()
+    _pays(registre.parent)
+    assert _get(f"{serveur}/groupe?siren=100000005") == (404, {"erreur": "societe_inconnue"})
+
+
+def test_groupe_sans_personne(registre: Path, serveur: str) -> None:
+    _pays(registre.parent)
+    for siren in (TETE, FILLE, SEULE, EI):
+        _, corps = _get(f"{serveur}/groupe?siren={siren}")
+        texte = json.dumps(corps)
+        assert PERSONNE not in texte and "ARMANDINE" not in texte and EI not in texte
+
+
+@pytest.mark.parametrize("valeur", ["", "12345", "abcdefghi", "1234567890"])
+def test_groupe_400_siren_invalide(serveur: str, valeur: str) -> None:
+    assert _get(f"{serveur}/groupe?siren={valeur}") == (400, {"erreur": "siren_invalide"})
+
+
+def test_groupe_503_avant_le_premier_calcul_du_pays(serveur: str) -> None:
+    assert _get(f"{serveur}/groupe?siren={TETE}") == (503, {"erreur": "pays_absent"})
+
+
+def test_recherche_porte_le_groupe(registre: Path) -> None:
+    assert all(r.groupe is None for r in rechercher("FROMAGERIE", registre))
+    _pays(registre.parent)
+    groupes = {r.siren: r.groupe for r in rechercher("FROMAGERIE", registre)}
+    fille = groupes[FILLE]
+    assert fille is not None and fille.tete == TETE and fille.taille == 2
+    assert groupes[SEULE] is None
+
+
+def test_recherche_marche_si_la_carto_du_pays_est_illisible(registre: Path) -> None:
+    (registre.parent / "pays.duckdb").write_bytes(b"pas une base")
+    assert rechercher("FROMAGERIE", registre)
