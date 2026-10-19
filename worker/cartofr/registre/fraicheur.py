@@ -23,6 +23,10 @@ Limite connue : la source rend l'état actuel de la société. Si elle a encore 
 dernière synchro (aujourd'hui, par exemple), le contrôle la compte manquante à tort. Le SIREN
 d'un écart est affiché pour qu'on le vérifie à la main.
 
+Carto du pays (T052, SC-009) : `fraicheur_pays` lit la date des données de `pays.duckdb`
+(la date du registre au moment du calcul de nuit, T048). Plus de 7 jours de retard, ou aucune
+carto du pays, est un retard au même titre qu'un changement du registre manquant.
+
 Journal : SIREN de personnes morales et volumes seulement, jamais un nom ni une clé de personne.
 """
 
@@ -195,3 +199,32 @@ def controler(
             vus.add(tirage.siren)
             verdicts.append(verifier(con, tirage, aujourdhui))
     return Controle(verdicts, non_tires)
+
+
+@dataclass(frozen=True)
+class FraicheurPays:
+    """La date des données de la carto du pays et son retard. Vide : pas de carto du pays."""
+
+    date_donnees: date | None
+    retard_jours: int | None
+
+    @property
+    def a_jour(self) -> bool:
+        # Une date dans le futur n'est pas une carto fraîche : une ligne du registre est fausse.
+        return self.retard_jours is not None and 0 <= self.retard_jours <= FENETRE_JOURS
+
+
+def fraicheur_pays(chemin: Path, aujourdhui: date) -> FraicheurPays:
+    """Le retard de la carto du pays au jour `aujourdhui` : la date des données du dernier calcul
+    (`pays_bilan`), lue en lecture seule. Sans fichier ou sans date : pas à jour."""
+    if not chemin.is_file():
+        return FraicheurPays(None, None)
+    con = duckdb.connect(str(chemin), read_only=True)
+    try:
+        ligne = con.execute("select date_donnees from pays_bilan order by calcule_le desc limit 1").fetchone()
+    finally:
+        con.close()
+    if ligne is None or ligne[0] is None:
+        return FraicheurPays(None, None)
+    jour: date = ligne[0]
+    return FraicheurPays(jour, (aujourdhui - jour).days)
