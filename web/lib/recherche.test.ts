@@ -20,6 +20,7 @@ const FROMAGERIE = {
   sigle: null,
   ville: "VILLEFICTIVE",
   statut: "active",
+  groupe: { tete: "100000006", nom: "BOULONNERIE QUANTIQUE", taille: 2 },
 };
 
 afterEach(() => {
@@ -43,7 +44,16 @@ describe("chercherSocietes", () => {
     );
     const r = await chercherSocietes("fromagerie", { url: URL_TEST, fetch: faux });
     expect(r.ok).toBe(true);
-    if (r.ok) expect(Object.keys(r.societes[0]).sort()).toEqual(["nom", "sigle", "siren", "statut", "ville"]);
+    if (r.ok)
+      expect(Object.keys(r.societes[0]).sort()).toEqual(["groupe", "nom", "sigle", "siren", "statut", "ville"]);
+  });
+
+  it("accepte une société sans groupe, et un worker qui ne rend pas encore le groupe (T050)", async () => {
+    const ancien: Record<string, unknown> = { ...FROMAGERIE };
+    delete ancien.groupe;
+    const faux = vi.fn(async () => reponseJson(200, { resultats: [ancien, { ...FROMAGERIE, groupe: null }] }));
+    const r = await chercherSocietes("fromagerie", { url: URL_TEST, fetch: faux });
+    expect(r.ok && r.societes.map((s) => s.groupe)).toEqual([null, null]);
   });
 
   it("traduit 503 registre_occupe en français", async () => {

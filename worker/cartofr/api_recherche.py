@@ -2,16 +2,26 @@
 
 But : le seul pont entre l'interface et le registre. L'écran « Nouveau groupe »
 cherche une société par nom ou par SIREN ; cette route lit `registre.duckdb`
-en lecture seule et rend 20 sociétés au plus.
+en lecture seule et rend 20 sociétés au plus. La route `/groupe` rend la carto
+d'une société, déjà calculée dans `pays.duckdb` (T050) : aucun calcul ici.
 
 Usage :
     CARTOFR_DATA=data .venv/bin/python -m cartofr.api_recherche [--port 8080] [--hote 0.0.0.0]
 
 Routes :
     GET /recherche?q=<nom ou SIREN>
-        200 {"resultats": [{"siren", "nom", "sigle", "ville", "statut"}, ...]}
+        200 {"resultats": [{"siren", "nom", "sigle", "ville", "statut", "groupe"}, ...]}
+            `groupe` : {"tete", "nom", "taille"}, le groupe de la carto du pays où la société
+            est rangée (T050) ; null si elle est seule, ou si la carto du pays n'existe pas encore
         400 {"erreur": "requete_trop_courte" | "requete_trop_longue"}
         503 {"erreur": "registre_occupe" | "registre_absent"}
+    GET /groupe?siren=<SIREN>   (T050)
+        200 la carto de la société lue dans la carto du pays (cartofr.pays.lecture) :
+            {"siren", "nom", "date_donnees", "groupe", "groupe_entier", "mere",
+             "mere_personne_physique", "societes": [...]}
+        400 {"erreur": "siren_invalide"}
+        404 {"erreur": "societe_inconnue"}  (ni dans la carto du pays, ni société active)
+        503 {"erreur": "pays_absent" | "registre_occupe" | "registre_absent"}
     GET /export/skill/<carto>?organisation=<uuid>   (T029)
         200 application/zip : les 6 tables du skill account-mapping (cartofr.exports.skill)
         400 {"erreur": "parametre_invalide"}
@@ -21,6 +31,7 @@ Routes :
     GET /sante  → 200 {"statut": "ok"}
 
 Entrées : `<CARTOFR_DATA>/registre.duckdb` (`data` par défaut), ou CARTOFR_REGISTRE ;
+la carto du pays `pays.duckdb` à côté du registre, ou CARTOFR_PAYS (T048) ;
 pour l'export, la base de l'app (DATABASE_URL, rôle `cartofr_recherche` en Docker, T041).
 Sortie : du JSON. `statut` vaut `active`, `cessee` (SIRENE : état C) ou
 `radiee` (fermée au registre : `fin` posée).
@@ -72,6 +83,7 @@ import psycopg
 
 from cartofr.db import ConfigurationManquante, connecter
 from cartofr.exports.skill import CartoNonTerminee, exporter
+from cartofr.pays.lecture import CartoSociete, Groupe, attacher_pays, groupes_de, lire_groupe
 
 log = logging.getLogger("cartofr.recherche")
 
@@ -92,6 +104,12 @@ class RegistreIndisponible(RuntimeError):
         self.code = code
 
 
+class PaysAbsent(RuntimeError):
+    """La carto du pays n'a pas encore été calculée (T048) : `pays.duckdb` n'existe pas."""
+
+    code = "pays_absent"
+
+
 class RequeteInvalide(ValueError):
     """La saisie est vide, trop courte ou trop longue."""
 
@@ -109,6 +127,7 @@ class Resultat:
     sigle: str | None
     ville: str | None
     statut: str  # 'active', 'cessee' ou 'radiee'
+    groupe: Groupe | None = None  # son groupe dans la carto du pays (T050)
 
 
 def chemin_registre() -> Path:
@@ -117,6 +136,14 @@ def chemin_registre() -> Path:
     if explicite:
         return Path(explicite)
     return Path(os.environ.get("CARTOFR_DATA", "data")) / "registre.duckdb"
+
+
+def chemin_pays(registre: Path | None = None) -> Path:
+    """Emplacement de la carto du pays : CARTOFR_PAYS, sinon `pays.duckdb` à côté du registre."""
+    explicite = os.environ.get("CARTOFR_PAYS")
+    if explicite:
+        return Path(explicite)
+    return (registre or chemin_registre()).parent / "pays.duckdb"
 
 
 def normaliser(texte: str) -> str:
@@ -224,14 +251,28 @@ def _sql(tables: set[str], par_siren: bool) -> str:
     """
 
 
-def rechercher(q: str, chemin: Path | None = None) -> list[Resultat]:
-    """Les sociétés qui correspondent à `q` (nom, sigle ou SIREN), 20 au plus."""
+def _groupes(con: duckdb.DuckDBPyConnection, pays: Path, sirens: list[str]) -> dict[str, Groupe]:
+    """Le groupe de chaque société trouvée. Sans carto du pays lisible, aucun : la recherche
+    reste utilisable avant le premier calcul du pays."""
+    try:
+        if not attacher_pays(con, pays):
+            return {}
+        return groupes_de(con, sirens)
+    except duckdb.Error as exc:
+        log.warning("recherche : groupes indisponibles, %s", type(exc).__name__)
+        return {}
+
+
+def rechercher(q: str, chemin: Path | None = None, pays: Path | None = None) -> list[Resultat]:
+    """Les sociétés qui correspondent à `q` (nom, sigle ou SIREN), 20 au plus, avec leur groupe."""
     saisie = preparer(q)
-    con = ouvrir(chemin or chemin_registre())
+    registre = chemin or chemin_registre()
+    con = ouvrir(registre)
     try:
         con.execute("set enable_progress_bar = false")
         sql = _sql(_tables(con), par_siren=bool(SIREN.match(saisie)))
         lignes: list[tuple[Any, ...]] = con.execute(sql, {"q": saisie}).fetchall()
+        groupes = _groupes(con, pays or chemin_pays(registre), [str(ligne[0]) for ligne in lignes])
     finally:
         con.close()
     return [
@@ -241,13 +282,31 @@ def rechercher(q: str, chemin: Path | None = None) -> list[Resultat]:
             sigle=str(sigle) if sigle else None,
             ville=str(ville) if ville else None,
             statut=str(statut),
+            groupe=groupes.get(str(siren)),
         )
         for siren, nom, sigle, ville, statut in lignes
     ]
 
 
+def carto_societe(siren: str, chemin: Path | None = None, pays: Path | None = None) -> CartoSociete | None:
+    """La carto de `siren` lue dans la carto du pays (T050). None : SIREN inconnu.
+    Lève PaysAbsent avant le premier calcul du pays, RegistreIndisponible si le registre manque."""
+    registre = chemin or chemin_registre()
+    fichier = pays or chemin_pays(registre)
+    if not fichier.is_file():
+        raise PaysAbsent("pays_absent")
+    con = ouvrir(registre)
+    try:
+        con.execute("set enable_progress_bar = false")
+        if not attacher_pays(con, fichier):
+            raise PaysAbsent("pays_absent")
+        return lire_groupe(con, siren)
+    finally:
+        con.close()
+
+
 class Gestionnaire(BaseHTTPRequestHandler):
-    """Deux routes en GET. Tout le reste : 404 ou 405."""
+    """Quatre routes en GET. Tout le reste : 404 ou 405."""
 
     server_version = "cartofr-recherche"
     sys_version = ""
@@ -304,6 +363,31 @@ class Gestionnaire(BaseHTTPRequestHandler):
         log.info("export skill : 200, carto %s, %d octets en %d ms", carto_id, len(contenu), duree)
         self._repondre_zip(contenu)
 
+    def _groupe(self, query: str) -> None:
+        """La carto d'une société, lue dans la carto du pays (T050)."""
+        siren = parse_qs(query).get("siren", [""])[0].replace(" ", "")
+        if not SIREN.match(siren):
+            self._repondre(HTTPStatus.BAD_REQUEST, {"erreur": "siren_invalide"})
+            return
+        debut = time.monotonic()
+        try:
+            carto = carto_societe(siren, self.server.registre, self.server.pays)  # type: ignore[attr-defined]
+        except (PaysAbsent, RegistreIndisponible) as exc:
+            log.warning("groupe : 503 %s", exc.code)
+            self._repondre(HTTPStatus.SERVICE_UNAVAILABLE, {"erreur": exc.code})
+            return
+        except Exception as exc:  # noqa: BLE001 : jamais de trace avec des données dans le journal
+            log.error("groupe : 500 %s", type(exc).__name__)
+            self._repondre(HTTPStatus.INTERNAL_SERVER_ERROR, {"erreur": "erreur_interne"})
+            return
+        if carto is None:
+            log.info("groupe : 404")
+            self._repondre(HTTPStatus.NOT_FOUND, {"erreur": "societe_inconnue"})
+            return
+        duree = int((time.monotonic() - debut) * 1000)
+        log.info("groupe : 200, %d société(s) en %d ms", len(carto.societes), duree)
+        self._repondre(HTTPStatus.OK, asdict(carto))
+
     def do_GET(self) -> None:  # noqa: N802 (nom imposé par http.server)
         url = urlsplit(self.path)
         if url.path == "/sante":
@@ -312,13 +396,16 @@ class Gestionnaire(BaseHTTPRequestHandler):
         if url.path.startswith(PREFIXE_EXPORT_SKILL):
             self._export_skill(url.path.removeprefix(PREFIXE_EXPORT_SKILL), url.query)
             return
+        if url.path == "/groupe":
+            self._groupe(url.query)
+            return
         if url.path != "/recherche":
             self._repondre(HTTPStatus.NOT_FOUND, {"erreur": "route_inconnue"})
             return
         debut = time.monotonic()
         q = parse_qs(url.query).get("q", [""])[0]
         try:
-            resultats = rechercher(q, self.server.registre)  # type: ignore[attr-defined]
+            resultats = rechercher(q, self.server.registre, self.server.pays)  # type: ignore[attr-defined]
         except RequeteInvalide as exc:
             log.info("recherche : 400 %s", exc.code)
             self._repondre(HTTPStatus.BAD_REQUEST, {"erreur": exc.code})
@@ -344,7 +431,8 @@ class Gestionnaire(BaseHTTPRequestHandler):
 
 
 class Serveur(ThreadingHTTPServer):
-    """Serveur HTTP qui connaît l'emplacement du registre et sait joindre la base de l'app."""
+    """Serveur HTTP qui connaît l'emplacement du registre et de la carto du pays, et sait joindre
+    la base de l'app."""
 
     daemon_threads = True
 
@@ -353,10 +441,12 @@ class Serveur(ThreadingHTTPServer):
         adresse: tuple[str, int],
         registre: Path | None = None,
         connecter: Callable[[], Connexion] = connecter,
+        pays: Path | None = None,
     ) -> None:
         super().__init__(adresse, Gestionnaire)
         self.registre = registre
         self.connecter = connecter
+        self.pays = pays
 
 
 def main(argv: list[str] | None = None) -> int:
