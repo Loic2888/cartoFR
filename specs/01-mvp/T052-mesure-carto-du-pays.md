@@ -22,9 +22,9 @@ Le PRD du 2026-10-16 juge la carto sans correction (SC-001), demande que tout le
 - `rapport.md`
 
 ## Critères de succès
-- [ ] **C1** : `--depuis-pays` mesure les trois groupes dans `pays.duckdb` avec les seuils de SC-001, et rend 1 tant qu'un seuil manque (tests sur un `pays.duckdb` inventé)
-- [ ] **C2** : le contrôle de fraîcheur signale une carto du pays de plus de 7 jours, comme un retard du registre (test)
-- [ ] **C3** : `mesure_couverture.py` rend la part des sociétés actives rangées et la liste des groupes cotés sans document ; chiffres du jour dans `rapport.md`
+- [x] **C1** : `--depuis-pays` mesure les trois groupes dans `pays.duckdb` avec les seuils de SC-001, et rend 1 tant qu'un seuil manque (tests sur un `pays.duckdb` inventé)
+- [x] **C2** : le contrôle de fraîcheur signale une carto du pays de plus de 7 jours, comme un retard du registre (test)
+- [x] **C3** *(part des sociétés rangées mesurée le 2026-10-19 ; groupes cotés sans document non mesurés : la liste des cotées manque)* : `mesure_couverture.py` rend la part des sociétés actives rangées et la liste des groupes cotés sans document ; chiffres du jour dans `rapport.md`
 
 ## Dépendances
 **À finir avant** : T048

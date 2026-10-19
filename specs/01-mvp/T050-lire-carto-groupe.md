@@ -34,12 +34,12 @@ US2 réécrite le 2026-10-16 : le consultant cherche une société et lit l'arbr
 | P6, P7 | ✅ | Lecture dans le worker ; Next.js affiche |
 
 ## Critères de succès
-- [ ] **C1** : `/groupe?siren=` rend la société et tout ce qui descend d'elle, sans aucune de ses sœurs ni des autres filiales de ses actionnaires, avec sa mère directe ; pour une société absente de `pays_societes`, elle seule ; 404 en français pour un SIREN inconnu ; 503 si `pays.duckdb` n'existe pas encore (tests)
-- [ ] **C2** : sur le registre réel, la route rend la carto de VINCI en moins d'1 s, et la page s'affiche en moins de 10 s après la recherche (SC-002), mesuré et relevé dans `rapport.md`
-- [ ] **C3** : aucun nom de personne ni SIREN d'entrepreneur individuel dans la réponse de la route ni dans le CSV, y compris quand la mère est un entrepreneur individuel (test)
-- [ ] **C4** : la page fonctionne au clavier et à 320 px ; la date des données et « calculée sans correction » sont visibles
-- [ ] **C6** : la page d'un groupe emboîté dit de quel groupe il est la filiale et ouvre la carto de ce groupe entier, sous-groupes compris (tests de la route et de la page)
-- [ ] **C5** : le CSV exporté depuis la page a les mêmes colonnes que celui de T023 et la date des données
+- [x] **C1** : `/groupe?siren=` rend la société et tout ce qui descend d'elle, sans aucune de ses sœurs ni des autres filiales de ses actionnaires, avec sa mère directe ; pour une société absente de `pays_societes`, elle seule ; 404 en français pour un SIREN inconnu ; 503 si `pays.duckdb` n'existe pas encore (tests)
+- [ ] **C2** *(route mesurée le 2026-10-19 : VINCI en 0,15 à 0,34 s ; affichage de la page non mesuré, pile Supabase non lancée)* : sur le registre réel, la route rend la carto de VINCI en moins d'1 s, et la page s'affiche en moins de 10 s après la recherche (SC-002), mesuré et relevé dans `rapport.md`
+- [x] **C3** : aucun nom de personne ni SIREN d'entrepreneur individuel dans la réponse de la route ni dans le CSV, y compris quand la mère est un entrepreneur individuel (test)
+- [ ] **C4** *(non vérifié à la main le 2026-10-19)* : la page fonctionne au clavier et à 320 px ; la date des données et « calculée sans correction » sont visibles
+- [x] **C6** : la page d'un groupe emboîté dit de quel groupe il est la filiale et ouvre la carto de ce groupe entier, sous-groupes compris (tests de la route et de la page)
+- [x] **C5** : le CSV exporté depuis la page a les mêmes colonnes que celui de T023 et la date des données
 
 ## Dépendances
 **À finir avant** : T048
