@@ -117,8 +117,8 @@ Ouverte le 2026-10-16, après la révision de `PRD.md` (US7, US2 réécrite, US8
 - [x] `T047` [P] — Ranger une société réclamée par deux groupes dans un seul
 - [x] `T048` — Calculer chaque nuit la carto du pays *(après T045, T046, T047)*
 - [ ] `T049` — Ranger les groupes mutualistes sans mêler leurs fédérations *(après T048 ; préalable : le DEU de CMAF déposé par Loïc)*
-- [ ] `T050` [P] — Lire la carto du groupe d'une société, sans attendre de calcul *(après T048)*
-- [ ] `T052` [P] — Mesurer la carto du pays : justesse sans correction, fraîcheur, couverture *(après T048)*
+- [x] `T050` [P] — Lire la carto du groupe d'une société, sans attendre de calcul *(mergée le 2026-10-19 ; C2 page et C4 à vérifier quand la pile tourne)*
+- [x] `T052` [P] — Mesurer la carto du pays : justesse sans correction, fraîcheur, couverture *(mergée le 2026-10-19 ; groupes cotés à mesurer quand la liste sera là)*
 - [ ] `T051` — Corriger la carto d'un groupe sans étape de validation, et en montrer l'effet *(P2, après T050)*
 - [ ] `T053` — Retrouver 90 % de LVMH sans correction *(après T052)*
 
