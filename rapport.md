@@ -634,3 +634,17 @@ Décision de Loïc. La carto d'une société, c'est cette société et tout ce q
 - Revue adverse : rien de bloquant. Corrigé : l'accueil revérifie la session ; la tête d'un groupe sans mère s'exporte « Tête du groupe » comme en T023 ; une société fermée au RNE mais encore dans SIRENE n'a plus de carto « seule ». Laissés : la taille rendue par la recherche pour la tête d'un groupe emboîté ne compte pas ses sous-groupes (aucun groupe emboîté dans les données réelles aujourd'hui) ; une personne morale absente de SIRENE serait dite « personne physique » (libellé faux, sans fuite) ; tout utilisateur connecté, même sans organisation, lit et exporte la carto du pays.
 - Tests : 13 dans `worker/tests/pays/test_lecture.py`, 9 de plus dans `test_api_recherche.py`, côté web `lib/pays.test.ts` et `pays/[siren]/en-tete.test.tsx`. Suite worker : 649 réussis, 138 sautés (sans Postgres) ; web : 328 réussis.
 
+
+### Mesurer la carto du pays (T052)
+
+- `non_regression.py --depuis-pays` lit dans `pays.duckdb` la carto de la tête de chaque groupe (elle et ce qui descend d'elle, comme la page de T050), avec les seuils de SC-001 : retrouvées LVMH ≥ 154/172, VINCI ≥ 813/1 007, CMAF ≥ 43/52 ; « en plus » non inscrits au document ≤ 16 et ≤ 193. Elle rend 1 tant qu'un seuil manque.
+- Chiffres du jour, `data/pays.duckdb` du 2026-10-18 :
+  - LVMH : 142/172 (83 %), 67 en plus dont 60 inscrites au document, 7 hors document. Seuil des retrouvées manqué (154) : c'est T053.
+  - VINCI : 836/1 007 (83 %), 620 en plus dont 513 inscrites, 107 hors document. Seuils tenus.
+  - CMAF : 1/52. Le groupe mutualiste n'est pas encore rangé (T049, qui attend le document de CMAF).
+  - Code de sortie 1, comme attendu.
+- Le contrôle hebdomadaire de fraîcheur (`controle_fraicheur.py`) lit aussi la date des données de la carto du pays et rend 1 au-delà de 7 jours, comme un retard du registre. Aujourd'hui : données au 04/03/2026, 229 jours de retard. Le registre local n'a jamais été synchronisé depuis le stock.
+- `mesure_couverture.py` : 7 827 096 sociétés actives, 937 396 dans un groupe de 2 sociétés ou plus (12,0 %), 6 889 700 seules (chacune est sa propre carto). Groupes cotés non mesurés : la liste des sociétés cotées à Paris manque (CSV à colonne `SIREN`, hors git).
+- Écart signalé, à trancher hors de T052 : la carto du pays date ses données au dernier événement du registre (`moteur.date_des_donnees`), alors que les cartos de groupe prennent le dernier jour appliqué par la synchro (`jobs/carto.py`, `jours.json`). Après une synchro réussie, la première date peut dépasser 7 jours (un acte RNE est daté avant sa publication) : faux retard possible. La correction se fait dans `pays/calcul.py` (T048).
+- Revue adverse. Corrigé : la lecture de la liste des cotées plantait sur un CSV à une seule colonne et ignorait un en-tête `Siren` ou des SIREN à espaces insécables ; elle rend 2 si aucun SIREN n'est lu. Le contrôle de fraîcheur lit `CARTOFR_PAYS`, et une date des données dans le futur n'est plus « à jour ».
+- Tests : 16 dans `worker/tests/pays/test_mesures.py`, sur une carto du pays et une référence inventées. Suite worker : 665 réussis. Non-régression du moteur sur CMAF inchangée (43/52).

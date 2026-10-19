@@ -37,6 +37,17 @@ Option `--sans-reglages` (T043 C4) : des réglages ne reste que la tête, rien d
 humain. Avec `--perimetre`, c'est la carto produite sans travail humain : seuils de 75 %
 (LVMH 129/172, VINCI 756/1 007), CMAF sans seuil. Sans `--perimetre`, aucun seuil.
 
+Option `--depuis-pays` (T052, SC-001 mesuré depuis la carto du pays) : au lieu de lancer le
+moteur, lit dans `<CARTOFR_DATA>/pays.duckdb` (ou CARTOFR_PAYS), en lecture seule, la carto de la
+tête de chaque groupe : elle et tout ce qui descend d'elle, comme la page de l'app (T050). Seuils
+de SC-001 : les retrouvées de la non-régression (LVMH 154/172, VINCI 813/1 007, CMAF 43/52) ; les
+« en plus » qui ne sont pas inscrits au document du groupe (`maniere` ≠ `inscription`) au plus 16
+et 193, ceux que le document inscrit lui-même étant comptés à part (colonne « inscrites »). Ce
+sont les cibles du PRD, pas l'état du jour : la commande rend 1 tant qu'elles ne sont pas tenues.
+Le registre n'est pas lu ; la durée est celle de la lecture.
+    CARTOFR_DATA=data CARTOFR_REFERENCES=basile .venv/bin/python \
+        worker/scripts/non_regression.py --depuis-pays
+
 Code de sortie : 0 si chaque groupe atteint ses seuils, 1 sinon, 2 si un fichier manque.
 Les seuils sont les scores du prototype du 2026-10-06 : « 90 % » pour LVMH est l'arrondi de
 154/172, et c'est 154/172 qui est exigé, pas 90 % exact.
@@ -56,6 +67,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, LiteralString
 
+import duckdb
 import psycopg
 
 from cartofr.empreinte import empreinte
@@ -285,9 +297,65 @@ def mesurer_depuis_postgres(
     return comparer(groupe, reference, nous, (duree_ms or 0) / 1000, None), str(carto_id)
 
 
-def verdict(r: Resultat, avec_perimetre: bool = False, sans_reglages: bool = False) -> list[str]:
+# La carto d'une société dans la carto du pays : elle et tout ce qui descend d'elle (T050).
+_DESCENTE_PAYS: LiteralString = """
+with recursive bas(siren, n) as (
+    select $tete::varchar, 0
+    union all
+    select s.siren, b.n + 1 from pays_societes s join bas b on s.mere = b.siren where b.n < 200
+)
+select s.siren, s.mere, s.ciblable, s.maniere
+  from pays_societes s where s.siren in (select siren from bas)
+"""
+
+
+def chemin_pays(data: Path) -> Path:
+    """La carto du pays : CARTOFR_PAYS, sinon `<CARTOFR_DATA>/pays.duckdb`."""
+    explicite = os.environ.get("CARTOFR_PAYS")
+    return Path(explicite) if explicite else data / "pays.duckdb"
+
+
+def mesurer_depuis_pays(groupe: str, pays: Path, references: Path, configs: Path) -> Resultat:
+    """Compare à sa référence la carto de la tête du groupe lue dans la carto du pays (T052).
+
+    Les « en plus » inscrits par le document du groupe (`maniere = 'inscription'`) sont comptés à
+    part, dans `en_plus_inscrites`. Une tête absente de la carto du pays : CartoIntrouvable.
+    """
+    reference = _lire_reference(references, groupe)
+    tete = json.loads((configs / f"{groupe}.json").read_text(encoding="utf-8"))["tete"]
+    debut = time.monotonic()
+    con = duckdb.connect(str(pays), read_only=True)
+    try:
+        lignes = con.execute(_DESCENTE_PAYS, {"tete": tete}).fetchall()
+    finally:
+        con.close()
+    duree = time.monotonic() - debut
+    if not any(siren == tete for siren, *_ in lignes):
+        raise CartoIntrouvable(f"tête de {groupe} ({tete}) absente de la carto du pays")
+    nous = {siren: (mere, bool(ciblable)) for siren, mere, ciblable, _ in lignes}
+    r = comparer(groupe, reference, nous, duree, None)
+    ref = {_siren(ligne) for ligne in reference}
+    inscrites = sum(1 for siren, _, _, maniere in lignes if siren not in ref and maniere == "inscription")
+    return replace(r, en_plus_inscrites=inscrites)
+
+
+def verdict(
+    r: Resultat, avec_perimetre: bool = False, sans_reglages: bool = False, depuis_pays: bool = False
+) -> list[str]:
     """Les seuils manqués par `r`, vide si le groupe passe. Avec le périmètre, les « en plus » sont
-    comptés sans plafond ; sans réglages, seule la carto avec périmètre a un seuil (C4)."""
+    comptés sans plafond ; sans réglages, seule la carto avec périmètre a un seuil (C4). Depuis la
+    carto du pays, le plafond des « en plus » ne compte pas ceux que le document inscrit (T052)."""
+    if depuis_pays:
+        seuil = SEUILS.get(r.groupe)
+        if seuil is None:
+            return []
+        echecs = []
+        if r.taux < seuil.taux:
+            echecs.append(f"retrouvées {r.retrouvees}/{r.reference} < {seuil.retrouvees}/{seuil.reference}")
+        hors_document = r.en_plus - (r.en_plus_inscrites or 0)
+        if seuil.en_plus_max is not None and hors_document > seuil.en_plus_max:
+            echecs.append(f"en plus hors document {hors_document} > {seuil.en_plus_max}")
+        return echecs
     if sans_reglages:
         seuil = SEUILS_SANS_REGLAGES.get(r.groupe) if avec_perimetre else None
     else:
@@ -334,6 +402,11 @@ def main(arguments: list[str] | None = None) -> int:
     parseur.add_argument(
         "--sans-reglages", action="store_true", help="des réglages ne garder que la tête (T043 C4)"
     )
+    parseur.add_argument(
+        "--depuis-pays",
+        action="store_true",
+        help="lit la carto de chaque tête dans pays.duckdb (lecture seule), sans lancer le moteur (T052)",
+    )
     parseur.add_argument("--carto", help="avec --depuis-postgres : l'uuid de la carto (un seul groupe)")
     parseur.add_argument(
         "--organisation", help="avec --depuis-postgres : la dernière carto de cette organisation (son nom)"
@@ -347,14 +420,27 @@ def main(arguments: list[str] | None = None) -> int:
         parseur.error("--empreintes lance le moteur : il ne va pas avec --depuis-postgres")
     if options.depuis_postgres and (options.perimetre or options.sans_reglages):
         parseur.error("--perimetre et --sans-reglages lancent le moteur : pas avec --depuis-postgres")
+    if options.depuis_pays and (
+        options.depuis_postgres or options.empreintes or options.perimetre or options.sans_reglages
+    ):
+        parseur.error(
+            "--depuis-pays lit la carto du pays : il ne va avec aucune autre source ni option du moteur"
+        )
     url = os.environ.get("DATABASE_URL", "")
     if options.depuis_postgres and not url:
         print("DATABASE_URL manque : --depuis-postgres lit la base de l'app.", file=sys.stderr)
         return 2
-    registre = Path(os.environ.get("CARTOFR_DATA", "data")) / "registre.duckdb"
+    data = Path(os.environ.get("CARTOFR_DATA", "data"))
+    registre = data / "registre.duckdb"
+    pays = chemin_pays(data)
     references = Path(os.environ.get("CARTOFR_REFERENCES", "basile"))
     configs = Path("config")
-    a_verifier = (references, configs) if options.depuis_postgres else (registre, references, configs)
+    if options.depuis_postgres:
+        a_verifier: tuple[Path, ...] = (references, configs)
+    elif options.depuis_pays:
+        a_verifier = (pays, references, configs)
+    else:
+        a_verifier = (registre, references, configs)
     manquants = [str(p) for p in a_verifier if not p.exists()]
     if manquants:
         print("Fichiers manquants : " + ", ".join(manquants), file=sys.stderr)
@@ -365,6 +451,7 @@ def main(arguments: list[str] | None = None) -> int:
         f" {'même ciblable':>14} {'durée':>7} {'mémoire':>8}"
         + (f" {'= noms':>7}" if options.empreintes else "")
         + (f" {'inscrites':>9} {'document':>9}" if options.perimetre else "")
+        + (f" {'inscrites':>9}" if options.depuis_pays else "")
         + (f" {'carto':>8}" if options.depuis_postgres else "")
         + "  verdict"
     )
@@ -375,7 +462,9 @@ def main(arguments: list[str] | None = None) -> int:
         carto_id = None
         document = document_perimetre(options.perimetre, groupe)
         try:
-            if options.depuis_postgres:
+            if options.depuis_pays:
+                r = mesurer_depuis_pays(groupe, pays, references, configs)
+            elif options.depuis_postgres:
                 r, carto_id = mesurer_depuis_postgres(
                     groupe, url, references, configs, options.carto, options.organisation
                 )
@@ -395,7 +484,7 @@ def main(arguments: list[str] | None = None) -> int:
             print(f"{groupe:<7} {erreur}", file=sys.stderr)
             code = max(code, 2)
             continue
-        echecs = verdict(r, document is not None, options.sans_reglages)
+        echecs = verdict(r, document is not None, options.sans_reglages, options.depuis_pays)
         code = max(code, 1 if echecs else 0)
         retrouvees = f"{_pourcent(r.taux)} ({r.retrouvees}/{r.reference})"
         print(
@@ -409,6 +498,7 @@ def main(arguments: list[str] | None = None) -> int:
                 if options.perimetre
                 else ""
             )
+            + (f" {r.en_plus_inscrites:>9}" if options.depuis_pays else "")
             + (f" {carto_id[:8]:>8}" if carto_id else "")
             + f"  {'OK' if not echecs else 'RÉGRESSION : ' + ' ; '.join(echecs)}",
             flush=True,
