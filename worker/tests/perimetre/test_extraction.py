@@ -66,6 +66,7 @@ def test_format_lvmh_ville_de_plusieurs_mots_exige_la_commune():
     assert ligne.candidats == (
         Candidat("Alphamark Vins", "Épernay"),
         Candidat("Alphamark", "Vins Épernay", commune_exigee=True),
+        Candidat("Alphamark Vins Épernay", "Épernay", commune_exigee=True, secours=True),
     )
     assert ligne.methode == "IG"
     assert ligne.taux == 66.0
@@ -77,6 +78,7 @@ def test_format_lvmh_titre_de_section_exige_la_commune():
         Candidat("Vins et Spiritueux Alphamark", "Épernay", commune_exigee=True),
         Candidat("Vins et Spiritueux", "Alphamark Épernay", commune_exigee=True),
         Candidat("Alphamark", "Épernay"),
+        Candidat("Alphamark Épernay", "Épernay", commune_exigee=True, secours=True),
     )
 
 
@@ -92,8 +94,84 @@ def test_format_lvmh_nom_coupe_sur_deux_lignes():
 def test_format_lvmh_etranger_ignore_et_termine_le_nom():
     texte = "TITRE INVENTE\nAlphamark UK Londres, Royaume-Uni IG 66 %\nBetamark Paris, France MEE 40 %"
     (ligne,) = extraire(texte)
-    assert ligne.candidats == (Candidat("Betamark", "Paris"),)
+    assert ligne.candidats[0] == Candidat("Betamark", "Paris")
     assert ligne.methode == "MEE"
+
+
+def test_format_lvmh_ville_dans_le_nom_essayee_en_dernier_et_exige_la_commune():
+    (ligne,) = extraire("SNC Hotel Inventé Courchevel, France IG 100 %")
+    assert ligne.candidats[0] == Candidat("SNC Hotel Inventé", "Courchevel")
+    assert ligne.candidats[-1] == Candidat(
+        "SNC Hotel Inventé Courchevel", "Courchevel", commune_exigee=True, secours=True
+    )
+
+
+def test_format_lvmh_nom_double_chaque_cote_essaye_apres():
+    (ligne,) = extraire("AB Inventé – Alphamark Inventé France Courbevoie, France IG 66 %")
+    noms = [c.nom for c in ligne.candidats]
+    assert noms[0] == "AB Inventé – Alphamark Inventé France"
+    ville_comprise = noms.index("AB Inventé – Alphamark Inventé France Courbevoie")
+    assert noms.index("Alphamark Inventé France") > ville_comprise
+    assert Candidat("Alphamark Inventé France", "Courbevoie", secours=True) in ligne.candidats
+    assert Candidat("AB Inventé", "Courbevoie", secours=True) in ligne.candidats
+
+
+def test_format_lvmh_nom_double_un_cote_d_un_seul_mot_n_est_pas_candidat():
+    (ligne,) = extraire("Alphamark - France Paris, France IG 100 %")
+    noms = [c.nom for c in ligne.candidats]
+    assert "France" not in noms
+    assert "France Paris" not in noms  # le candidat ville comprise n'est pas coupé
+
+
+def test_format_lvmh_ligne_coupee_apres_la_virgule():
+    texte = (
+        "Alphamark Saint-Barthélemy Saint-Barthélemy, \n"
+        "Antilles françaises\n"
+        "IG 100 %\n"
+        "Betamark Paris, France IG 100 %"
+    )
+    premiere, seconde = extraire(texte)
+    assert premiere.candidats[0] == Candidat("Alphamark Saint-Barthélemy", "Saint-Barthélemy")
+    assert (premiere.methode, premiere.taux) == ("IG", 100.0)
+    assert premiere.texte == "Alphamark Saint-Barthélemy Saint-Barthélemy, Antilles françaises IG 100 %"
+    assert seconde.candidats[0] == Candidat("Betamark", "Paris")  # rien de la ligne coupée devant
+
+
+def test_format_lvmh_ligne_coupee_a_l_etranger_ignoree_et_termine_le_nom():
+    texte = "TITRE INVENTE\nAlphamark Doha, \nQatar\nIG 100 %\nBetamark Paris, France IG 100 %"
+    (ligne,) = extraire(texte)
+    assert ligne.candidats[0] == Candidat("Betamark", "Paris")
+
+
+def test_virgule_en_fin_de_texte_courant_redevient_une_ligne_d_avant():
+    texte = "Retraites,\nparticipation inventée\nautre phrase\nBetamark Paris, France IG 100 %"
+    (ligne,) = extraire(texte)
+    # comme sans la virgule : les deux dernières lignes d'avant
+    assert ligne.candidats[0].nom == "participation inventée autre phrase Betamark"
+
+
+def test_ligne_finie_par_une_virgule_n_avale_pas_les_lignes_vinci_suivantes():
+    """Revue T053 : avant la correction, les deux premières sociétés étaient perdues."""
+    texte = (
+        "Société Inventée,\n"
+        "Alphamark France 100,00 Intégration globale\n"
+        "Betamark France 100,00 Intégration globale"
+    )
+    premiere, seconde = extraire(texte)
+    assert premiere.candidats == (Candidat("Société Inventée, Alphamark", None), Candidat("Alphamark", None))
+    assert seconde.candidats == (Candidat("Betamark", None),)
+
+
+def test_phrase_finie_par_une_virgule_ne_se_recolle_pas_a_la_ligne_de_societe():
+    texte = "Les sociétés suivantes, détenues à 100 %,\nsont listées ici.\nAlphamark Paris, France IG 100 %"
+    (ligne,) = extraire(texte)
+    assert Candidat("Alphamark", "Paris") in ligne.candidats
+    assert ligne.texte == "Alphamark Paris, France IG 100 %"
+
+
+def test_nom_avec_un_tiret_court_n_est_pas_un_nom_double():
+    (ligne,) = extraire("Hôtel - Restaurant Inventé Paris, France IG 100 %")
+    assert "Restaurant Inventé" not in [c.nom for c in ligne.candidats]
 
 
 def test_format_lvmh_outre_mer():

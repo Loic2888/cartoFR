@@ -13,7 +13,9 @@ Règle, mesurée le 2026-10-14 sur VINCI et LVMH, puis resserrée après la revu
 5. enfin, un même SIREN retenu pour des lignes de noms différents est un signe d'erreur : aucune
    de ces lignes n'est retenue (`conflit`).
 Les candidats d'une ligne sont essayés dans l'ordre : le premier qui retient une société décide ;
-à défaut, le premier porté par des homonymes passe à l'étape 3.
+à défaut, le premier porté par des homonymes passe à l'étape 3. Un candidat de secours (ville
+comprise dans le nom, côté d'un nom double, T053) n'est essayé que si aucun candidat d'avant, hors
+secours, n'a d'homonymes.
 
 Usage :
     con = duckdb.connect(str(registre), read_only=True)
@@ -52,12 +54,11 @@ INTROUVABLE: Raison = "introuvable"
 CONFLIT: Raison = "conflit"
 RETENUES: tuple[Raison, ...] = (UNIQUE, COMMUNE, REGISTRE)
 
-# Clé d'un nom, après `norm` : formes écrites avec des points recollées (« S.A.S. » → « SAS »),
-# abréviations développées, « ET » retiré, formes juridiques retirées en tête et en fin seulement
+# Clé d'un nom, après `norm` : sigles espacés recollés, formes écrites avec des points comprises
+# (« S.A.S. » → « SAS », « M H C S » → « MHCS », T053), abréviations développées (« ST » →
+# « SAINT », T053), « ET » retiré, formes juridiques retirées en tête et en fin seulement
 # (« SE LOGER SA » → « SE LOGER »). Mêmes expressions côté Python et côté Arrow (testé).
-POINTEES = (("S A S U", "SASU"), ("S A R L", "SARL"), ("E U R L", "EURL"), ("S A S", "SAS"),
-            ("S N C", "SNC"), ("S C I", "SCI"), ("S C A", "SCA"), ("S A", "SA"))  # fmt: skip
-ABREVIATIONS = (("STE", "SOCIETE"), ("CIE", "COMPAGNIE"), ("ETS", "ETABLISSEMENTS"))
+ABREVIATIONS = (("STE", "SOCIETE"), ("CIE", "COMPAGNIE"), ("ETS", "ETABLISSEMENTS"), ("ST", "SAINT"))
 _FORMES = "SASU|SAS|SARL|SNC|SCI|SA|SE|EURL|SCA|GIE|SEP|SCS"
 _EN_TETE = rf"^(?:(?:{_FORMES})(?: |$))+"
 _EN_FIN = rf"(?:(?:^| )(?:{_FORMES}))+$"
@@ -94,9 +95,13 @@ class Correspondance:
 
 def cle(nom: str | None) -> str:
     """La clé de correspondance d'un nom : « Sté Inventée & Cie S.A.S. » → « SOCIETE INVENTEE COMPAGNIE »."""
-    s = norm(nom)
-    for avec_points, forme in POINTEES:
-        s = re.sub(rf"\b{avec_points}\b", forme, s)
+    # Sigle espacé, sans lookahead (Arrow n'en a pas) : chaque espace est doublée, une lettre seule
+    # est encadrée de \x01 ; deux lettres seules voisines se touchent par « \x01\x01 », retiré.
+    # Une lettre seule dans un nom (« D ART ») reste seule. Le sigle entier est recollé avant de
+    # reconnaître une forme juridique : « S.N.C.F. » donne « SNCF », pas « SNC F » (revue T053).
+    # Limite : une forme collée à un sigle (« M H C S S A ») reste dans le sigle, « MHCSSA ».
+    s = re.sub(r" ([A-Z]) ", "\x01\\1\x01", " " + norm(nom).replace(" ", "  ") + " ")
+    s = s.replace("\x01\x01", "").replace("\x01", " ")
     for court, long in ABREVIATIONS:
         s = re.sub(rf"\b{court}\b", long, s)
     s = re.sub(r"\bET\b", "", s)
@@ -108,8 +113,9 @@ def cle(nom: str | None) -> str:
 def cle_arrow(noms: pa.Array) -> pa.Array:
     """`cle` sur toute une colonne d'un coup, même résultat."""
     s = norm_arrow(noms)
-    for avec_points, forme in POINTEES:
-        s = pc.replace_substring_regex(s, rf"\b{avec_points}\b", forme)
+    s = pc.binary_join_element_wise(" ", pc.replace_substring(s, " ", "  "), " ", "")
+    s = pc.replace_substring_regex(s, r" ([A-Z]) ", "\x01\\1\x01")
+    s = pc.replace_substring(pc.replace_substring(s, "\x01\x01", ""), "\x01", " ")
     for court, long in ABREVIATIONS:
         s = pc.replace_substring_regex(s, rf"\b{court}\b", long)
     s = pc.replace_substring_regex(s, r"\bET\b", "")
@@ -159,7 +165,10 @@ def _une_ligne(
 ) -> tuple[Correspondance, list[str]]:
     """Étapes 1 et 2 pour une ligne ; rend aussi les homonymes à départager par le registre."""
     attente: tuple[Correspondance, list[str]] | None = None
+    attente_sure = False  # les homonymes en attente viennent d'un candidat qui n'est pas de secours
     for candidat in ligne.candidats:
+        if candidat.secours and attente_sure:
+            break  # les homonymes d'un nom plus sûr passent avant : le registre les départage
         societes = porteurs.get(cle(candidat.nom))
         if not societes:
             continue
@@ -174,6 +183,7 @@ def _une_ligne(
         if attente is None:
             homonymes = memes or [s for s, _ in societes]
             attente = Correspondance(ligne, HOMONYMES, None, candidat.nom, len(societes)), homonymes
+            attente_sure = not candidat.secours
     return attente or (Correspondance(ligne, INTROUVABLE), [])
 
 

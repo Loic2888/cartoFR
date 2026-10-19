@@ -27,9 +27,9 @@ Au 2026-10-16, sans correction, LVMH est à 142/172 (83 %) pour une cible de 154
 | P5 Pas de régression silencieuse | ⚠️ | Non-régression des trois groupes, dans les deux modes, avant la PR (C3) |
 
 ## Critères de succès
-- [ ] **C1** : `rapport.md` range les sociétés de LVMH manquées sans correction par cause, avec leur nombre
-- [ ] **C2** : sans correction, LVMH ≥ 154/172, « en plus » non inscrits au document ≤ 16
-- [ ] **C3** : VINCI et CMAF ne baissent pas, dans les deux modes de la non-régression (sans correction, et avec les réglages de `config/`)
+- [x] **C1** : `rapport.md` range les sociétés de LVMH manquées sans correction par cause, avec leur nombre
+- [x] **C2** : sans correction, LVMH ≥ 154/172, « en plus » non inscrits au document ≤ 16
+- [x] **C3** : VINCI et CMAF ne baissent pas, dans les deux modes de la non-régression (sans correction, et avec les réglages de `config/`)
 
 ## Dépendances
 **À finir avant** : T048 (mesure dans `pays.duckdb`), T052

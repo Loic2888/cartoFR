@@ -26,6 +26,13 @@ PREFIXES = [
     "CIE", "COMPAGNIE", "ETS", "ETABLISSEMENTS", "LES", "LE", "LA", "L", "DES", "DU", "DE", "D",
 ]  # fmt: skip
 
+# Caractères que NFKD ne décompose pas, remplacés avant : « D’Yquem » se lit « D YQUEM » comme
+# « D'Yquem », et non « DYQUEM » ; « Œuvre » se lit « OEUVRE » (T053).
+REMPLACEMENTS = (
+    ("\u2019", "'"), ("\u2018", "'"), ("\u02bc", "'"), ("\u00b4", "'"), ("`", "'"), ("\u2032", "'"),
+    ("Œ", "OE"), ("œ", "oe"), ("Æ", "AE"), ("æ", "ae"), ("ß", "ss"), ("ẞ", "SS"),
+)  # fmt: skip
+
 TABLE_NOMS = "noms_normalises"
 pc: Any = _pc  # fonctions générées à l'exécution : inconnues du vérificateur de types
 
@@ -41,7 +48,10 @@ class Candidate:
 
 def norm(s: str | None) -> str:
     """Majuscules sans accents, « & » lu « ET », tout ce qui n'est ni lettre ni chiffre devient une espace."""
-    s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().upper()
+    s = s or ""
+    for avant, apres in REMPLACEMENTS:
+        s = s.replace(avant, apres)
+    s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().upper()
     s = s.replace("&", " ET ")
     return re.sub(r"[^A-Z0-9]+", " ", s).strip()
 
@@ -49,10 +59,14 @@ def norm(s: str | None) -> str:
 def norm_arrow(noms: pa.Array) -> pa.Array:
     """`norm` sur toute une colonne d'un coup, même résultat, pour les 9 millions de noms de SIRENE.
 
-    Mêmes étapes que `norm` : décomposition NFKD, caractères non ASCII retirés, majuscules,
-    « & » lu « ET », le reste réduit à des espaces simples, espaces de bord retirées.
+    Mêmes étapes que `norm` : apostrophes et ligatures remplacées, décomposition NFKD, caractères
+    non ASCII retirés, majuscules, « & » lu « ET », le reste réduit à des espaces simples, espaces
+    de bord retirées.
     """
-    n = pc.utf8_normalize(pc.fill_null(noms, ""), "NFKD")
+    n = pc.fill_null(noms, "")
+    for avant, apres in REMPLACEMENTS:
+        n = pc.replace_substring(n, avant, apres)
+    n = pc.utf8_normalize(n, "NFKD")
     n = pc.replace_substring_regex(n, r"[^\x00-\x7F]", "")
     n = pc.ascii_upper(n)
     n = pc.replace_substring(n, "&", " ET ")

@@ -68,6 +68,17 @@ def _mini() -> MiniRegistre:
         ("Gammamark-Été", "GAMMAMARK ETE"),
         ("SAS", ""),
         (None, ""),
+        # T053
+        ("Château d’Inventé", "CHATEAU D INVENTE"),  # apostrophe typographique, comme « ' »
+        ("CHATEAU D'INVENTE", "CHATEAU D INVENTE"),
+        ("M H C S", "MHCS"),  # sigle espacé recollé
+        ("Inventé M H C S Vins", "INVENTE MHCS VINS"),
+        ("LVMH METIERS D ART", "LVMH METIERS D ART"),  # une lettre seule reste seule
+        ("Cheval Inventé ST-Tropez", "CHEVAL INVENTE SAINT TROPEZ"),
+        ("Œuvre Deltamark", "OEUVRE DELTAMARK"),
+        ("S.N.C.F.", "SNCF"),  # le sigle entier, pas « SNC F » puis « F » (revue T053)
+        ("J.S.A.", "JSA"),
+        ("Alphamark S.A.R.L.", "ALPHAMARK"),
     ],
 )
 def test_cle(nom: str | None, attendu: str):
@@ -87,6 +98,14 @@ def test_cle_arrow_identique_a_cle():
         "SCI SAS Alphamark",
         "SAS",
         "",
+        "Château d’Inventé",
+        "M H C S",
+        "A B C Deltamark D E",
+        "X",
+        "Cheval Inventé ST-Tropez",
+        "Straße Inventée",
+        "S.N.C.F.",
+        "Alphamark S.A.R.L.",
     ]
     assert cle_arrow(pa.array(noms)).to_pylist() == [cle(n) for n in noms]
 
@@ -181,6 +200,71 @@ def test_deux_homonymes_dans_le_groupe_restent_homonymes(tmp_path: Path):
     mini.lien(TETE, g2, PRESIDENT)
     (c,) = _correspondre(mini, tmp_path, _vinci("Gammamark"))
     assert (c.raison, c.siren) == (HOMONYMES, None)
+
+
+def test_apostrophe_typographique_du_document(tmp_path: Path):
+    mini = _mini()
+    a = mini.societe(siren(10), "SA DU CHATEAU D'INVENTE", commune="SAUTERNES")
+    (c,) = _correspondre(mini, tmp_path, "SA Du Château d’Inventé Sauternes, France IG 97 %")
+    assert (c.raison, c.siren) == (UNIQUE, a)
+
+
+def test_sigle_espace_au_registre_departage_par_la_commune(tmp_path: Path):
+    mini = _mini()
+    epernay = mini.societe(siren(10), "M H C S", commune="EPERNAY")
+    mini.societe(siren(11), "MHCS", commune="LYON 3")  # un autre MHCS, ailleurs
+    (c,) = _correspondre(mini, tmp_path, "MHCS Épernay, France IG 66 %")
+    assert (c.raison, c.siren, c.porteurs) == (COMMUNE, epernay, 2)
+
+
+def test_ville_comprise_dans_le_nom(tmp_path: Path):
+    mini = _mini()
+    a = mini.societe(siren(10), "HOTEL INVENTE COURCHEVEL", commune="COURCHEVEL")
+    (c,) = _correspondre(mini, tmp_path, "SNC HOTEL INVENTE Courchevel, France IG 100 %")
+    assert (c.raison, c.siren) == (COMMUNE, a)
+
+
+def test_ville_comprise_dans_le_nom_exige_le_siege_dans_la_ville(tmp_path: Path):
+    mini = _mini()
+    mini.societe(siren(10), "HOTEL INVENTE COURCHEVEL", commune="PARIS 8")
+    (c,) = _correspondre(mini, tmp_path, "SNC HOTEL INVENTE Courchevel, France IG 100 %")
+    assert c.raison == INTROUVABLE
+
+
+def test_le_secours_ne_passe_pas_devant_le_registre(tmp_path: Path):
+    """« L . P. M . Paris » : deux L.P.M. à Paris, dont un relié au groupe ; « LPM PARIS » existe
+    aussi. Le registre départage les L.P.M., le nom ville comprise n'est pas essayé."""
+    mini = _mini()
+    filiale = mini.societe(siren(10), "L.P.M.", commune="PARIS 8")
+    mini.societe(siren(11), "LPM", commune="PARIS 15")
+    mini.societe(siren(12), "LPM PARIS", commune="PARIS 1")
+    mini.lien(TETE, filiale, PRESIDENT)
+    (c,) = _correspondre(mini, tmp_path, "L . P. M . Paris, France IG 100 %")
+    assert (c.raison, c.siren) == (REGISTRE, filiale)
+
+
+def test_le_secours_essaye_si_rien_n_attend(tmp_path: Path):
+    mini = _mini()
+    a = mini.societe(siren(10), "ALPHAMARK INVENTE FRANCE", commune="LEVALLOIS PERRET")
+    (c,) = _correspondre(mini, tmp_path, "AB Inventé – Alphamark Inventé France Courbevoie, France IG 66 %")
+    assert (c.raison, c.siren, c.nom) == (UNIQUE, a, "Alphamark Inventé France")
+
+
+def test_un_secours_a_homonymes_n_arrete_pas_le_secours_suivant(tmp_path: Path):
+    mini = _mini()
+    mini.societe(siren(10), "AB INVENTE", commune="METZ")
+    mini.societe(siren(11), "AB INVENTE", commune="LYON 3")
+    a = mini.societe(siren(12), "ALPHAMARK INVENTE FRANCE", commune="LEVALLOIS PERRET")
+    (c,) = _correspondre(mini, tmp_path, "AB Inventé – Alphamark Inventé France Courbevoie, France IG 66 %")
+    assert (c.raison, c.siren) == (UNIQUE, a)
+
+
+def test_ligne_coupee_aux_antilles(tmp_path: Path):
+    mini = _mini()
+    a = mini.societe(siren(10), "ALPHAMARK SAINT BARTHELEMY", commune="SAINT BARTHELEMY")
+    texte = "Alphamark Saint‑Barthélemy Saint‑Barthélemy,  \nAntilles françaises\nIG 100 %"
+    (c,) = _correspondre(mini, tmp_path, texte)
+    assert (c.raison, c.siren) == (UNIQUE, a)
 
 
 def test_introuvable(tmp_path: Path):
