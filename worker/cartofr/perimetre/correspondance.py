@@ -26,7 +26,9 @@ Sorties : une `Correspondance` par ligne, retenue ou non, avec sa raison.
 `correspondre_plusieurs` lit les noms de SIRENE une seule fois pour tous les documents (T046) :
 c'est cette lecture qui coûte, 25 s environ ; le résultat est celui de `correspondre` document par
 document.
-Seules les dénominations des sociétés sont lues : jamais `dirigeants_personnes` (garde-fou 6).
+Un candidat marqué `sigle` (format ESEF, T049) est cherché parmi les sigles de SIRENE et non les
+dénominations, par la même règle. Les autres formats n'en ont jamais : leurs résultats ne changent pas.
+Seuls les dénominations et sigles des sociétés sont lus : jamais `dirigeants_personnes` (garde-fou 6).
 """
 
 import collections
@@ -53,6 +55,7 @@ HOMONYMES: Raison = "homonymes"
 INTROUVABLE: Raison = "introuvable"
 CONFLIT: Raison = "conflit"
 RETENUES: tuple[Raison, ...] = (UNIQUE, COMMUNE, REGISTRE)
+SIGLE = "\x02"  # préfixe des clés de sigle dans la table des porteurs
 
 # Clé d'un nom, après `norm` : sigles espacés recollés, formes écrites avec des points comprises
 # (« S.A.S. » → « SAS », « M H C S » → « MHCS », T053), abréviations développées (« ST » →
@@ -124,15 +127,20 @@ def cle_arrow(noms: pa.Array) -> pa.Array:
     return pc.utf8_trim(pc.replace_substring_regex(s, _EN_FIN, ""), " ")
 
 
-def _porteurs(con: duckdb.DuckDBPyConnection, cles: set[str]) -> dict[str, list[tuple[str, str]]]:
-    """Pour chaque clé voulue, les sociétés actives qui la portent : (SIREN, commune normalisée)."""
-    table = con.execute("""
-        select u.siren, u.denomination, coalesce(s.commune, '') commune
+def _porteurs(
+    con: duckdb.DuckDBPyConnection, cles: set[str], colonne: str = "denomination", prefixe: str = ""
+) -> dict[str, list[tuple[str, str]]]:
+    """Pour chaque clé voulue, les sociétés actives qui la portent : (SIREN, commune normalisée).
+    `colonne` : `denomination`, ou `sigle` (clés rendues avec `prefixe`)."""
+    if colonne not in ("denomination", "sigle"):
+        raise ValueError(colonne)
+    table = con.execute(f"""
+        select u.siren, u.{colonne} nom, coalesce(s.commune, '') commune
         from unites_legales u left join sieges s using (siren)
-        where u.etat_administratif = 'A' and u.fin is null and u.denomination is not null
+        where u.etat_administratif = 'A' and u.fin is null and u.{colonne} is not null
           and (u.categorie_juridique is null or u.categorie_juridique not between 1000 and 1999)
     """).to_arrow_table()
-    cles_noms = cle_arrow(table.column("denomination").combine_chunks())
+    cles_noms = cle_arrow(table.column("nom").combine_chunks())
     garde = pc.is_in(cles_noms, value_set=pa.array(sorted(cles), pa.string()))
     sortie: dict[str, list[tuple[str, str]]] = {}
     for k, siren, commune in zip(
@@ -141,7 +149,7 @@ def _porteurs(con: duckdb.DuckDBPyConnection, cles: set[str]) -> dict[str, list[
         pc.filter(table.column("commune"), garde).to_pylist(),
         strict=True,
     ):
-        sortie.setdefault(k, []).append((siren, norm(commune)))
+        sortie.setdefault(prefixe + k, []).append((siren, norm(commune)))
     return sortie
 
 
@@ -169,7 +177,7 @@ def _une_ligne(
     for candidat in ligne.candidats:
         if candidat.secours and attente_sure:
             break  # les homonymes d'un nom plus sûr passent avant : le registre les départage
-        societes = porteurs.get(cle(candidat.nom))
+        societes = porteurs.get((SIGLE if candidat.sigle else "") + cle(candidat.nom))
         if not societes:
             continue
         if len(societes) == 1 and not candidat.commune_exigee:
@@ -209,8 +217,12 @@ def correspondre_plusieurs(
     con: duckdb.DuckDBPyConnection, documents: Sequence[tuple[str, list[LignePerimetre]]]
 ) -> list[list[Correspondance]]:
     """`correspondre` pour plusieurs documents (tête, lignes), avec une seule lecture des noms."""
-    voulues = {k for _, lignes in documents for ligne in lignes for c in ligne.candidats if (k := cle(c.nom))}
+    candidats = [c for _, lignes in documents for ligne in lignes for c in ligne.candidats]
+    voulues = {k for c in candidats if not c.sigle and (k := cle(c.nom))}
+    sigles = {k for c in candidats if c.sigle and (k := cle(c.nom))}
     porteurs = _porteurs(con, voulues) if voulues else {}
+    if sigles:
+        porteurs |= _porteurs(con, sigles, "sigle", SIGLE)
     return [_document(con, tete, lignes, porteurs) for tete, lignes in documents]
 
 

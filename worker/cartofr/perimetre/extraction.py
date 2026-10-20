@@ -29,6 +29,17 @@ noms candidats, et c'est la correspondance avec le registre qui choisit. Ordre d
   si sa virgule est celle d'avant le pays ; une ligne qui se lit seule passe toujours d'abord, et
   ce qui attendait redevient du texte d'avant. Une ligne coupée en fin de texte est perdue.
 
+Troisième format, ajouté le 2026-10-20 (T049) : le tableau de périmètre d'un document
+d'enregistrement universel au format ESEF (paquet .zip de l'AMF, ou son .xhtml), ex. la note 3 de
+CMAF. `texte_document` y rend une ligne par rangée, cellules séparées par « | » :
+« CIC Nord Ouest | France | 100 | 98 | IG | 100 | 98 | IG » : nom, pays, % de contrôle, % d'intérêt
+et méthode de l'exercice, puis ceux de l'exercice d'avant, ignorés. Une société sortie, fusionnée
+(« FU ») ou une succursale n'est pas lue. Candidats, dans l'ordre :
+  1. le nom ; 2. le nom sans son sigle final entre parenthèses (« Banque Transatlantique (BT) ») ;
+  3. de secours, cherchés parmi les sigles de SIRENE et non les dénominations (`sigle`) : le nom
+     sans parenthèses (« CIC Est », sigle de BANQUE CIC EST), puis le sigle entre parenthèses, s'il
+     a 3 caractères au moins (`SIGLE_MIN`).
+
 Usage :
     lignes = extraire(texte_document(Path("out/perimetre/vinci.pdf")))
 Entrée : un PDF, une page HTML ou un texte.
@@ -37,6 +48,7 @@ Sortie : une `LignePerimetre` par société située en France ou en outre-mer.
 
 import logging
 import re
+import zipfile
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
@@ -60,6 +72,9 @@ LIGNES_SUITE = 2  # lignes lues au plus pour finir une ligne coupée après la v
 # Restaurant Inventé » est un seul nom, son côté « Restaurant Inventé » serait trop vague (revue T053).
 _DOUBLE = re.compile(r" – ")
 TAILLE_MAX = 50 * 1024 * 1024  # un document de périmètre fait quelques Mo : au-delà, on refuse
+# Le rapport d'un paquet ESEF, une fois décompressé : 96 Mo pour le DEU 2025 de CMAF. Au-delà, on
+# refuse : un zip de quelques Mo peut se décompresser en plusieurs Go.
+TAILLE_MAX_ESEF = 300 * 1024 * 1024
 
 _FR = r"(?:(?:" + "|".join(re.escape(o) for o in OUTRE_MER) + r"), )?France"
 # Format VINCI. Seule la France est lue en détail : le nom d'un pays étranger peut avoir plusieurs mots.
@@ -76,6 +91,38 @@ _LVMH = re.compile(
 _NC = re.compile(r"^(?P<avant>.+), (?P<pays>[^,]+) (?P<taux>\d{1,3}(?:[.,]\d+)?) ?%$")
 _TITRE_NC = re.compile(r"(?i)non (?:incluses dans la|comprises dans la) consolidation|non consolidées")
 _INVISIBLES = dict.fromkeys(map(ord, "​‌‍⁠﻿"))
+# Format ESEF : « <nom> | <pays> | <contrôle> | <intérêt> | <méthode> », puis l'exercice d'avant.
+_NOMBRE = r"\d{1,3}(?:[,.]\d+)?"
+_TABLEAU = re.compile(
+    rf"^(?P<nom>[^|]+?) \| (?P<pays>[^|]+?) \| {_NOMBRE} \| (?P<taux>{_NOMBRE}) \| (?P<meth>IG|MEE|ME|IP|NC)"
+    r"(?: \|.*)?$"
+)
+# « ACM Vie, Société d'Assurance Mutuelle » : une forme juridique écrite en toutes lettres après une
+# virgule, et sa forme abrégée, telle que SIRENE l'écrit dans les sigles (« ACM VIE SAM »).
+_FORMES_EN_LETTRES = {
+    "SOCIETE D ASSURANCE MUTUELLE": "SAM",
+    "SOCIETE ANONYME": "SA",
+    "SOCIETE PAR ACTIONS SIMPLIFIEE": "SAS",
+    "SOCIETE CIVILE IMMOBILIERE": "SCI",
+    "SOCIETE EN NOM COLLECTIF": "SNC",
+}
+_FORME_EN_LETTRES = re.compile(
+    r"(?i)^(?P<nom>[^,]+), (?P<forme>soci[ée]t[ée] (?:d['’ ]assurance mutuelle|anonyme"
+    r"|par actions simplifi[ée]e|civile immobili[èe]re|en nom collectif))$"
+)
+
+
+def _cle_forme(forme: str) -> str:
+    sans = forme.upper().replace("’", " ").replace("'", " ")
+    for accent, lettre in (("É", "E"), ("È", "E")):
+        sans = sans.replace(accent, lettre)
+    return " ".join(sans.split())
+
+
+# Un sigle entre parenthèses plus court (« LB », « BT ») est porté par trop de sociétés : le registre
+# finirait par en retenir une au hasard dans le groupe.
+SIGLE_MIN = 3
+_SIGLE_FINAL = re.compile(r"^(?P<nom>.+?) \((?P<sigle>[^()]+)\)$")
 
 
 @dataclass(frozen=True)
@@ -86,6 +133,7 @@ class Candidat:
     ville: str | None  # None : le document ne donne pas la ville (format VINCI)
     commune_exigee: bool = False  # retenu seulement si le siège SIRENE est dans `ville`
     secours: bool = False  # essayé seulement si aucun candidat d'avant n'a d'homonymes
+    sigle: bool = False  # cherché parmi les sigles de SIRENE, pas parmi les dénominations (ESEF)
 
 
 @dataclass(frozen=True)
@@ -140,12 +188,77 @@ class _Texte(HTMLParser):
             self.morceaux.append(" " + data)
 
 
+class _Rangees(_Texte):
+    """Le texte d'un rapport ESEF : une ligne par rangée de tableau, cellules séparées par « | ». Les
+    blocs d'une cellule (un nom sur deux lignes) y sont recollés par une espace."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._cellule = 0  # profondeur dans une cellule
+        self._cellules = 0  # cellules déjà ouvertes dans la rangée
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in ("td", "th"):
+            self.morceaux.append(" | " if self._cellules else "\n")
+            self._cellules += 1
+            self._cellule += 1
+        elif tag == "tr":
+            self._cellules = 0
+            self.morceaux.append("\n")
+        elif self._cellule and tag in self.BLOCS:
+            self.morceaux.append(" ")
+        else:
+            super().handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("td", "th"):
+            self._cellule = max(0, self._cellule - 1)
+        elif tag == "tr":
+            self._cellules = 0
+            self.morceaux.append("\n")
+        elif self._cellule and tag in self.BLOCS:
+            self.morceaux.append(" ")
+        else:
+            super().handle_endtag(tag)
+
+
+def _texte_esef(xhtml: str) -> str:
+    lecteur = _Rangees()
+    lecteur.feed(xhtml)
+    lecteur.close()
+    return "".join(lecteur.morceaux)
+
+
+def _rapport_esef(chemin: Path) -> str:
+    """Le rapport xhtml d'un paquet ESEF (zip déposé à l'AMF), dans `reports/`."""
+    try:
+        with zipfile.ZipFile(chemin) as paquet:
+            rapports = [i for i in paquet.infolist() if "/reports/" in f"/{i.filename}"
+                        and i.filename.lower().endswith((".xhtml", ".html"))]  # fmt: skip
+            if len(rapports) != 1:
+                raise ValueError("Paquet ESEF sans rapport unique dans « reports/ ».")
+            if rapports[0].file_size > TAILLE_MAX_ESEF:
+                raise ValueError("Rapport ESEF de plus de 300 Mo une fois décompressé.")
+            with paquet.open(rapports[0]) as f:
+                donnees = f.read(TAILLE_MAX_ESEF + 1)  # la taille annoncée peut mentir
+    except zipfile.BadZipFile as erreur:
+        raise ValueError("Archive zip abîmée.") from erreur
+    if len(donnees) > TAILLE_MAX_ESEF:
+        raise ValueError("Rapport ESEF de plus de 300 Mo une fois décompressé.")
+    return donnees.decode("utf-8", errors="replace")
+
+
 def texte_document(chemin: Path) -> str:
-    """Le texte d'un document de périmètre : PDF (pypdf), page HTML (balises retirées) ou texte."""
+    """Le texte d'un document de périmètre : PDF (pypdf), paquet ESEF (.zip ou .xhtml, une ligne par
+    rangée de tableau), page HTML (balises retirées) ou texte."""
     if chemin.stat().st_size > TAILLE_MAX:
         raise ValueError("Le document dépasse 50 Mo : ce n'est pas une liste de sociétés consolidées.")
     with chemin.open("rb") as f:
         debut = f.read(5)
+    if debut.startswith(b"PK\x03\x04") or chemin.suffix.lower() == ".zip":
+        return _texte_esef(_rapport_esef(chemin))
+    if chemin.suffix.lower() == ".xhtml":
+        return _texte_esef(chemin.read_text(encoding="utf-8", errors="replace"))
     if debut.startswith(b"%PDF") or chemin.suffix.lower() == ".pdf":
         from pypdf import PdfReader
 
@@ -205,6 +318,36 @@ def _noms_doubles(candidats: list[Candidat]) -> list[Candidat]:
     return candidats + cotes
 
 
+_FEDERATIONS = re.compile(
+    r"(?is)\bles\s+F[ée]d[ée]rations\s+du\s+Cr[ée]dit\s+Mutuel\b(?P<liste>[^;]{1,2000});"
+)
+
+
+def passage_federations(texte: str) -> str:
+    """Le passage d'un document de groupe mutualiste qui liste ses fédérations (« les Fédérations du
+    Crédit Mutuel Centre Est Europe (FCMCEE), du Sud-Est… ; », note 3a du DEU de CMAF), espaces
+    recollées ; vide si le document n'en a pas (T049)."""
+    m = _FEDERATIONS.search(texte)
+    return " ".join(m["liste"].split()) if m else ""
+
+
+def _candidats_tableau(nom: str) -> tuple[Candidat, ...]:
+    """Format ESEF : le nom, le nom sans son sigle final ou sans sa forme juridique en toutes lettres,
+    puis, de secours, parmi les sigles de SIRENE : le nom sans sigle, le nom suivi de sa forme
+    abrégée, et le sigle seul."""
+    m = _SIGLE_FINAL.match(nom)
+    court = m["nom"] if m else nom
+    candidats = [Candidat(nom, None), Candidat(court, None)]
+    secours = [Candidat(court, None, secours=True, sigle=True)]
+    if f := _FORME_EN_LETTRES.match(court):
+        abregee = _FORMES_EN_LETTRES[_cle_forme(f["forme"])]
+        candidats.append(Candidat(f["nom"], None))
+        secours.append(Candidat(f"{f['nom']} {abregee}", None, secours=True, sigle=True))
+    if m and len(m["sigle"].replace(" ", "")) >= SIGLE_MIN:
+        secours.append(Candidat(m["sigle"], None, secours=True, sigle=True))
+    return _unique(candidats + secours)
+
+
 def _unique(candidats: list[Candidat]) -> tuple[Candidat, ...]:
     return tuple(dict.fromkeys(c for c in candidats if c.nom))
 
@@ -218,6 +361,13 @@ def extraire(texte: str) -> list[LignePerimetre]:
     for brute in texte.splitlines():
         ligne = _propre(brute)
         if not ligne or ligne.isdigit():  # ligne vide ou numéro de page
+            continue
+        if m := _TABLEAU.match(ligne):  # format ESEF : une rangée se lit seule
+            nom = m["nom"].strip()
+            if (m["pays"] == "France" or m["pays"] in OUTRE_MER) and "succursale" not in nom.lower():
+                meth = METHODES_COURTES.get(m["meth"], NON_CONSOLIDEE)
+                sortie.append(LignePerimetre(_candidats_tableau(nom), meth, _taux(m["taux"]), ligne))
+            avant, coupee = [], []
             continue
         if coupee:
             seule = _VINCI_FR.match(ligne) or _LVMH.match(ligne) or _VINCI_FIN.search(ligne)

@@ -18,7 +18,7 @@ create table pays_groupes (
     nom varchar,
     taille integer not null,            -- sociétés du groupe, tête comprise
     document varchar,                   -- fichier du document de périmètre utilisé, ou vide
-    mutualiste boolean not null,        -- traitement à part (T049) ; faux pour l'instant
+    mutualiste boolean not null,        -- groupe de Crédit Mutuel qui a reçu ses caisses locales (T049)
     parent varchar,                     -- tête du groupe parent (groupes emboîtés), ou vide
     date_donnees date
 );
