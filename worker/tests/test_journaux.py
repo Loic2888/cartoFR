@@ -10,7 +10,7 @@ Parcours :
   d'une personne, saisie trop courte, registre absent), et le démarrage du worker sans
   DATABASE_URL ;
 - avec base : une carto réussie sur un mini-registre où des dirigeants personnes font entrer
-  une société, une carto refusée (réglages non validés), une carto en échec (registre absent),
+  une société, une carto refusée (réglages illisibles), une carto en échec (registre absent),
   un travail dont le paramètre est une adresse e-mail, un travail de type inconnu. Le groupe et
   les réglages sont créés par un compte auth.users à adresse example.test.
 
@@ -254,28 +254,24 @@ class Monde:
         )
         conn.commit()
 
-    def reglages(self, *, valide: bool, version: int) -> uuid.UUID:
+    def reglages(self, *, version: int, contenu: dict[str, Any] = CONTENU) -> uuid.UUID:
+        """Une version enregistrée, sans validation (T051)."""
         ident = _un(
             self.conn,
-            "insert into public.reglages (groupe_id, organisation_id, version, contenu, cree_par,"
-            " valide_le, valide_par) values (%s, %s, %s, %s, %s, case when %s then now() end,"
-            " case when %s then %s::uuid end) returning id",
-            (self.groupe, self.org, version, Jsonb(CONTENU), self.user, valide, valide, self.user),
+            "insert into public.reglages (groupe_id, organisation_id, version, contenu, cree_par)"
+            " values (%s, %s, %s, %s, %s) returning id",
+            (self.groupe, self.org, version, Jsonb(contenu), self.user),
         )
         self.conn.commit()
         return ident
 
-    def carto(self, reglages_id: uuid.UUID, *, contourner_declencheur: bool = False) -> uuid.UUID:
-        if contourner_declencheur:
-            self.conn.execute("alter table public.cartos disable trigger cartos_reglages_valides")
+    def carto(self, reglages_id: uuid.UUID) -> uuid.UUID:
         ident = _un(
             self.conn,
             "insert into public.cartos (organisation_id, groupe_id, reglages_id)"
             " values (%s, %s, %s) returning id",
             (self.org, self.groupe, reglages_id),
         )
-        if contourner_declencheur:
-            self.conn.execute("alter table public.cartos enable trigger cartos_reglages_valides")
         self.conn.commit()
         return ident
 
@@ -318,8 +314,9 @@ def test_parcours_des_travaux_sans_donnee_personnelle_dans_les_journaux(
     donnees.mkdir()
     monkeypatch.setenv("CARTOFR_DATA", str(donnees))
     monkeypatch.setenv(VARIABLE_CLE, "cle-de-test-FAKE")
-    valide = monde.reglages(valide=True, version=1)
-    brouillon = monde.reglages(valide=False, version=2)
+    valide = monde.reglages(version=1)
+    # Un contenu que le moteur refuse (tête absente), avec un e-mail qui ne doit pas sortir.
+    illisible = monde.reglages(version=2, contenu={"groupe": monde.email})
 
     # Registre absent : la carto échoue.
     assert monde.executer("carto", {"carto_id": str(monde.carto(valide))}) == "echec"
@@ -332,8 +329,8 @@ def test_parcours_des_travaux_sans_donnee_personnelle_dans_les_journaux(
     ).fetchall()
     monde.conn.commit()
     assert (HOLDING,) in entrees, "le parcours doit faire lire des dirigeants personnes au moteur"
-    # Réglages non validés : refus.
-    refusee = monde.carto(brouillon, contourner_declencheur=True)
+    # Réglages illisibles : refus.
+    refusee = monde.carto(illisible)
     assert monde.executer("carto", {"carto_id": str(refusee)}) == "echec"
     # Paramètres hostiles : une adresse e-mail à la place de l'identifiant de carto.
     assert monde.executer("carto", {"carto_id": monde.email}) == "echec"

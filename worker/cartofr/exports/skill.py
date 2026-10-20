@@ -302,7 +302,7 @@ def construire_tables(carto: CartoEnregistree) -> list[Table]:
                 "legal_entity_id": siren,
                 "legal_entity_name": noms.get(siren, ""),
                 "mapping_status": "mapped" if siren else "unresolved",
-                "notes": "organigramme public (réglages validés)",
+                "notes": "organigramme public (corrections du groupe)",
             }
         )
 
@@ -329,7 +329,7 @@ def construire_tables(carto: CartoEnregistree) -> list[Table]:
         },
         {
             "source_id": "S3",
-            "source_name": "Organigramme public du groupe (réglages validés)",
+            "source_name": "Organigramme public du groupe (corrections du groupe)",
             "url": "",
             "source_tier": "B",
             "usage": "têtes de maison",

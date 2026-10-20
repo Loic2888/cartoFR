@@ -1,6 +1,7 @@
-// Réglages d'un groupe : la dernière version, sa saisie, sa validation et
-// l'historique (T020, FR-005, US2 scénarios 2 et 5) ; la proposition de l'IA
-// et sa revue (T026, FR-008, SC-007).
+// Corrections d'un groupe : la dernière version, sa saisie et l'historique
+// (T020, T051, FR-005, US8) ; la proposition de l'IA et sa revue (T026,
+// FR-008, SC-007). Aucune validation (principe 2 amendé le 2026-10-16) :
+// chaque version enregistrée porte son auteur et sa date, et relance la carto.
 //
 // Tout est lu avec la session de l'utilisateur : RLS limite aux groupes de
 // ses organisations, un autre groupe rend une page introuvable. Les familles
@@ -19,7 +20,7 @@ import { utilisateurCourant } from "@/lib/session";
 import { EditeurReglages } from "./editeur-reglages";
 import { DemandeProposition, RevueProposition } from "./proposition";
 
-export const metadata: Metadata = { title: "Réglages · cartoFR" };
+export const metadata: Metadata = { title: "Corrections · cartoFR" };
 
 const jour = new Intl.DateTimeFormat("fr-FR", {
   day: "2-digit",
@@ -45,8 +46,6 @@ type LigneVersion = {
   contenu: Record<string, unknown>;
   cree_le: string;
   cree_par: string | null;
-  valide_le: string | null;
-  valide_par: string | null;
   proposition: unknown;
   corrections: number | null;
 };
@@ -60,7 +59,7 @@ export default async function PageReglages(props: PageProps<"/groupes/[id]/regla
     supabase.from("groupes").select("id, nom, tete_siren").eq("id", id).maybeSingle(),
     supabase
       .from("reglages")
-      .select("id, version, origine, contenu, cree_le, cree_par, valide_le, valide_par, proposition, corrections")
+      .select("id, version, origine, contenu, cree_le, cree_par, proposition, corrections")
       .eq("groupe_id", id)
       .order("version", { ascending: false }),
     lireDernierTravail(supabase, id),
@@ -73,36 +72,36 @@ export default async function PageReglages(props: PageProps<"/groupes/[id]/regla
   const qui = (userId: string | null) =>
     userId === null ? null : userId === user.id ? "vous" : "un membre";
 
+  // L'éditeur part de la dernière version enregistrée, jamais d'une proposition en attente de
+  // revue (principe 1) : la proposition se revoit dans son propre bloc.
+  const enVigueur = lignes.find((v) => v.origine !== "proposition") ?? null;
   const listes = Object.fromEntries(
     LISTES.map((l) => {
-      const valeurs = derniere?.contenu[l.cle];
+      const valeurs = enVigueur?.contenu[l.cle];
       return [l.cle, Array.isArray(valeurs) ? valeurs.map(String).join("\n") : ""];
     }),
   ) as Record<(typeof LISTES)[number]["cle"], string>;
-  const empreintes = derniere?.contenu.familles_exclues_empreintes;
+  const empreintes = enVigueur?.contenu.familles_exclues_empreintes;
   const nbFamilles = Array.isArray(empreintes) ? empreintes.length : 0;
   // La dernière version est une proposition de l'IA : elle se revoit, elle ne
-  // se valide pas telle quelle (migration 0004, principe 1).
-  const aRevoir = derniere !== null && derniere.origine === "proposition" && !derniere.valide_le;
+  // sert jamais telle quelle (migrations 0004 et 0007, principe 1).
+  const aRevoir = derniere !== null && derniere.origine === "proposition";
   const elements = aRevoir ? lireElements(derniere.proposition) : null;
 
   function etat(v: LigneVersion): string {
-    if (v.valide_le) {
-      if (v.origine === "depart") return `Réglages de départ (repris du prototype), validés ${quand(v.valide_le)}`;
-      const par = qui(v.valide_par);
-      const revue =
-        v.corrections === null
-          ? ""
-          : `, après revue d'une proposition de l'IA (${v.corrections === 0 ? "aucune correction" : v.corrections === 1 ? "1 correction" : `${v.corrections} corrections`})`;
-      return `Validée ${quand(v.valide_le)}${par ? ` par ${par}` : " (compte effacé)"}${revue}`;
-    }
     if (v.origine === "proposition") return "Proposition de l'IA : à revoir, jamais utilisée telle quelle";
-    return "Brouillon : à valider avant de servir aux cartos";
+    if (v.origine === "depart") return "Réglages de départ, repris du prototype";
+    if (v.corrections === null) return "Saisie à la main";
+    const n = v.corrections === 0 ? "aucune correction" : v.corrections === 1 ? "1 correction" : `${v.corrections} corrections`;
+    return `Après revue d'une proposition de l'IA (${n})`;
   }
 
+  // L'auteur et la date de chaque version : la trace du principe 2.
   function creation(v: LigneVersion): string {
+    if (v.origine === "proposition") return `Proposée ${quand(v.cree_le)}`;
     const par = qui(v.cree_par);
-    return `Créée ${quand(v.cree_le)}${par ? ` par ${par}` : ""}`;
+    const auteur = par ? ` par ${par}` : v.origine === "depart" ? "" : " (compte effacé)";
+    return `Enregistrée ${quand(v.cree_le)}${auteur}`;
   }
 
   return (
@@ -115,10 +114,14 @@ export default async function PageReglages(props: PageProps<"/groupes/[id]/regla
           Retour au groupe
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight break-words">
-          Réglages · {groupe.nom as string}
+          Corrections · {groupe.nom as string}
         </h1>
         <p className="text-sm text-muted-foreground">
           Tête du groupe : SIREN {groupe.tete_siren as string}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Sans correction, la carto du groupe se calcule à partir du registre et du document publié
+          par le groupe. Vos corrections s&apos;y appliquent dès qu&apos;elles sont enregistrées.
         </p>
       </div>
 
@@ -133,8 +136,8 @@ export default async function PageReglages(props: PageProps<"/groupes/[id]/regla
           </>
         ) : (
           <p className="text-sm">
-            Ce groupe n&apos;a pas encore de réglages. Saisissez-les ci-dessous, enregistrez, puis
-            validez : le moteur ne tourne que sur une version validée.
+            Ce groupe n&apos;a pas encore de corrections. Saisissez-les ci-dessous, puis enregistrez :
+            la carto se recalcule avec elles.
           </p>
         )}
       </section>
@@ -164,7 +167,6 @@ export default async function PageReglages(props: PageProps<"/groupes/[id]/regla
       <EditeurReglages
         groupeId={groupe.id as string}
         baseVersion={derniere?.version ?? 0}
-        aValider={derniere !== null && !derniere.valide_le && !aRevoir}
         listes={listes}
         nbFamilles={nbFamilles}
       />
@@ -179,7 +181,7 @@ export default async function PageReglages(props: PageProps<"/groupes/[id]/regla
               <li key={v.id} className="flex flex-col gap-1 rounded-lg border px-3 py-2">
                 <span className="font-medium">
                   Version {v.version} ·{" "}
-                  {v.valide_le ? "validée" : v.origine === "proposition" ? "proposition de l'IA" : "brouillon"}
+                  {v.origine === "proposition" ? "proposition de l'IA" : "enregistrée"}
                 </span>
                 <span className="text-sm text-muted-foreground">{etat(v)}</span>
                 <span className="text-sm text-muted-foreground">{creation(v)}</span>

@@ -1,5 +1,5 @@
 // Fiche d'un groupe (T019) : sa tête, sa date de création, le lien vers ses
-// réglages (T020), le lancement d'une carto et la liste de ses cartos (T021).
+// corrections (T020, T051), le lancement d'une carto et la liste de ses cartos (T021).
 // Lu avec la session (RLS) : un groupe d'une autre organisation n'existe pas
 // pour l'utilisateur, d'où un 404.
 import { CircleCheck, CircleX, Clock, LoaderCircle } from "lucide-react";
@@ -13,6 +13,7 @@ import {
   type StatutCarto,
   dateDonneesFr,
   dureeFr,
+  effetFr,
   libelleStatut,
   peutLancer,
   uneBloquante,
@@ -38,6 +39,8 @@ type LigneCarto = {
   date_donnees: string | null;
   duree_ms: number | null;
   avertissement: string | null;
+  societes_ajoutees: number | null;
+  societes_retirees: number | null;
 };
 
 const ICONES: Record<StatutCarto, React.ReactNode> = {
@@ -55,19 +58,21 @@ export default async function Groupe({ params }: PageProps<"/groupes/[id]">) {
   if (!z.uuid().safeParse(id).success) notFound();
 
   const { supabase } = await utilisateurCourant();
-  const [{ data: groupe }, { data: validee }, { data: cartos, error: erreurCartos }] = await Promise.all([
+  const [{ data: groupe }, { data: version }, { data: cartos, error: erreurCartos }] = await Promise.all([
     supabase.from("groupes").select("id, nom, tete_siren, cree_le").eq("id", id).maybeSingle(),
     supabase
       .from("reglages")
       .select("version")
       .eq("groupe_id", id)
-      .not("valide_le", "is", null)
+      .neq("origine", "proposition")
       .order("version", { ascending: false })
       .limit(1)
       .maybeSingle(),
     supabase
       .from("cartos")
-      .select("id, statut, travail_id, cree_le, date_donnees, duree_ms, avertissement")
+      .select(
+        "id, statut, travail_id, cree_le, date_donnees, duree_ms, avertissement, societes_ajoutees, societes_retirees",
+      )
       .eq("groupe_id", id)
       .order("cree_le", { ascending: false })
       .limit(20),
@@ -77,7 +82,7 @@ export default async function Groupe({ params }: PageProps<"/groupes/[id]">) {
 
   const lignes = (cartos ?? []) as LigneCarto[];
   const actif = uneBloquante(lignes);
-  const verdict = peutLancer({ versionValidee: Boolean(validee), cartoActive: actif });
+  const verdict = peutLancer({ version: Boolean(version), cartoActive: actif });
   const reglages = `/groupes/${groupe.id as string}/reglages`;
 
   return (
@@ -94,13 +99,13 @@ export default async function Groupe({ params }: PageProps<"/groupes/[id]">) {
         <dd className="font-mono tabular-nums">{groupe.tete_siren as string}</dd>
         <dt className="text-muted-foreground">Créé le</dt>
         <dd>{dateFr.format(new Date(groupe.cree_le as string))}</dd>
-        <dt className="text-muted-foreground">Réglages validés</dt>
-        <dd>{validee ? `version ${validee.version as number}` : "aucune version validée"}</dd>
+        <dt className="text-muted-foreground">Corrections</dt>
+        <dd>{version ? `version ${version.version as number}` : "aucune : la carto est celle du pays"}</dd>
       </dl>
 
       <div>
         <Link href={reglages} className={buttonVariants({ className: "w-full sm:w-auto" })}>
-          Réglages
+          Corrections
         </Link>
       </div>
 
@@ -112,9 +117,9 @@ export default async function Groupe({ params }: PageProps<"/groupes/[id]">) {
           groupeId={groupe.id as string}
           empechement={verdict.ok ? null : verdict.message}
           lienReglages={
-            validee ? null : (
+            version ? null : (
               <Link href={reglages} className={LIEN}>
-                Ouvrir les réglages
+                Ouvrir les corrections
               </Link>
             )
           }
@@ -131,6 +136,7 @@ export default async function Groupe({ params }: PageProps<"/groupes/[id]">) {
           <ul className="flex flex-col gap-3" aria-label="Cartos du groupe, la plus récente d'abord">
             {lignes.map((c) => {
               const lancee = new Date(c.cree_le);
+              const effet = c.statut === "terminee" ? effetFr(c.societes_ajoutees, c.societes_retirees) : null;
               return (
                 <li key={c.id} className="rounded-lg border px-4 py-3 text-sm">
                   <p className="flex items-center gap-2 font-medium">
@@ -147,6 +153,7 @@ export default async function Groupe({ params }: PageProps<"/groupes/[id]">) {
                     <dt className="text-muted-foreground">Données au</dt>
                     <dd>{dateDonneesFr(c.date_donnees)}</dd>
                   </dl>
+                  {effet ? <p className="mt-2 break-words">{effet}</p> : null}
                   {c.avertissement ? (
                     <p className="mt-2 rounded-md border px-3 py-2 break-words">
                       <span className="font-medium">Avertissement : </span>

@@ -29,12 +29,12 @@ export function depotSupabase(utilisateur: ClientUtilisateur, admin: () => Clien
       return { id: data.id as string, organisationId: data.organisation_id as string };
     },
 
-    async derniereVersionValidee(groupeId) {
+    async derniereVersion(groupeId) {
       const { data, error } = await utilisateur
         .from("reglages")
         .select("id, version")
         .eq("groupe_id", groupeId)
-        .not("valide_le", "is", null)
+        .neq("origine", "proposition")
         .order("version", { ascending: false })
         .limit(1)
         .maybeSingle();

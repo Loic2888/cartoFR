@@ -10,6 +10,7 @@ import {
   bloquante,
   dateDonneesFr,
   dureeFr,
+  effetFr,
   estActive,
   libelleStatut,
   peutLancer,
@@ -53,26 +54,27 @@ describe("bloquante", () => {
 });
 
 describe("peutLancer", () => {
-  it("sans version validée, refus avec l'explication", () => {
-    expect(peutLancer({ versionValidee: false, cartoActive: false })).toEqual({
+  it("sans version enregistrée, refus avec l'explication", () => {
+    expect(peutLancer({ version: false, cartoActive: false })).toEqual({
       ok: false,
-      message: MESSAGES.aucuneVersionValidee,
+      message: MESSAGES.aucuneVersion,
     });
   });
 
   it("une carto déjà active empêche un second lancement", () => {
-    expect(peutLancer({ versionValidee: true, cartoActive: true })).toEqual({
+    expect(peutLancer({ version: true, cartoActive: true })).toEqual({
       ok: false,
       message: MESSAGES.dejaEnCours,
     });
   });
 
-  it("version validée et rien en cours : on peut lancer", () => {
-    expect(peutLancer({ versionValidee: true, cartoActive: false })).toEqual({ ok: true });
+  it("version enregistrée et rien en cours : on peut lancer", () => {
+    expect(peutLancer({ version: true, cartoActive: false })).toEqual({ ok: true });
   });
 
   it("les messages sont en français et disent quoi faire", () => {
-    expect(MESSAGES.aucuneVersionValidee).toMatch(/Validez une version/);
+    expect(MESSAGES.aucuneVersion).toMatch(/enregistrez-les/);
+    expect(MESSAGES.aucuneVersion).not.toMatch(/valid/i);
     expect(MESSAGES.dejaEnCours).toMatch(/Attendez/);
   });
 });
@@ -104,5 +106,28 @@ describe("dateDonneesFr", () => {
   it("vide ou illisible : un tiret", () => {
     expect(dateDonneesFr(null)).toBe("—");
     expect(dateDonneesFr("04/03/2026")).toBe("—");
+  });
+});
+
+describe("effetFr (T051, C2)", () => {
+  it("n'affiche rien quand l'effet n'est pas mesuré : jamais un faux zéro", () => {
+    expect(effetFr(null, null)).toBeNull();
+    expect(effetFr(undefined, 3)).toBeNull();
+    expect(effetFr(4, null)).toBeNull();
+  });
+
+  it("dit qu'il n'y a aucune différence", () => {
+    expect(effetFr(0, 0)).toBe("Les corrections n'ajoutent ni ne retirent aucune société.");
+  });
+
+  it("accorde le singulier et le pluriel, en français", () => {
+    expect(effetFr(1, 1)).toBe("1 société ajoutée, 1 retirée par rapport à la carto sans correction.");
+    expect(effetFr(12, 3)).toBe("12 sociétés ajoutées, 3 retirées par rapport à la carto sans correction.");
+    expect(effetFr(0, 2)).toBe("Aucune société ajoutée, 2 retirées par rapport à la carto sans correction.");
+    expect(effetFr(5, 0)).toBe("5 sociétés ajoutées, aucune retirée par rapport à la carto sans correction.");
+  });
+
+  it("sépare les milliers à la française", () => {
+    expect(effetFr(1234, 0)).toMatch(/^1\s234 sociétés ajoutées/);
   });
 });

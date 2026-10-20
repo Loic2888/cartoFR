@@ -7,7 +7,9 @@
 //   autre organisation est introuvable, rien n'est lancé. L'organisation de
 //   la carto et du travail est celle du groupe ainsi lu, jamais une valeur
 //   envoyée par le navigateur ;
-// - la carto part sur la DERNIÈRE version validée des réglages (FR-005) ;
+// - la carto part sur la DERNIÈRE version enregistrée des corrections, jamais
+//   sur une proposition de l'IA (T051 : plus de validation ; la base refuse
+//   aussi une proposition, migration 0007) ;
 // - une seule carto active (en attente ou en cours) par groupe ;
 // - aucune ligne orpheline : la carto est insérée d'abord, sans travail ; si
 //   le travail ne s'insère pas, la carto est supprimée. Si seul le lien
@@ -23,8 +25,8 @@ import { MESSAGES, peutLancer } from "./affichage";
 export interface Depot {
   /** Le groupe, lu sous RLS ; null s'il n'existe pas ou appartient à une autre organisation. */
   lireGroupe(groupeId: string): Promise<{ id: string; organisationId: string } | null>;
-  /** La version validée de numéro le plus haut, ou null. */
-  derniereVersionValidee(groupeId: string): Promise<{ id: string; version: number } | null>;
+  /** La version de numéro le plus haut qui n'est pas une proposition de l'IA, ou null. */
+  derniereVersion(groupeId: string): Promise<{ id: string; version: number } | null>;
   /** Les ids des cartos actives (en attente ou en cours) du groupe. */
   cartosActives(groupeId: string): Promise<string[]>;
   insererCarto(ligne: {
@@ -46,12 +48,12 @@ export async function lancerCartoAvec(depot: Depot, groupeId: string): Promise<R
   if (!groupe) return { statut: "erreur", message: MESSAGES.groupeIntrouvable };
 
   const [version, actives] = await Promise.all([
-    depot.derniereVersionValidee(groupe.id),
+    depot.derniereVersion(groupe.id),
     depot.cartosActives(groupe.id),
   ]);
-  const verdict = peutLancer({ versionValidee: version !== null, cartoActive: actives.length > 0 });
+  const verdict = peutLancer({ version: version !== null, cartoActive: actives.length > 0 });
   if (!verdict.ok) return { statut: "erreur", message: verdict.message };
-  if (!version) return { statut: "erreur", message: MESSAGES.aucuneVersionValidee };
+  if (!version) return { statut: "erreur", message: MESSAGES.aucuneVersion };
 
   const cartoId = await depot.insererCarto({
     organisationId: groupe.organisationId,

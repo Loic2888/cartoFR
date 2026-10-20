@@ -17,7 +17,7 @@ import {
   etatTravail,
   lireElements,
   sourceSure,
-  validerPropositionAvec,
+  enregistrerPropositionAvec,
 } from "./proposition";
 import type { Reglages } from "./schema";
 
@@ -185,7 +185,7 @@ describe("lecture et affichage", () => {
   });
 });
 
-type Ligne = VersionProposee & { groupeId: string; organisationId: string; corrections: number | null; propositionId: string | null; validePar: string | null };
+type Ligne = VersionProposee & { groupeId: string; organisationId: string; corrections: number | null; propositionId: string | null; creePar: string | null };
 
 function base(organisationDuLecteur: string) {
   const groupes: Groupe[] = [
@@ -201,10 +201,9 @@ function base(organisationDuLecteur: string) {
       origine: "proposition",
       contenu: CONTENU,
       proposition: { modele: "modele-test", elements: ELEMENTS },
-      valideLe: null,
       corrections: null,
       propositionId: null,
-      validePar: null,
+      creePar: null,
     },
   ];
   const travaux: (TravailProposition & { groupeId: string; organisationId: string })[] = [];
@@ -223,7 +222,7 @@ function base(organisationDuLecteur: string) {
       travaux.push({ ...ligne, statut: "en_attente", erreur: null, creeLe: new Date().toISOString() });
       return "ok";
     },
-    async insererVersionValidee(ligne) {
+    async insererVersion(ligne) {
       if (reglages.some((r) => r.groupeId === ligne.groupeId && r.version === ligne.version)) return "conflit";
       reglages.push({
         id: `r-${ligne.version}`,
@@ -233,10 +232,9 @@ function base(organisationDuLecteur: string) {
         origine: "saisie",
         contenu: ligne.contenu,
         proposition: null,
-        valideLe: ligne.le,
         corrections: ligne.corrections,
         propositionId: ligne.propositionId,
-        validePar: ligne.par,
+        creePar: ligne.par,
       });
       return "ok";
     },
@@ -263,17 +261,14 @@ describe("demanderPropositionAvec", () => {
   });
 });
 
-describe("validerPropositionAvec (C2)", () => {
-  const le = () => new Date("2026-10-08T12:00:00.000Z");
-
-  it("enregistre une version validée avec son nombre de corrections", async () => {
+describe("enregistrerPropositionAvec (C2, T051)", () => {
+  it("enregistre une version, à son auteur, avec son nombre de corrections, sans validation", async () => {
     const { depot, reglages } = base("org-a");
     const decisions: Decision[] = [{ choix: "rejeter" }, ...tout("accepter").slice(1)];
-    const r = await validerPropositionAvec(
+    const r = await enregistrerPropositionAvec(
       depot,
       MOI,
       { groupeId: "g-a", version: 2, decisions, ajouts: [{ liste: "marques_sures", valeur: "Nouvelle" }] },
-      le,
     );
     expect(r).toMatchObject({ statut: "ok", version: 3, corrections: 2 });
     const v3 = reglages.find((x) => x.version === 3);
@@ -281,26 +276,26 @@ describe("validerPropositionAvec (C2)", () => {
       origine: "saisie",
       corrections: 2,
       propositionId: "r-a-2",
-      valideLe: "2026-10-08T12:00:00.000Z",
-      validePar: MOI,
+      creePar: MOI,
     });
     expect(v3?.contenu.marques_sures).toEqual(["Nouvelle"]);
-    // La proposition elle-même reste non validée (principe 1).
-    expect(reglages.find((x) => x.version === 2)?.valideLe).toBeNull();
+    expect(r.message).toBe("Version 3 enregistrée, avec 2 corrections apportées à la proposition.");
+    // La proposition elle-même reste une proposition (principe 1).
+    expect(reglages.find((x) => x.version === 2)?.origine).toBe("proposition");
   });
 
   it("refuse si la dernière version n'est plus la proposition revue", async () => {
     const { depot } = base("org-a");
-    const r = await validerPropositionAvec(depot, MOI, { groupeId: "g-a", version: 1, decisions: tout("accepter"), ajouts: [] });
+    const r = await enregistrerPropositionAvec(depot, MOI, { groupeId: "g-a", version: 1, decisions: tout("accepter"), ajouts: [] });
     expect(r.statut).toBe("erreur");
-    await validerPropositionAvec(depot, MOI, { groupeId: "g-a", version: 2, decisions: tout("accepter"), ajouts: [] }, le);
-    const deux = await validerPropositionAvec(depot, MOI, { groupeId: "g-a", version: 2, decisions: tout("accepter"), ajouts: [] });
+    await enregistrerPropositionAvec(depot, MOI, { groupeId: "g-a", version: 2, decisions: tout("accepter"), ajouts: [] });
+    const deux = await enregistrerPropositionAvec(depot, MOI, { groupeId: "g-a", version: 2, decisions: tout("accepter"), ajouts: [] });
     expect(deux).toEqual({ statut: "erreur", message: MESSAGES_PROPOSITION.pasDeProposition });
   });
 
   it("un groupe d'une autre organisation est introuvable", async () => {
     const { depot, reglages } = base("org-b");
-    const r = await validerPropositionAvec(depot, MOI, { groupeId: "g-a", version: 2, decisions: tout("accepter"), ajouts: [] });
+    const r = await enregistrerPropositionAvec(depot, MOI, { groupeId: "g-a", version: 2, decisions: tout("accepter"), ajouts: [] });
     expect(r.statut).toBe("erreur");
     expect(reglages).toHaveLength(1);
   });
@@ -311,7 +306,7 @@ describe("validerPropositionAvec (C2)", () => {
       { choix: "corriger", valeur: "x".repeat(201), liste: "marques_sures" },
       ...tout("accepter").slice(1),
     ];
-    const r = await validerPropositionAvec(depot, MOI, { groupeId: "g-a", version: 2, decisions, ajouts: [] });
+    const r = await enregistrerPropositionAvec(depot, MOI, { groupeId: "g-a", version: 2, decisions, ajouts: [] });
     expect(r.statut).toBe("erreur");
     expect(reglages).toHaveLength(1);
   });

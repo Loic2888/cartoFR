@@ -21,15 +21,15 @@ Sorties : des `ElementRange` (liste des réglages, valeur, source, homonymes).
 
 Règles tenues ici :
 - l'IA propose, elle ne décide jamais (principe 1) : ce module ne rend qu'une
-  proposition, enregistrée comme version non validée par le travail ;
+  proposition, enregistrée par le travail comme version `proposition`, jamais base d'une carto ;
 - ce qui part chez OpenRouter puis le fournisseur du modèle (hors UE, R5) : le nom du groupe, la raison
   sociale, le sigle et le SIREN de la tête et des plus grosses sociétés du groupe. Que des
   données de sociétés publiques : la table des dirigeants personnes physiques
   n'est jamais lue ici (garde-fou 6, principe 6 ; test_proposition.py, C2). Le routage est
   limité aux fournisseurs sans conservation ni collecte (`provider` : zdr, data_collection) ;
 - chaque élément gardé de l'IA porte une source http(s) : un élément sans source est écarté ;
-- rien de validé ne se perd en silence (principe 2) : les éléments de la dernière version
-  validée que l'IA ne repropose pas sont ajoutés à la revue, gardés par défaut (`garder_validees`) ;
+- rien d'enregistré ne se perd en silence (principe 2) : les éléments de la dernière version
+  enregistrée que l'IA ne repropose pas sont ajoutés à la revue, gardés par défaut (`garder_validees`) ;
 - marque ambiguë : au moins une société active au registre, hors de la tête et
   des sociétés qu'elle dirige directement ou non, dont la dénomination, le sigle
   ou l'enseigne commence par la marque. Même normalisation (casse, accents,
@@ -141,7 +141,7 @@ class ElementRange:
     """Un élément de la revue : la liste des réglages où il va, et d'où il vient.
 
     `origine` : « ia » (proposé par l'IA, avec sa source) ou « validee » (déjà dans la
-    dernière version validée, que l'IA n'a pas reproposé : pas de source).
+    dernière version enregistrée, que l'IA n'a pas reproposé : pas de source).
     `deja_valide_en` : la liste où la valeur était déjà validée, s'il y en a une.
     """
 
@@ -341,19 +341,19 @@ def ranger(
     return ranges
 
 
-# Listes que la proposition remplit ; les autres clés viennent de la dernière version validée.
+# Listes que la proposition remplit ; les autres clés viennent de la dernière version enregistrée.
 LISTES_PROPOSEES = ("marques_sures", "marques_ambigues", "marques_sigles", "organigramme", "exclus_noms")
 
 
 def garder_validees(ranges: Iterable[ElementRange], base: dict[str, Any] | None) -> list[ElementRange]:
     """Principe 2 : une proposition ne fait jamais perdre en silence un élément validé par un
-    humain. Chaque valeur des listes proposées de la dernière version validée (`base`) :
+    humain. Chaque valeur des listes proposées de la dernière version enregistrée (`base`) :
     - reproposée par l'IA (même valeur normalisée : casse, accents, ponctuation ignorés, dans
       n'importe quelle liste) : l'élément de l'IA reste seul, marqué `deja_valide_en` avec la
       liste validée. Une liste différente se voit donc à la revue ;
     - non reproposée : ajoutée à la fin, origine « validee », dans sa liste, sans source.
       Elle entre dans le contenu proposé : gardée tant que le consultant ne la rejette pas.
-    Sans version validée, les éléments de l'IA sont rendus tels quels."""
+    Sans version enregistrée, les éléments de l'IA sont rendus tels quels."""
     ia = list(ranges)
     validees: dict[str, str] = {}  # valeur normalisée → première liste validée
     ordre: list[tuple[str, str]] = []  # chaque (liste, valeur) validée, une fois
@@ -386,7 +386,7 @@ def contenu_propose(
 ) -> dict[str, Any]:
     """Le contenu des réglages proposés : groupe et tête du groupe, les listes proposées, et les
     autres clés (exclusions par SIREN, empreintes de familles, priorités…) reprises telles
-    quelles de `base`, la dernière version validée s'il y en a une."""
+    quelles de `base`, la dernière version enregistrée s'il y en a une."""
     contenu: dict[str, Any] = {
         cle: valeur
         for cle, valeur in (base or {}).items()

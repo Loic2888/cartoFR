@@ -16,7 +16,7 @@ import { z } from "zod";
 import { Arbre } from "@/components/arbre/arbre";
 import { buttonVariants } from "@/components/ui/button";
 import { type SocieteCarto, compter, construireArbre } from "@/lib/cartos/arbre";
-import { type StatutCarto, dateDonneesFr, dureeFr, libelleStatut, uneBloquante } from "@/lib/cartos/affichage";
+import { type StatutCarto, dateDonneesFr, dureeFr, effetFr, libelleStatut, uneBloquante } from "@/lib/cartos/affichage";
 import { utilisateurCourant } from "@/lib/session";
 
 import { dateFr } from "../../../organisation";
@@ -78,7 +78,7 @@ export default async function Carto({ params }: PageProps<"/groupes/[id]/cartos/
     supabase.from("groupes").select("id, nom").eq("id", id).maybeSingle(),
     supabase
       .from("cartos")
-      .select("id, statut, travail_id, cree_le, date_donnees, duree_ms, avertissement")
+      .select("id, statut, travail_id, cree_le, date_donnees, duree_ms, avertissement, societes_ajoutees, societes_retirees")
       .eq("id", cartoId)
       .eq("groupe_id", id)
       .maybeSingle(),
@@ -109,6 +109,9 @@ export default async function Carto({ params }: PageProps<"/groupes/[id]/cartos/
   // Les chiffres n'ont de sens que sur une carto terminée : pas de « 0 » pendant le calcul.
   const chiffres = terminee && societes ? compter(societes) : null;
   const racines = societes ? construireArbre(societes) : [];
+  const effet = terminee
+    ? effetFr(carto.societes_ajoutees as number | null, carto.societes_retirees as number | null)
+    : null;
 
   return (
     <main className="flex flex-1 flex-col gap-6 px-4 py-8 md:mx-auto md:w-full md:max-w-5xl md:px-8">
@@ -149,7 +152,13 @@ export default async function Carto({ params }: PageProps<"/groupes/[id]/cartos/
             <dt className="text-muted-foreground">Opposées à la prospection</dt>
             <dd className="mb-2 tabular-nums sm:mb-0">{nombre(chiffres.opposees)}</dd>
             <dt className="text-muted-foreground">Non diffusibles (INSEE)</dt>
-            <dd className="tabular-nums">{nombre(chiffres.nonDiffusibles)}</dd>
+            <dd className="mb-2 tabular-nums sm:mb-0">{nombre(chiffres.nonDiffusibles)}</dd>
+          </>
+        ) : null}
+        {effet ? (
+          <>
+            <dt className="text-muted-foreground">Effet des corrections</dt>
+            <dd className="break-words">{effet}</dd>
           </>
         ) : null}
       </dl>

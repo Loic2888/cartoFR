@@ -11,7 +11,8 @@ Usage : exécuté par la boucle du worker (`cartofr.travaux`), jamais appelé à
 
 Entrées :
     - le groupe (`groupes`, même organisation que le travail) et sa dernière version
-      validée de réglages, dont les clés que l'IA ne propose pas sont reprises ;
+      enregistrée de réglages (pas une proposition), dont les clés que l'IA ne propose
+      pas sont reprises ;
     - `<CARTOFR_DATA>/registre.duckdb`, ouvert en lecture seule, deux fois : pour le
       contexte donné à l'IA, puis pour compter les homonymes. Il est refermé pendant
       l'appel à l'API, qui peut durer plusieurs minutes, pour ne pas bloquer la synchro ;
@@ -19,13 +20,13 @@ Entrées :
 Sortie : une ligne `reglages` (version suivante du groupe) : `contenu` au schéma des
 réglages (vérifié par cartofr.reglages.valider), `proposition` = modèle et éléments
 (liste, valeur, source, homonymes, origine, liste déjà validée), `cree_par` = le
-consultant s'il existe encore. Les éléments de la dernière version validée que l'IA ne
-repropose pas y sont gardés, origine « validee » (principe 2, `garder_validees`).
+consultant s'il existe encore. Les éléments de la dernière version enregistrée que l'IA
+ne repropose pas y sont gardés, origine « validee » (principe 2, `garder_validees`).
 
 Règles :
-    - L'IA ne décide jamais (principe 1) : la version n'est pas validée, et la base
-      refuse qu'elle le soit un jour (migration 0004). Le moteur ne tourne que sur une
-      version validée (FR-005).
+    - L'IA ne décide jamais (principe 1) : la proposition n'est jamais validée (migration
+      0004) et ne sert jamais de base à une carto (migration 0007). Seule la version que
+      le consultant enregistre après revue s'applique (T051).
     - Rôle service : chaque lecture et chaque écriture filtre ou pose l'`organisation_id`
       du travail. Un groupe d'une autre organisation est introuvable.
     - Aucun nom de personne n'est envoyé à l'IA ni journalisé (garde-fou 6, R5).
@@ -84,7 +85,7 @@ select nom, tete_siren from public.groupes where id = %s and organisation_id = %
 
 _BASE: LiteralString = """
 select contenu from public.reglages
- where groupe_id = %s and organisation_id = %s and valide_le is not null
+ where groupe_id = %s and organisation_id = %s and origine <> 'proposition'
  order by version desc limit 1
 """
 
@@ -127,7 +128,7 @@ def enregistrer_proposition(
     nom_modele: str,
     demande_par: uuid.UUID | None,
 ) -> tuple[uuid.UUID, int]:
-    """Insère la version proposée, non validée. Une course sur le numéro : une seconde tentative."""
+    """Insère la version proposée, jamais base d'une carto. Course sur le numéro : un second essai."""
     proposition = {"modele": nom_modele, "elements": [r.en_json() for r in ranges]}
     for essai in (1, 2):
         try:
@@ -154,7 +155,7 @@ def enregistrer_proposition(
 
 @enregistrer(TYPE)
 def travail_proposition(ctx: Contexte) -> None:
-    """Lit le groupe, interroge l'IA, range, enregistre la version proposée non validée."""
+    """Lit le groupe, interroge l'IA, range, enregistre la version proposée."""
     conn = ctx.conn
     if conn is None or ctx.organisation_id is None:
         raise PropositionEnEchec("travail sans connexion ou sans organisation")

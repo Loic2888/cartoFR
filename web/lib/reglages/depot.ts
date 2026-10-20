@@ -1,4 +1,4 @@
-// Le dépôt des réglages sur Supabase (T020), branché par reglages/actions.ts.
+// Le dépôt des corrections sur Supabase (T020, T051), branché par reglages/actions.ts.
 //
 // Lectures avec la session de l'utilisateur : RLS limite aux groupes de ses
 // organisations, c'est là que se décide le droit d'écrire. Écritures avec la
@@ -40,24 +40,11 @@ export function depotSupabase(
     },
 
     async derniereVersion(groupeId) {
-      const { data, error } = await utilisateur
-        .from("reglages")
-        .select("id, version, contenu, valide_le")
-        .eq("groupe_id", groupeId)
-        .order("version", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) {
-        console.error("réglages : lecture de la dernière version impossible", { code: error.code });
-        throw new Error("lecture des réglages impossible");
-      }
-      if (!data) return null;
-      return {
-        id: data.id as string,
-        version: data.version as number,
-        contenu: data.contenu as Reglages,
-        valideLe: (data.valide_le as string | null) ?? null,
-      };
+      return lireVersion(utilisateur, groupeId, false);
+    },
+
+    async derniereEnregistree(groupeId) {
+      return lireVersion(utilisateur, groupeId, true);
     },
 
     async insererVersion(ligne) {
@@ -75,19 +62,18 @@ export function depotSupabase(
       console.error("réglages : insertion d'une version impossible", { code: error.code });
       return "erreur";
     },
-
-    async marquerValidee(versionId, validePar, valideLe) {
-      const { data, error } = await admin()
-        .from("reglages")
-        .update({ valide_le: valideLe, valide_par: validePar })
-        .eq("id", versionId)
-        .is("valide_le", null)
-        .select("id");
-      if (error) {
-        console.error("réglages : validation impossible", { code: error.code });
-        return "erreur";
-      }
-      return (data ?? []).length > 0;
-    },
   };
+}
+
+/** La version de numéro le plus haut, lue sous RLS ; `enregistree` : hors propositions de l'IA. */
+async function lireVersion(utilisateur: ClientUtilisateur, groupeId: string, enregistree: boolean) {
+  let requete = utilisateur.from("reglages").select("version, origine, contenu").eq("groupe_id", groupeId);
+  if (enregistree) requete = requete.neq("origine", "proposition");
+  const { data, error } = await requete.order("version", { ascending: false }).limit(1).maybeSingle();
+  if (error) {
+    console.error("réglages : lecture de la dernière version impossible", { code: error.code });
+    throw new Error("lecture des réglages impossible");
+  }
+  if (!data) return null;
+  return { version: data.version as number, origine: data.origine as string, contenu: data.contenu as Reglages };
 }

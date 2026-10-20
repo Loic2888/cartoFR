@@ -687,3 +687,29 @@ Mesure du jour, registre réel, `pays.duckdb` recalculé :
   - le prime « ′ » et « ẞ » sont ajoutés aux remplacements de `norm`.
   - Essayé puis retiré : ignorer les clés d'une lettre. « S+ SAS », filiale de Sephora, a la clé « S » et sortait de la carto (155/172).
 - Tests : nouveaux cas dans `worker/tests/perimetre/` (extraction, clé, correspondance) et `test_moteur.py` (`norm`), sur des noms inventés. Suite worker : 704 réussis, 138 sautés (sans Postgres).
+
+### Corriger une carto sans étape de validation (T051)
+
+Principe 2 amendé le 2026-10-16 : une carto existe sans validation humaine ; une correction laisse une trace. Ce qui change :
+- Une version des corrections enregistrée s'applique tout de suite. Le bouton « Valider » disparaît : l'écran s'appelle « Corrections », et son bouton « Enregistrer et recalculer » enregistre la version puis relance la carto. Une carto déjà en cours n'empêche pas l'enregistrement : le message dit que la carto n'a pas été relancée.
+- Toute version est figée dès qu'elle est enregistrée (migration 0007) : contenu, numéro, auteur, date. Avant, seule une version validée l'était. Les colonnes `valide_le` et `valide_par` restent, pour l'historique.
+- Une proposition de l'IA ne sert jamais de base à une carto (principe 1) : un déclencheur de la base le refuse, même en service_role, et le worker le refuse aussi. Tant qu'une proposition attend sa revue, l'éditeur part de la dernière version enregistrée, pas de la proposition : sans cela, changer une ligne dans l'éditeur enregistrait toute la proposition sans revue (vu en revue adverse).
+- Le travail `carto` part de la tête et de son document en vigueur (T046), plus les corrections.
+- **Effet** (décision de Loïc du jour) : ce que les corrections changent, et seulement elles. Le moteur tourne une seconde fois, sans réglages ni décisions, sur la même tête et le même document ; l'effet compte les sociétés ajoutées et retirées entre les deux. Sans correction, 0/0 sans second passage. Première version écartée : comparer à `pays.duckdb`. La revue adverse a montré que l'écart y mêlait la méthode : la carto du pays range un groupe sans document par l'arbre du registre (tous les rôles), et départage les groupes entre eux. Sur 25 groupes sans document pris au hasard, 19 montraient un « effet » sans aucune correction (jusqu'à 18 sociétés « retirées »).
+- L'effet s'affiche sur la page du groupe et sur celle de la carto. Un document illisible n'arrête pas la carto : elle se calcule sans lui, et l'avertissement le dit.
+- Les versions jamais validées d'avant T051 deviennent actives. Aucune n'existe en production (pas encore de serveur, T005).
+
+Mesure du jour (`worker/scripts/mesure_corrections.py`) : les réglages de `config/` appliqués comme corrections, par le calcul du travail, registre réel.
+
+| Groupe | Retrouvées | En plus (dont document) | Effet des corrections | Sans correction (T053) | Durée |
+|---|---|---|---|---|---|
+| LVMH | **168/172** (98 %) | 76 | 14 ajoutées, 3 retirées | 158/172 | 108 s |
+| VINCI | 861/1 007 (86 %) | 682 | 83 ajoutées, 0 retirée | 836/1 007 | 119 s |
+| CMAF | 43/52 (83 %) | 529 (non mesuré) | 565 ajoutées, 0 retirée | 1/52 | 65 s |
+
+- C3 tenu : LVMH 168/172, cible 155/172 (PRD US8). Le 2026-10-16, avec le document, c'était 166/172.
+- Les « en plus » comptent les sociétés que le document inscrit lui-même : ils ne se comparent pas à la non-régression sans document (LVMH 15, VINCI 176).
+- CMAF : sans document, la carto sans correction est presque la tête seule ; les marques de `config/cmaf.json` font tout le travail. Le traitement des mutualistes reste à faire (T049).
+- Durée : deux passages du moteur, mais la correspondance du document au registre n'est faite qu'une fois. Moins de 5 min (SC-004).
+- Le moteur n'est pas modifié par T051 (seul le travail `carto` change) : la non-régression n'a pas été relancée.
+- Revue adverse du jour, corrigé aussi : texte exporté « réglages validés » dans l'export skill, devenu « corrections du groupe » ; bloc « enregistrer puis relancer » dédoublé dans une fonction ; un échec de relance est journalisé (nom de classe seulement) ; test C5 (aucun « valider » à l'écran) étendu aux messages renvoyés par la logique.
