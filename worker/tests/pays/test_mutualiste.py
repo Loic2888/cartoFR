@@ -7,10 +7,11 @@ Ce que le mini-registre contient :
 - la caisse fédérale CF (Bas-Rhin), dont le DEU nomme la fédération « Centre Inventé » et inscrit
   BANQUE. Au registre, la mère de BANQUE est l'autre caisse fédérale CF2, par un seul mandat
   d'administrateur : les deux fédérations sont dans le même arbre. BANQUE préside BF ;
-- la caisse fédérale CF2 (Vendée), dont le DEU nomme la fédération « Océan » et inscrit OUEST ;
+- la caisse fédérale CF2 (Vendée), dont le DEU nomme la fédération « Océan » et inscrit OUEST. Elle
+  est membre des deux GIE, comme celle d'Océan au registre réel, et son SIREN est le plus petit ;
 - le GIE_A, dont CF est membre, avec 21 caisses A de Loire-Atlantique, une caisse S79 des
   Deux-Sèvres (département partagé), deux caisses O85 de Vendée (territoire d'Océan) et trois
-  caisses D membres aussi du GIE_B ;
+  caisses D des Deux-Sèvres membres aussi du GIE_B ;
 - le GIE_B, plus petit, dont CF2 est membre, avec 21 caisses B de Vendée et les trois caisses D ;
 - le GIE_F, fermé, dont les caisses A sont aussi membres.
 """
@@ -38,7 +39,8 @@ from fabrique import (  # noqa: E402  # pyright: ignore[reportMissingImports]
 )
 
 CJ_CAISSE = 5194
-CF, CF2, GIE_A, GIE_B, GIE_F = siren(1), siren(2), siren(10), siren(11), siren(12)
+# CF2 a le plus petit SIREN : à réclamation égale, le départage (T047) lui donnerait la caisse.
+CF2, CF, GIE_A, GIE_B, GIE_F = siren(2), siren(3), siren(10), siren(11), siren(12)
 BANQUE, BF, OUEST, SAS = siren(20), siren(21), siren(22), siren(23)
 A = [siren(100 + i) for i in range(21)]
 B = [siren(200 + i) for i in range(21)]
@@ -68,7 +70,7 @@ def _mini() -> MiniRegistre:
     for i, s in enumerate(B):
         _caisse(mini, s, f"CAISSE DE CREDIT MUTUEL INVENTEE B{i}", "85000")
     for i, s in enumerate(D):
-        _caisse(mini, s, f"CAISSE DE CREDIT MUTUEL INVENTEE D{i}", "49000")
+        _caisse(mini, s, f"CAISSE DE CREDIT MUTUEL INVENTEE D{i}", "79000")
     for i, s in enumerate(O85):
         _caisse(mini, s, f"CAISSE DE CREDIT MUTUEL INVENTEE O{i}", "85000")
     _caisse(mini, S79, "CAISSE DE CREDIT MUTUEL INVENTEE NIORT", "79000")
@@ -76,6 +78,7 @@ def _mini() -> MiniRegistre:
         mini.lien(s, GIE_A, MEMBRE)
     for s in (CF2, *B, *D):
         mini.lien(s, GIE_B, MEMBRE)
+    mini.lien(CF2, GIE_A, MEMBRE)
     for s in A:
         mini.lien(s, GIE_F, MEMBRE)
     mini.lien(CF2, BANQUE, ADMINISTRATEUR)
@@ -162,17 +165,28 @@ def test_c2_une_caisse_locale_rejoint_sa_federation(societes: dict[str, dict[str
     assert caisse["raison"] == "Caisse locale de la fédération (groupe mutualiste)"
 
 
-def test_c2_caisse_d_un_departement_partage_gardee(societes: dict[str, dict[str, Any]]) -> None:
-    assert societes[S79]["groupe"] == CF
+def test_c2_caisse_d_un_departement_partage_dans_un_seul_des_deux(
+    societes: dict[str, dict[str, Any]],
+) -> None:
+    # Les deux groupes la réclament (79 : partagé par Océan) ; le départage la range dans un seul.
+    assert societes[S79]["groupe"] in (CF, CF2)
+
+
+def test_c4_une_autre_caisse_federale_du_meme_gie_ne_prend_pas_les_caisses(
+    societes: dict[str, dict[str, Any]],
+) -> None:
+    # CF2 est membre du GIE_A et a le plus petit SIREN : sans la limite de son territoire, elle
+    # prendrait toutes les caisses A au départage (revue adverse du 2026-10-20).
+    assert all(societes[s]["groupe"] == CF for s in A)
 
 
 def test_c2_caisse_du_territoire_d_une_federation_que_le_document_ne_nomme_pas(
     societes: dict[str, dict[str, Any]],
 ) -> None:
-    # Membres du GIE de CF, mais en Vendée : Océan n'est pas dans le DEU de CF. Ni dans le GIE de
-    # CF2 : chacune reste seule, sa propre carto (une société seule n'est pas écrite).
+    # Membres du GIE_A de CF, mais en Vendée : Océan n'est pas dans le DEU de CF. CF2, membre du même
+    # GIE et dont c'est le territoire, les prend.
     for s in O85:
-        assert s not in societes
+        assert societes[s]["groupe"] == CF2
 
 
 def test_c2_caisse_de_deux_gie_va_au_plus_petit(societes: dict[str, dict[str, Any]]) -> None:
@@ -187,7 +201,9 @@ def test_c2_gie_ferme_ne_compte_pas(societes: dict[str, dict[str, Any]]) -> None
 
 def test_groupes_mutualistes_marques(groupes: dict[str, dict[str, Any]]) -> None:
     assert groupes[CF]["mutualiste"] and groupes[CF2]["mutualiste"]
-    assert groupes[CF]["taille"] == 1 + 2 + len(A) + 1  # tête, BANQUE et BF, caisses A, S79
+    assert (
+        groupes[CF]["taille"] + groupes[CF2]["taille"] == (1 + 2 + len(A)) + (1 + 1 + len(B) + len(D) + 2) + 1
+    )
     assert SAS not in groupes  # seule : ni groupe ni drapeau
 
 
@@ -227,7 +243,22 @@ def test_tete_qui_n_est_pas_une_caisse_n_a_pas_de_caisses(con: duckdb.DuckDBPyCo
 def test_document_sans_liste_exclut_tous_les_territoires_sauf_celui_de_la_tete() -> None:
     tous = sorted(d for f in mutualiste.TERRITOIRES for d in f.departements)
     assert mutualiste.departements_exclus("", None) == tous
-    assert "85" not in mutualiste.departements_exclus("", "85")
+    # La fédération de la tête n'est jamais exclue, même hors de son département (revue adverse).
+    assert not {"85", "17"} & set(mutualiste.departements_exclus("", "85"))
+    assert not {"29", "22", "56", "35"} & set(mutualiste.departements_exclus("", "29"))
+
+
+def test_tete_d_une_federation_de_la_table_limitee_a_son_territoire() -> None:
+    assert mutualiste.departements_permis("", "85") == ["17", "79", "85"]
+    assert mutualiste.departements_permis("", "67") is None  # CMAF : pas dans la table
+    # Arkéa : Bretagne, et Sud-Ouest si son document la nomme.
+    assert mutualiste.departements_permis("Bretagne et Sud-Ouest ;", "29") == sorted(
+        ["29", "22", "56", "35", "33", "24", "16", "47"]
+    )
+
+
+def test_motif_borne_au_mot() -> None:
+    assert "85" in mutualiste.departements_exclus("Océanie (FCMO)", "67")
 
 
 def test_federation_nommee_par_le_document_non_exclue() -> None:
@@ -239,5 +270,5 @@ def test_federation_nommee_par_le_document_non_exclue() -> None:
 
 
 def test_caisses_d_une_caisse_federale_sans_document(con: duckdb.DuckDBPyConnection) -> None:
-    trouvees = {c.siren for c in mutualiste.caisses(con, CF, "Centre Inventé")}
-    assert trouvees == {*A, S79}
+    assert {c.siren for c in mutualiste.caisses(con, CF, "Centre Inventé")} == {*A, S79}
+    assert {c.siren for c in mutualiste.caisses(con, CF2, "Océan")} == {*B, *D, *O85, S79}

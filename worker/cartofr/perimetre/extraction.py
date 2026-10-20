@@ -49,6 +49,7 @@ Sortie : une `LignePerimetre` par société située en France ou en outre-mer.
 import logging
 import re
 import zipfile
+import zlib
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
@@ -241,8 +242,9 @@ def _rapport_esef(chemin: Path) -> str:
                 raise ValueError("Rapport ESEF de plus de 300 Mo une fois décompressé.")
             with paquet.open(rapports[0]) as f:
                 donnees = f.read(TAILLE_MAX_ESEF + 1)  # la taille annoncée peut mentir
-    except zipfile.BadZipFile as erreur:
-        raise ValueError("Archive zip abîmée.") from erreur
+    except (zipfile.BadZipFile, NotImplementedError, RuntimeError, EOFError, zlib.error) as erreur:
+        # NotImplementedError : méthode de compression inconnue ; RuntimeError : archive chiffrée.
+        raise ValueError("Archive zip abîmée, chiffrée ou compressée d'une façon inconnue.") from erreur
     if len(donnees) > TAILLE_MAX_ESEF:
         raise ValueError("Rapport ESEF de plus de 300 Mo une fois décompressé.")
     return donnees.decode("utf-8", errors="replace")
@@ -251,14 +253,17 @@ def _rapport_esef(chemin: Path) -> str:
 def texte_document(chemin: Path) -> str:
     """Le texte d'un document de périmètre : PDF (pypdf), paquet ESEF (.zip ou .xhtml, une ligne par
     rangée de tableau), page HTML (balises retirées) ou texte."""
-    if chemin.stat().st_size > TAILLE_MAX:
+    taille = chemin.stat().st_size
+    if chemin.suffix.lower() == ".xhtml":  # rapport ESEF hors de son paquet
+        if taille > TAILLE_MAX_ESEF:
+            raise ValueError("Rapport ESEF de plus de 300 Mo.")
+        return _texte_esef(chemin.read_text(encoding="utf-8", errors="replace"))
+    if taille > TAILLE_MAX:
         raise ValueError("Le document dépasse 50 Mo : ce n'est pas une liste de sociétés consolidées.")
     with chemin.open("rb") as f:
         debut = f.read(5)
     if debut.startswith(b"PK\x03\x04") or chemin.suffix.lower() == ".zip":
         return _texte_esef(_rapport_esef(chemin))
-    if chemin.suffix.lower() == ".xhtml":
-        return _texte_esef(chemin.read_text(encoding="utf-8", errors="replace"))
     if debut.startswith(b"%PDF") or chemin.suffix.lower() == ".pdf":
         from pypdf import PdfReader
 
@@ -323,6 +328,23 @@ _FEDERATIONS = re.compile(
 )
 
 
+_NOTE = re.compile(r"\s*(?:\(\d+\)|\*+|%)$")
+
+
+def _rangee(ligne: str) -> str:
+    """Une rangée ESEF sans cellules vides en tête ni en fin, ni appel de note (« IG (1) », « 98* »)
+    ni « % ». Une cellule vide au milieu reste : les colonnes vides d'une société sortie ne doivent
+    pas faire lire l'exercice d'avant à leur place."""
+    if "|" not in ligne:
+        return ligne
+    cellules = [_NOTE.sub("", c.strip()).strip() for c in ligne.split("|")]
+    while cellules and not cellules[0]:
+        cellules.pop(0)
+    while cellules and not cellules[-1]:
+        cellules.pop()
+    return " | ".join(cellules)
+
+
 def passage_federations(texte: str) -> str:
     """Le passage d'un document de groupe mutualiste qui liste ses fédérations (« les Fédérations du
     Crédit Mutuel Centre Est Europe (FCMCEE), du Sud-Est… ; », note 3a du DEU de CMAF), espaces
@@ -362,7 +384,7 @@ def extraire(texte: str) -> list[LignePerimetre]:
         ligne = _propre(brute)
         if not ligne or ligne.isdigit():  # ligne vide ou numéro de page
             continue
-        if m := _TABLEAU.match(ligne):  # format ESEF : une rangée se lit seule
+        if m := _TABLEAU.match(_rangee(ligne)):  # format ESEF : une rangée se lit seule
             nom = m["nom"].strip()
             if (m["pays"] == "France" or m["pays"] in OUTRE_MER) and "succursale" not in nom.lower():
                 meth = METHODES_COURTES.get(m["meth"], NON_CONSOLIDEE)

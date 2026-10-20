@@ -146,7 +146,11 @@ class _GroupeDocument:
     carto: Carto
     inscrites: dict[str, float]  # SIREN inscrit en intégration globale -> taux le plus haut
     passage: str = ""  # la liste des fédérations lue dans le document (groupes mutualistes, T049)
-    mutualiste: bool = False  # des caisses locales ont été ajoutées à l'étape 4
+    caisses: int = 0  # caisses locales ajoutées à l'étape 4 (groupes mutualistes, T049)
+
+    @property
+    def mutualiste(self) -> bool:
+        return self.caisses > 0
 
 
 def reglages_tete_seule(tete: str, nom: str | None) -> dict[str, Any]:
@@ -279,7 +283,7 @@ def avec_caisses(con: duckdb.DuckDBPyConnection, groupes: Sequence[_GroupeDocume
                 compte_de_rattachement=c.siren if ciblable else tete.compte_de_rattachement,
             ))  # fmt: skip
         carto = replace(g.carto, societes=(*g.carto.societes, *ajout))
-        sortie.append(replace(g, carto=carto, mutualiste=True))
+        sortie.append(replace(g, carto=carto, caisses=len(ajout)))
     return sortie
 
 
@@ -303,7 +307,9 @@ def _lignes_documents(groupes: Sequence[_GroupeDocument]) -> tuple[list[Ligne], 
     reclamations = _reclamations(groupes)
     tetes = {g.tete for g in groupes}
     descriptions = [
-        Groupe(g.tete, len(g.carto.societes), frozenset(set(g.inscrites) & (tetes - {g.tete})))
+        # La taille sans les caisses locales : 1 200 caisses ne doivent pas faire gagner à un groupe
+        # mutualiste les égalités de la règle 4 du départage (revue adverse T049).
+        Groupe(g.tete, len(g.carto.societes) - g.caisses, frozenset(set(g.inscrites) & (tetes - {g.tete})))
         for g in groupes
     ]
     resultat = departager(reclamations, descriptions)

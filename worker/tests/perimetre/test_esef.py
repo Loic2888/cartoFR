@@ -143,6 +143,39 @@ def test_forme_en_toutes_lettres_retrouvee_par_le_sigle(tmp_path: Path):
     assert (c.raison, c.siren) == (UNIQUE, siren(9))
 
 
+def test_rangee_avec_cellule_vide_en_tete_appel_de_note_et_pourcentage():
+    (ligne,) = extraire("| Société Inventée | France | 100 % | 98 % | IG (1) | 100 | 98 | IG")
+    assert (ligne.candidats[0].nom, ligne.taux, ligne.methode) == ("Société Inventée", 98.0, "IG")
+    # La preuve garde la ligne telle que lue.
+    assert ligne.texte == "| Société Inventée | France | 100 % | 98 % | IG (1) | 100 | 98 | IG"
+
+
+def test_societe_sortie_colonnes_vides_au_milieu_non_lue():
+    assert extraire("Sortie Inventée | France |  |  |  | 100 | 98 | IG") == []
+
+
+def test_xhtml_seul_au_dela_de_50_mo_accepte_jusqu_a_la_limite_esef(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    chemin = tmp_path / "deu.xhtml"
+    chemin.write_text(DOCUMENT, encoding="utf-8")
+    monkeypatch.setattr(module, "TAILLE_MAX", 10)
+    assert len(extraire(texte_document(chemin))) == 6
+    monkeypatch.setattr(module, "TAILLE_MAX_ESEF", 10)
+    with pytest.raises(ValueError, match="300 Mo"):
+        texte_document(chemin)
+
+
+def test_methode_de_compression_inconnue_refusee_en_francais(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def inconnue(*_: object, **__: object) -> None:
+        raise NotImplementedError("compression type 9 (deflate64)")
+
+    paquet = _paquet(tmp_path / "deu.zip", DOCUMENT)
+    monkeypatch.setattr(module.zipfile.ZipFile, "open", inconnue)
+    with pytest.raises(ValueError, match="compressée d'une façon inconnue"):
+        texte_document(paquet)
+
+
 def test_sigle_trop_court_jamais_essaye():
     (ligne,) = extraire("CIC Lyonnaise Inventée (LB) | France | 100 | 98 | IG")
     assert [c.nom for c in ligne.candidats if c.sigle] == ["CIC Lyonnaise Inventée"]
