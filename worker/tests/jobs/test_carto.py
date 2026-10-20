@@ -1,6 +1,8 @@
-"""Travail `carto` : lancer le moteur depuis la file et enregistrer le résultat (T021).
+"""Travail `carto` : lancer le moteur depuis la file et enregistrer le résultat (T021, T051).
 
-Vérifie : refus d'une version de réglages non validée (C1) ; chaque ligne
+Vérifie : une version de corrections s'applique sans validation, son auteur et sa date restent,
+elle est figée, et une proposition de l'IA ne sert jamais de base (T051 C1) ; l'effet des corrections
+(par rapport à la carto sans correction) est enregistré (T051 C2) ; chaque ligne
 `carto_*` porte l'`organisation_id` du travail (C2) ; date des données et durée
 enregistrées (C3) ; tête sans lien réduite à la tête avec un avertissement
 (C4). T027 : cas douteux écrits dans `carto_cas`, décisions du groupe lues
@@ -22,9 +24,9 @@ import sys
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, LiteralString
 
 import psycopg
 import pytest
@@ -162,30 +164,29 @@ def monde(conn: Connexion) -> Iterator[Monde]:
         conn.commit()
 
 
-def creer_reglages(m: Monde, contenu: dict[str, Any], *, valide: bool = True, version: int = 1) -> uuid.UUID:
+def creer_reglages(
+    m: Monde, contenu: dict[str, Any], *, version: int = 1, origine: str = "saisie"
+) -> uuid.UUID:
+    """Une version enregistrée, sans validation (T051). Une proposition porte son détail."""
+    proposition = Jsonb({"modele": "test", "elements": []}) if origine == "proposition" else None
     ident = _un(
         m.conn,
-        "insert into public.reglages (groupe_id, organisation_id, version, contenu, valide_le)"
-        " values (%s, %s, %s, %s, case when %s then now() end) returning id",
-        (m.groupe, m.org, version, Jsonb(contenu), valide),
+        "insert into public.reglages (groupe_id, organisation_id, version, contenu, origine, proposition)"
+        " values (%s, %s, %s, %s, %s, %s) returning id",
+        (m.groupe, m.org, version, Jsonb(contenu), origine, proposition),
     )
     m.conn.commit()
     return ident
 
 
-def creer_carto(m: Monde, reglages_id: uuid.UUID, *, contourner_declencheur: bool = False) -> uuid.UUID:
-    """Une carto en attente. `contourner_declencheur` : sur une version non validée, que le
-    déclencheur refuse ; désactivé le temps de cette seule transaction (C1 côté worker)."""
-    if contourner_declencheur:
-        m.conn.execute("alter table public.cartos disable trigger cartos_reglages_valides")
+def creer_carto(m: Monde, reglages_id: uuid.UUID) -> uuid.UUID:
+    """Une carto en attente."""
     ident = _un(
         m.conn,
         "insert into public.cartos (organisation_id, groupe_id, reglages_id)"
         " values (%s, %s, %s) returning id",
         (m.org, m.groupe, reglages_id),
     )
-    if contourner_declencheur:
-        m.conn.execute("alter table public.cartos enable trigger cartos_reglages_valides")
     m.conn.commit()
     return ident
 
@@ -211,7 +212,8 @@ def lancer(m: Monde, carto_id: uuid.UUID, org: uuid.UUID | None = None) -> tuple
 
 def lire_carto(m: Monde, carto_id: uuid.UUID) -> dict[str, Any]:
     cur = m.conn.execute(
-        "select statut, travail_id, date_donnees, fin_le, duree_ms, avertissement from public.cartos"
+        "select statut, travail_id, date_donnees, fin_le, duree_ms, avertissement, societes_ajoutees,"
+        " societes_retirees from public.cartos"
         " where id = %s",
         (carto_id,),
     )
@@ -270,10 +272,8 @@ def test_type_carto_enregistre() -> None:
     assert TRAVAUX["carto"] is job.travail_carto
 
 
-def test_c1_version_non_validee_refusee_sans_base() -> None:
-    with pytest.raises(job.CartoEnEchec) as e:
-        job.verifier_reglages(None, CONTENU)
-    assert str(e.value) == job.NON_VALIDEE
+def test_t051_c1_reglages_lisibles_acceptes_sans_validation() -> None:
+    assert job.verifier_reglages(CONTENU).tete == TETE
 
 
 @pytest.mark.parametrize(
@@ -284,9 +284,9 @@ def test_c1_version_non_validee_refusee_sans_base() -> None:
         pytest.param(["pas", "un", "objet"], id="pas_un_objet"),
     ],
 )
-def test_reglages_valides_mais_illisibles_refuses_sans_recopier(contenu: Any) -> None:
+def test_reglages_illisibles_refuses_sans_recopier(contenu: Any) -> None:
     with pytest.raises(job.CartoEnEchec) as e:
-        job.verifier_reglages(datetime(2026, 10, 7), contenu)
+        job.verifier_reglages(contenu)
     assert str(e.value) == job.REGLAGES_ILLISIBLES
     assert "Inventee" not in str(e.value)
 
@@ -307,31 +307,94 @@ def test_avertissement_reprend_ceux_du_moteur(tmp_path: Path) -> None:
     assert job.avertissement(carto, date(2026, 10, 1), date(2026, 10, 8)) == GARDE_ATTEINTE
 
 
-# --- C1 : version non validée -----------------------------------------------------------------------
+# --- T051 C1 : une version enregistrée s'applique, sans validation --------------------------------
 
 
-def test_c1_version_non_validee_refusee(monde: Monde, donnees: Path) -> None:
+def test_t051_c1_version_sans_validation_appliquee(monde: Monde, donnees: Path) -> None:
     ecrire(registre_groupe(), donnees)
-    brouillon = creer_reglages(monde, CONTENU, valide=False)
-    carto_id = creer_carto(monde, brouillon, contourner_declencheur=True)
+    reglages_id = creer_reglages(monde, CONTENU)
+    carto_id = creer_carto(monde, reglages_id)
 
-    statut, t = lancer(monde, carto_id)
+    statut, _ = lancer(monde, carto_id)
+
+    assert statut == "termine"
+    assert lire_carto(monde, carto_id)["statut"] == "terminee"
+    assert F2 in societes(monde, carto_id)  # la marque de la version enregistrée a servi
+    ligne = monde.conn.execute(
+        "select valide_le, cree_le from public.reglages where id = %s", (reglages_id,)
+    ).fetchone()
+    monde.conn.commit()
+    assert ligne is not None and ligne[0] is None and ligne[1] is not None  # jamais validée, datée
+
+
+def test_t051_c1_version_enregistree_figee(monde: Monde) -> None:
+    """La trace du principe 2 : ni le contenu ni l'auteur ni la date d'une version ne changent."""
+    reglages_id = creer_reglages(monde, CONTENU)
+    modifications: tuple[tuple[LiteralString, Any], ...] = (
+        ("update public.reglages set contenu = %s where id = %s", Jsonb(CONTENU | {"exclus": [F1]})),
+        ("update public.reglages set cree_le = %s where id = %s", datetime(2020, 1, 1, tzinfo=UTC)),
+    )
+    for requete, valeur in modifications:
+        with pytest.raises(psycopg.errors.CheckViolation):
+            monde.conn.execute(requete, (valeur, reglages_id))
+        monde.conn.rollback()
+
+
+def test_t051_une_proposition_de_l_ia_ne_sert_pas_de_base(monde: Monde) -> None:
+    """Principe 1 : seule la version enregistrée après revue part en carto (migration 0007)."""
+    proposition = creer_reglages(monde, CONTENU, origine="proposition")
+    with pytest.raises(psycopg.errors.CheckViolation):
+        creer_carto(monde, proposition)
+    monde.conn.rollback()
+
+
+# --- T051 C2 : l'effet des corrections ------------------------------------------------------------
+
+
+def test_t051_c2_effet_des_corrections_enregistre(monde: Monde, donnees: Path) -> None:
+    registre = ecrire(registre_groupe(), donnees)
+    contenu = CONTENU | {"exclus": [F1]}
+    carto_id = creer_carto(monde, creer_reglages(monde, contenu))
+    corrigee = {s.siren for s in cartographier(valider(contenu).model_dump(), registre).societes}
+    nue = {
+        s.siren for s in cartographier(valider({"groupe": "G", "tete": TETE}).model_dump(), registre).societes
+    }
+    assert F1 in nue and F1 not in corrigee
+
+    statut, _ = lancer(monde, carto_id)
+
+    assert statut == "termine"
+    c = lire_carto(monde, carto_id)
+    assert (c["societes_ajoutees"], c["societes_retirees"]) == (len(corrigee - nue), len(nue - corrigee))
+    assert c["societes_retirees"] >= 1
+
+
+def test_t051_c2_sans_correction_effet_nul(monde: Monde, donnees: Path) -> None:
+    ecrire(registre_groupe(), donnees)
+    carto_id = creer_carto(monde, creer_reglages(monde, {"groupe": "TEST T021", "tete": TETE}))
+
+    statut, _ = lancer(monde, carto_id)
+
+    assert statut == "termine"
+    c = lire_carto(monde, carto_id)
+    assert (c["societes_ajoutees"], c["societes_retirees"]) == (0, 0)
+
+
+def test_t051_le_worker_refuse_aussi_une_proposition(monde: Monde, donnees: Path) -> None:
+    """Défense en profondeur (principe 1) : le déclencheur contourné, le worker refuse encore."""
+    ecrire(registre_groupe(), donnees)
+    proposition = creer_reglages(monde, CONTENU, origine="proposition")
+    monde.conn.execute("alter table public.cartos disable trigger cartos_reglages_pas_une_proposition")
+    carto_id = creer_carto(monde, proposition)
+    monde.conn.execute("alter table public.cartos enable trigger cartos_reglages_pas_une_proposition")
+    monde.conn.commit()
+
+    statut, _ = lancer(monde, carto_id)
 
     assert statut == "echec"
     c = lire_carto(monde, carto_id)
-    assert c["statut"] == "echec"
-    assert c["avertissement"] == job.NON_VALIDEE
-    assert c["fin_le"] is not None and c["travail_id"] == t.id
-    assert societes(monde, carto_id) == {} and liens(monde, carto_id) == []
-    assert lire_travail(monde, t.id) == {"statut": "echec", "erreur": "échec du travail (CartoEnEchec)"}
-
-
-def test_c1_declencheur_refuse_aussi_une_carto_non_validee(monde: Monde) -> None:
-    """Le refus a deux étages : la base refuse déjà l'insertion (T018)."""
-    brouillon = creer_reglages(monde, CONTENU, valide=False)
-    with pytest.raises(psycopg.errors.CheckViolation):
-        creer_carto(monde, brouillon)
-    monde.conn.rollback()
+    assert c["avertissement"] == job.PROPOSITION
+    assert societes(monde, carto_id) == {}
 
 
 # --- C2 et C3 : résultat complet, organisation, date, durée ------------------------------------------

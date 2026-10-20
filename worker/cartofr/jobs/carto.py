@@ -1,9 +1,10 @@
-"""Travail `carto` : calculer la carto d'un groupe et enregistrer son résultat (T021, FR-005, FR-006).
+"""Travail `carto` : calculer la carto corrigée d'un groupe et enregistrer son résultat (T021, T051).
 
 But : relier l'interface au moteur par la file de travaux. L'interface insère
 une ligne `cartos` (statut `en_attente`) et un travail `carto` dont les
-paramètres portent `carto_id` ; ce travail lit la carto et ses réglages, lance
-le moteur sur le registre local et écrit `carto_societes` et `carto_liens`.
+paramètres portent `carto_id` ; ce travail lit la carto et sa version de
+corrections, lance le moteur sur le registre local et écrit `carto_societes`
+et `carto_liens`.
 
 Usage : exécuté par la boucle du worker (`cartofr.travaux`), jamais appelé à la main.
 
@@ -11,11 +12,14 @@ Entrées :
     - la ligne `cartos` (id dans `parametres.carto_id`, même organisation que
       le travail) et sa version de `reglages` ;
     - `<CARTOFR_DATA>/registre.duckdb`, ouvert en lecture seule ;
+    - le document de périmètre en vigueur de la tête (`documents_perimetre` du
+      registre, fichier dans `<CARTOFR_DATA>/perimetre/`, T046), s'il y en a un ;
     - `<CARTOFR_DATA>/synchro/jours.json` (synchro T013), pour la date des données ;
     - CARTOFR_CLE_EMPREINTE, si les réglages excluent des familles.
 Sorties :
     - `cartos` : statut `en_cours` puis `terminee` ou `echec`, `date_donnees`,
-      `fin_le`, `duree_ms` et `avertissement` (texte français, affiché tel quel) ;
+      `fin_le`, `duree_ms`, `avertissement` (texte français, affiché tel quel),
+      et l'effet : `societes_ajoutees`, `societes_retirees` ;
     - une ligne `carto_societes` par société retenue, une ligne `carto_liens`
       par mandat au registre entre deux sociétés retenues, toutes avec
       l'`organisation_id` du travail (C2) ;
@@ -23,9 +27,23 @@ Sorties :
       ses indices et la décision appliquée (T027).
 
 Règles :
-    - Refus d'une version de réglages non validée (FR-005, principe 2, C1),
-      même si le déclencheur de la base a été contourné. Les réglages sont
-      revérifiés par `cartofr.reglages.valider` avant d'aller au moteur.
+    - Aucune validation demandée (principe 2 amendé le 2026-10-16, T051) : la
+      version enregistrée s'applique. Les réglages sont revérifiés par
+      `cartofr.reglages.valider` avant d'aller au moteur. Une proposition de
+      l'IA n'est jamais une base de carto : la base le refuse (déclencheur de la
+      migration 0007), et le worker aussi, si le déclencheur a été contourné.
+    - Point de départ (T051) : comme la carto du pays d'un groupe à document, la
+      tête et son document en vigueur ; plus les corrections. Un document
+      illisible n'arrête pas la carto : elle se calcule sans lui, et
+      l'avertissement le dit.
+    - Effet (C2, décision de Loïc du 2026-10-19) : ce que les corrections
+      changent, et seulement elles. Le moteur tourne une seconde fois, même tête,
+      même document, sans réglages ni décisions ; ajoutées = sociétés de la carto
+      corrigée absentes de cette carto sans correction, retirées = l'inverse.
+      Sans correction, l'effet est 0/0 sans second passage. On ne compare pas à
+      `pays.duckdb` : la carto du pays range les groupes sans document par l'arbre
+      du registre et départage les groupes entre eux, deux méthodes que le moteur
+      n'applique pas ; l'écart se lirait à tort comme l'effet des corrections.
     - Le worker écrit en rôle service, qui contourne RLS : chaque lecture et
       chaque écriture filtre ou pose l'`organisation_id` du travail. Une carto
       d'une autre organisation est introuvable pour ce travail.
@@ -58,6 +76,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -70,6 +89,8 @@ from cartofr.empreinte import CleManquante, cle_depuis_env
 from cartofr.jobs import Contexte, enregistrer
 from cartofr.jobs.synchro import FUSEAU, NOM_REGISTRE, RNE, SIRENE, Jours, dossier_donnees, empreinte_registre
 from cartofr.moteur import Carto, Decision, cartographier, decisions_en_vigueur
+from cartofr.pays.calcul import DOSSIER_DOCUMENTS, documents_en_vigueur, reglages_tete_seule
+from cartofr.perimetre import Correspondance, PerimetrePublie, correspondre, extraire, texte_document
 from cartofr.reglages import Reglages, ReglagesInvalides, valider
 
 log = logging.getLogger(__name__)
@@ -80,13 +101,17 @@ TYPE = "carto"
 FRAICHEUR_JOURS = 7  # SC-003
 
 # Messages affichés à l'utilisateur (colonne `avertissement`) : français, sans donnée.
-NON_VALIDEE = (
-    "Les réglages de cette carto ne sont pas validés : validez une version des réglages, "
-    "puis relancez la carto."
-)
 REGLAGES_ILLISIBLES = (
-    "Les réglages validés ne sont pas lisibles par le moteur : enregistrez et validez une "
-    "nouvelle version des réglages, puis relancez la carto."
+    "Les corrections de cette carto ne sont pas lisibles par le moteur : enregistrez une "
+    "nouvelle version des corrections, ce qui relance la carto."
+)
+DOCUMENT_ILLISIBLE = (
+    "Le document de périmètre du groupe n'a pas pu être lu : la carto est calculée sans lui. "
+    "Déposez-le de nouveau."
+)
+PROPOSITION = (
+    "Cette carto part d'une proposition de l'IA, qui ne sert jamais telle quelle : revoyez-la et "
+    "enregistrez-la dans les corrections, ce qui relance la carto."
 )
 REGISTRE_ABSENT = "Le registre n'est pas disponible sur le serveur. Prévenez l'administrateur."
 REGISTRE_OCCUPE = (
@@ -117,11 +142,29 @@ class CartoLue:
     statut: str
     travail_id: int | None
     contenu: Any
-    valide_le: datetime | None
+    origine: str
+
+
+@dataclass(frozen=True)
+class Effet:
+    """Ce que les corrections changent à la carto du groupe sans correction (T051, C2)."""
+
+    ajoutees: int
+    retirees: int
+
+
+@dataclass(frozen=True)
+class Calcul:
+    """Une carto corrigée : la carto du moteur, l'effet des corrections et les avertissements du
+    calcul lui-même (document illisible)."""
+
+    carto: Carto
+    effet: Effet
+    avertissements: tuple[str, ...]
 
 
 _LIRE: LiteralString = """
-select c.id, c.organisation_id, c.groupe_id, c.statut, c.travail_id, r.contenu, r.valide_le
+select c.id, c.organisation_id, c.groupe_id, c.statut, c.travail_id, r.contenu, r.origine
   from public.cartos c
   join public.reglages r
     on r.id = c.reglages_id and r.groupe_id = c.groupe_id and r.organisation_id = c.organisation_id
@@ -139,7 +182,8 @@ returning id
 
 _TERMINER: LiteralString = """
 update public.cartos
-   set statut = 'terminee', date_donnees = %s, fin_le = now(), duree_ms = %s, avertissement = %s
+   set statut = 'terminee', date_donnees = %s, fin_le = now(), duree_ms = %s, avertissement = %s,
+       societes_ajoutees = %s, societes_retirees = %s
  where id = %s and organisation_id = %s and statut = 'en_cours'
 returning id
 """
@@ -182,10 +226,11 @@ select siren, decision, decide_le, id from public.decisions
 # --- Règles sans base, testées seules ----------------------------------------------------
 
 
-def verifier_reglages(valide_le: datetime | None, contenu: Any) -> Reglages:
-    """Les réglages d'une carto, s'ils sont validés et lisibles. Lève CartoEnEchec sinon (C1)."""
-    if valide_le is None:
-        raise CartoEnEchec(NON_VALIDEE)
+def verifier_reglages(contenu: Any, origine: str = "saisie") -> Reglages:
+    """Les réglages d'une carto, s'ils sont lisibles et ne sont pas une proposition de l'IA. Lève
+    CartoEnEchec sinon (T051 : aucune validation demandée)."""
+    if origine == "proposition":
+        raise CartoEnEchec(PROPOSITION)
     try:
         return valider(contenu)
     except ReglagesInvalides:
@@ -208,10 +253,66 @@ def date_des_donnees(registre: Path) -> date:
     return min(jours.dernier(RNE), jours.dernier(SIRENE))
 
 
-def avertissement(carto: Carto, date_donnees: date, aujourdhui: date) -> str | None:
+def effet(corrigee: Carto, sans_correction: Carto) -> Effet:
+    """Sociétés que les corrections ajoutent à la carto sans correction, et celles qu'elles retirent."""
+    nous = {s.siren for s in corrigee.societes}
+    avant = {s.siren for s in sans_correction.societes}
+    return Effet(ajoutees=len(nous - avant), retirees=len(avant - nous))
+
+
+def sans_correction(contenu: dict[str, Any], decisions: Mapping[str, Decision] | None) -> bool:
+    """Vrai si la version ne corrige rien : toutes ses listes vides, aucune décision."""
+    return not decisions and not any(v for k, v in contenu.items() if k not in ("groupe", "tete"))
+
+
+def _document(registre: Path, tete: str) -> tuple[PerimetrePublie | None, list[Correspondance] | None, bool]:
+    """Le document en vigueur de la tête, lu, et ses correspondances au registre (calculées une fois
+    pour les deux passages du moteur) ; et vrai s'il existe mais n'a pas pu être lu."""
+    con = duckdb.connect(str(registre), read_only=True)
+    try:
+        fichiers = [f for t, f in documents_en_vigueur(con) if t == tete]
+        if not fichiers:
+            return None, None, False
+        try:
+            lignes = extraire(texte_document(registre.parent / DOSSIER_DOCUMENTS / fichiers[0]))
+        except Exception as exc:  # pypdf lève bien plus que PyPdfError sur un fichier abîmé
+            log.warning("carto : document de périmètre illisible (%s)", type(exc).__name__)
+            return None, None, True
+        return PerimetrePublie(fichiers[0], tuple(lignes)), correspondre(con, tete, lignes), False
+    finally:
+        con.close()
+
+
+def calculer(
+    contenu: dict[str, Any],
+    registre: Path,
+    cle_empreinte: str | None = None,
+    decisions: dict[str, Decision] | None = None,
+) -> Calcul:
+    """La carto corrigée : tête, document en vigueur de la tête et corrections ; puis l'effet des
+    corrections, par un second passage sans elles. Aucun appel extérieur (principe 3)."""
+    tete = contenu["tete"]
+    document, correspondances, illisible = _document(registre, tete)
+    avertissements = (DOCUMENT_ILLISIBLE,) if illisible else ()
+    carto = cartographier(
+        contenu, registre, cle_empreinte=cle_empreinte, decisions=decisions,
+        perimetre=document, correspondances=correspondances,
+    )  # fmt: skip
+    if sans_correction(contenu, decisions):
+        return Calcul(carto, Effet(0, 0), avertissements)
+    reference = cartographier(
+        reglages_tete_seule(tete, contenu.get("groupe")), registre,
+        perimetre=document, correspondances=correspondances,
+    )  # fmt: skip
+    return Calcul(carto, effet(carto, reference), avertissements)
+
+
+def avertissement(
+    carto: Carto, date_donnees: date, aujourdhui: date, autres: tuple[str, ...] = ()
+) -> str | None:
     """Ce que l'utilisateur doit savoir de cette carto : avertissements du moteur (garde de la
-    boucle atteinte), tête seule, données anciennes. None sinon."""
-    messages = list(carto.avertissements)
+    boucle atteinte), du calcul (document illisible), tête seule, données anciennes. None sinon."""
+    messages = list(carto.avertissements) + list(autres)
     if all(s.siren == carto.tete for s in carto.societes):
         messages.append(TETE_SEULE)
     if (aujourdhui - date_donnees).days > FRAICHEUR_JOURS:
@@ -318,14 +419,18 @@ def enregistrer_resultat(
     date_donnees: date,
     duree_ms: int,
     message: str | None,
+    effet: Effet | None = None,
 ) -> None:
-    """Sociétés, liens, cas douteux et statut `terminee`, en une seule transaction."""
+    """Sociétés, liens, cas douteux, effet et statut `terminee`, en une seule transaction."""
+    ajoutees, retirees = (effet.ajoutees, effet.retirees) if effet else (None, None)
     try:
         with conn.cursor() as cur:
             cur.executemany(_SOCIETE, lignes_societes(carto, carto_id, organisation_id))
             cur.executemany(_LIEN, lignes_liens(carto, carto_id, organisation_id))
             cur.executemany(_CAS, lignes_cas(carto, carto_id, organisation_id))
-            cur.execute(_TERMINER, (date_donnees, duree_ms, message, carto_id, organisation_id))
+            cur.execute(
+                _TERMINER, (date_donnees, duree_ms, message, ajoutees, retirees, carto_id, organisation_id)
+            )
             if cur.fetchone() is None:
                 raise CartoEnEchec(ECHEC)  # la carto n'est plus en cours : rien n'est écrit
         conn.commit()
@@ -370,10 +475,10 @@ def travail_carto(ctx: Contexte) -> None:
         raise CartoEnEchec("carto déjà prise par un autre travail")
 
     try:
-        reglages = verifier_reglages(lue.valide_le, lue.contenu)
+        reglages = verifier_reglages(lue.contenu, lue.origine)
     except CartoEnEchec as exc:
         echouer(conn, carto_id, organisation_id, ctx.travail_id, str(exc))
-        log.warning("carto %s refusée : réglages non validés ou illisibles", carto_id)
+        log.warning("carto %s refusée : réglages illisibles ou proposition", carto_id)
         raise
     prise = conn.execute(_PRENDRE, (ctx.travail_id, carto_id, organisation_id, ctx.travail_id)).fetchone()
     conn.commit()
@@ -389,10 +494,11 @@ def travail_carto(ctx: Contexte) -> None:
         contenu = reglages.model_dump()
         cle = cle_depuis_env() if contenu["familles_exclues_empreintes"] else None
         decisions = lire_decisions(conn, lue.groupe_id, organisation_id)
-        carto = cartographier(contenu, registre, cle_empreinte=cle, decisions=decisions)
+        calcul = calculer(contenu, registre, cle_empreinte=cle, decisions=decisions)
+        carto = calcul.carto
         duree_ms = round((time.monotonic() - debut) * 1000)
-        message = avertissement(carto, donnees, datetime.now(FUSEAU).date())
-        enregistrer_resultat(conn, carto, carto_id, organisation_id, donnees, duree_ms, message)
+        message = avertissement(carto, donnees, datetime.now(FUSEAU).date(), calcul.avertissements)
+        enregistrer_resultat(conn, carto, carto_id, organisation_id, donnees, duree_ms, message, calcul.effet)
     except Exception as exc:
         duree_ms = round((time.monotonic() - debut) * 1000)
         try:

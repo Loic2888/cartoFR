@@ -100,7 +100,8 @@ def _un(conn: Connexion, requete: LiteralString, params: tuple[Any, ...]) -> Any
 
 
 def _remplir_cartos(conn: Connexion, org: uuid.UUID, user: uuid.UUID, tete: str) -> dict[str, Any]:
-    """Un groupe, deux versions de réglages (validée, brouillon), une carto et son résultat."""
+    """Un groupe, deux versions de réglages (validée avant T051, enregistrée sans validation), une
+    carto corrigée sur la seconde, avec son effet, et son résultat."""
     groupe = _un(
         conn,
         "insert into public.groupes (organisation_id, tete_siren, nom, cree_par) "
@@ -127,8 +128,9 @@ def _remplir_cartos(conn: Connexion, org: uuid.UUID, user: uuid.UUID, tete: str)
     carto = _un(
         conn,
         "insert into public.cartos (organisation_id, groupe_id, reglages_id, travail_id, statut, "
-        "date_donnees, duree_ms) values (%s, %s, %s, %s, 'terminee', current_date, 1000) returning id",
-        (org, groupe, valide, travail),
+        "date_donnees, duree_ms, societes_ajoutees, societes_retirees) "
+        "values (%s, %s, %s, %s, 'terminee', current_date, 1000, 3, 1) returning id",
+        (org, groupe, brouillon, travail),
     )
     filiale = tete[:-1] + ("1" if tete[-1] != "1" else "2")
     conn.execute(
@@ -258,7 +260,8 @@ def test_un_membre_ne_voit_que_son_organisation(conn: Connexion, monde: Monde, c
 def test_un_membre_ne_voit_ni_les_cartos_ni_les_reglages_de_l_autre(
     conn: Connexion, monde: Monde, cote: str
 ) -> None:
-    """T018, C2 : par identifiant, la carto et les réglages de l'autre organisation sont introuvables."""
+    """T018, C2 et T051, C4 : par identifiant, la carto corrigée, son effet et les corrections de
+    l'autre organisation sont introuvables."""
     moi, autre = (monde.org_a, monde.org_b) if cote == "a" else (monde.org_b, monde.org_a)
     _en_tant_que(conn, monde.user_a if cote == "a" else monde.user_b)
 
@@ -269,7 +272,12 @@ def test_un_membre_ne_voit_ni_les_cartos_ni_les_reglages_de_l_autre(
     }
     lectures: tuple[tuple[LiteralString, Any], ...] = (
         ("select count(*) from public.cartos where id = %s", monde.cartos[autre]),
+        (
+            "select count(*) from public.cartos where groupe_id = %s and societes_ajoutees is not null",
+            monde.groupes[autre],
+        ),
         ("select count(*) from public.reglages where id = %s", monde.reglages_valides[autre]),
+        ("select count(*) from public.reglages where id = %s", monde.reglages_brouillon[autre]),
         ("select count(*) from public.reglages where groupe_id = %s", monde.groupes[autre]),
         ("select count(*) from public.groupes where id = %s", monde.groupes[autre]),
         ("select count(*) from public.carto_societes where carto_id = %s", monde.cartos[autre]),
@@ -419,57 +427,73 @@ def test_aucune_colonne_de_personne_physique(conn: Connexion) -> None:
     assert suspectes == []
 
 
-def test_une_carto_refuse_des_reglages_non_valides(conn: Connexion, monde: Monde) -> None:
-    """FR-005 : le moteur ne tourne que sur une version validée, même en service_role."""
+def test_une_carto_part_d_une_version_jamais_validee(conn: Connexion, monde: Monde) -> None:
+    """T051, principe 2 amendé : une version enregistrée sert sans validation."""
     org = monde.org_a
-    with pytest.raises(psycopg.errors.CheckViolation):
+    conn.execute(
+        "insert into public.cartos (organisation_id, groupe_id, reglages_id) values (%s, %s, %s)",
+        (org, monde.groupes[org], monde.reglages_brouillon[org]),
+    )
+
+
+def _proposition(conn: Connexion, monde: Monde, org: uuid.UUID) -> uuid.UUID:
+    return _un(
+        conn,
+        "insert into public.reglages (groupe_id, organisation_id, version, contenu, origine, proposition) "
+        "values (%s, %s, 3, '{}', 'proposition', %s) returning id",
+        (monde.groupes[org], org, Jsonb({"modele": "test", "elements": []})),
+    )
+
+
+def test_une_carto_refuse_une_proposition_de_l_ia(conn: Connexion, monde: Monde) -> None:
+    """Principe 1 (migration 0007) : une proposition ne part jamais en carto, même en service_role."""
+    org = monde.org_a
+    proposition = _proposition(conn, monde, org)
+    with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
         conn.execute(
             "insert into public.cartos (organisation_id, groupe_id, reglages_id) values (%s, %s, %s)",
-            (org, monde.groupes[org], monde.reglages_brouillon[org]),
+            (org, monde.groupes[org], proposition),
         )
-
-
-def test_une_carto_ne_peut_pas_passer_sur_des_reglages_non_valides(conn: Connexion, monde: Monde) -> None:
-    org = monde.org_a
-    with pytest.raises(psycopg.errors.CheckViolation):
+    with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
         conn.execute(
-            "update public.cartos set reglages_id = %s where id = %s",
-            (monde.reglages_brouillon[org], monde.cartos[org]),
+            "update public.cartos set reglages_id = %s where id = %s", (proposition, monde.cartos[org])
         )
 
 
-def test_une_version_validee_est_figee(conn: Connexion, monde: Monde) -> None:
+def test_toute_version_enregistree_est_figee(conn: Connexion, monde: Monde) -> None:
+    """T051 : la trace du principe 2. Une version, validée ou non, ne change plus : ni contenu, ni
+    numéro, ni auteur, ni date."""
     org = monde.org_a
-    valide = monde.reglages_valides[org]
-    modifications: tuple[tuple[LiteralString, tuple[Any, ...]], ...] = (
-        ("update public.reglages set contenu = '{}' where id = %s", (valide,)),
-        ("update public.reglages set version = 5 where id = %s", (valide,)),
-        ("update public.reglages set valide_le = null, valide_par = null where id = %s", (valide,)),
-        ("update public.reglages set valide_par = %s where id = %s", (monde.user_b, valide)),
-    )
-    for requete, params in modifications:
-        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
-            conn.execute(requete, params)
-    # Effacer le compte du validateur reste possible (RGPD) : valide_par passe à nul.
+    for version in (monde.reglages_valides[org], monde.reglages_brouillon[org]):
+        modifications: tuple[tuple[LiteralString, tuple[Any, ...]], ...] = (
+            ("update public.reglages set contenu = '{}' where id = %s", (version,)),
+            ("update public.reglages set version = 5 where id = %s", (version,)),
+            ("update public.reglages set cree_le = now() - interval '1 day' where id = %s", (version,)),
+            ("update public.reglages set cree_par = %s where id = %s", (monde.user_b, version)),
+            ("update public.reglages set valide_le = now() + interval '1 hour' where id = %s", (version,)),
+            ("update public.reglages set valide_par = %s where id = %s", (monde.user_b, version)),
+        )
+        for requete, params in modifications:
+            with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+                conn.execute(requete, params)
+    # Effacer le compte de l'auteur reste possible (RGPD) : cree_par et valide_par passent à nul.
     conn.execute("delete from auth.users where id = %s", (monde.user_a,))
-    ligne = conn.execute(
-        "select valide_le is not null, valide_par from public.reglages where id = %s", (valide,)
-    )
-    assert ligne.fetchone() == (True, None)
-    # Une version brouillon, elle, se valide.
-    brouillon = monde.reglages_brouillon[monde.org_b]
-    conn.execute(
-        "update public.reglages set valide_le = now(), valide_par = %s where id = %s",
-        (monde.user_b, brouillon),
-    )
+    lignes = conn.execute(
+        "select cree_par, valide_par from public.reglages where id = any(%s)",
+        ([monde.reglages_valides[org], monde.reglages_brouillon[org]],),
+    ).fetchall()
+    assert lignes == [(None, None), (None, None)]
 
 
 def test_pas_de_validateur_sans_date(conn: Connexion, monde: Monde) -> None:
+    """La contrainte de 0002, visée par une insertion : une mise à jour est déjà refusée par le gel
+    des versions (0007)."""
     org = monde.org_a
     with pytest.raises(psycopg.errors.CheckViolation):
         conn.execute(
-            "update public.reglages set valide_par = %s where id = %s",
-            (monde.user_a, monde.reglages_brouillon[org]),
+            "insert into public.reglages (groupe_id, organisation_id, version, contenu, valide_par) "
+            "values (%s, %s, 9, '{}', %s)",
+            (monde.groupes[org], org, monde.user_a),
         )
 
 

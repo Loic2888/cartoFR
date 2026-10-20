@@ -1,6 +1,7 @@
-// C2 et C4 : la logique des Server Actions de reglages/actions.ts, avec un
-// dépôt en mémoire qui imite la base (RLS par organisation, unicité du
-// numéro de version, version validée figée).
+// C2 et C4 (T020), C1 (T051) : la logique des Server Actions de
+// reglages/actions.ts, avec un dépôt en mémoire qui imite la base (RLS par
+// organisation, unicité du numéro de version). Aucune validation : une
+// version enregistrée s'applique.
 import { describe, expect, it } from "vitest";
 
 import { empreinte } from "./empreinte";
@@ -10,13 +11,10 @@ import {
   MESSAGES,
   type Saisie,
   type Version,
-  enregistrerBrouillonAvec,
+  enregistrerVersionAvec,
   lignes,
   peutEnregistrer,
-  peutValider,
-  validerAvec,
 } from "./operations";
-import type { Reglages } from "./schema";
 
 const CLE = "cle-de-test-FAKE";
 const MOI = "00000000-0000-4000-8000-000000000001";
@@ -25,10 +23,10 @@ const ORG_A = "org-a";
 const ORG_B = "org-b";
 
 type Ligne = Version & {
+  id: string;
   groupeId: string;
   organisationId: string;
   creePar: string | null;
-  validePar: string | null;
 };
 
 function base(organisationDuLecteur: string) {
@@ -42,15 +40,14 @@ function base(organisationDuLecteur: string) {
       groupeId: "g-a",
       organisationId: ORG_A,
       version: 1,
+      origine: "saisie",
       contenu: {
         groupe: "Groupe Fictif",
         tete: "123456789",
         marques_sures: ["Marque Fictive"],
         familles_exclues_empreintes: [empreinte("Dupont", CLE)],
       },
-      valideLe: "2026-10-06T10:00:00.000Z",
       creePar: null,
-      validePar: null,
     },
   ];
   let conflitAuProchainInsert = false;
@@ -63,6 +60,12 @@ function base(organisationDuLecteur: string) {
       const v = reglages.filter((r) => r.groupeId === groupeId).sort((a, b) => b.version - a.version)[0];
       return v ?? null;
     },
+    async derniereEnregistree(groupeId) {
+      const v = reglages
+        .filter((r) => r.groupeId === groupeId && r.origine !== "proposition")
+        .sort((a, b) => b.version - a.version)[0];
+      return v ?? null;
+    },
     async insererVersion(l) {
       if (conflitAuProchainInsert || reglages.some((r) => r.groupeId === l.groupeId && r.version === l.version)) {
         conflitAuProchainInsert = false;
@@ -73,19 +76,11 @@ function base(organisationDuLecteur: string) {
         groupeId: l.groupeId,
         organisationId: l.organisationId,
         version: l.version,
+        origine: "saisie",
         contenu: l.contenu,
-        valideLe: null,
         creePar: l.creePar,
-        validePar: null,
       });
       return "ok";
-    },
-    async marquerValidee(id, par, le) {
-      const r = reglages.find((x) => x.id === id);
-      if (!r || r.valideLe) return false;
-      r.valideLe = le;
-      r.validePar = par;
-      return true;
     },
   };
   return {
@@ -118,19 +113,12 @@ function saisie(sur: Partial<Saisie> = {}, listes: Partial<Saisie["listes"]> = {
   };
 }
 
-describe("peutEnregistrer et peutValider", () => {
+describe("peutEnregistrer", () => {
   it("n'enregistre que sur la dernière version ouverte", () => {
     expect(peutEnregistrer(3, 3)).toBe(true);
     expect(peutEnregistrer(4, 3)).toBe(false);
     expect(peutEnregistrer(null, 0)).toBe(true);
     expect(peutEnregistrer(null, 1)).toBe(false);
-  });
-
-  it("ne valide que la dernière version, en brouillon", () => {
-    expect(peutValider({ version: 2, valideLe: null }, 2)).toBe("ok");
-    expect(peutValider({ version: 3, valideLe: null }, 2)).toBe("pas_la_derniere");
-    expect(peutValider({ version: 2, valideLe: "2026-10-07" }, 2)).toBe("deja_validee");
-    expect(peutValider(null, 1)).toBe("aucune");
   });
 });
 
@@ -141,14 +129,14 @@ describe("lignes", () => {
   });
 });
 
-describe("enregistrerBrouillonAvec", () => {
-  it("crée la version suivante, en brouillon, avec son auteur (C4)", async () => {
+describe("enregistrerVersionAvec", () => {
+  it("crée la version suivante, avec son auteur, sans rien à valider (C4, T051 C1)", async () => {
     const { depot, reglages } = base(ORG_A);
-    const r = await enregistrerBrouillonAvec(depot, MOI, saisie(), CLE);
-    expect(r).toMatchObject({ statut: "ok", version: 2 });
+    const r = await enregistrerVersionAvec(depot, MOI, saisie(), CLE);
+    expect(r).toEqual({ statut: "ok", version: 2, message: "Version 2 des corrections enregistrée." });
+    expect(r.message).not.toMatch(/valid|brouillon/i);
     const v2 = reglages.find((x) => x.version === 2)!;
     expect(v2.creePar).toBe(MOI);
-    expect(v2.valideLe).toBeNull();
     expect(v2.contenu.marques_sures).toEqual(["Marque Fictive", "Nouvelle Marque"]);
     // Groupe et tête viennent du groupe, pas de la saisie.
     expect(v2.contenu).toMatchObject({ groupe: "Groupe Fictif", tete: "123456789" });
@@ -158,9 +146,9 @@ describe("enregistrerBrouillonAvec", () => {
 
   it("refuse si une autre version a été enregistrée depuis l'ouverture (C2)", async () => {
     const { depot, reglages } = base(ORG_A);
-    expect(await enregistrerBrouillonAvec(depot, AUTRE, saisie(), CLE)).toMatchObject({ statut: "ok" });
+    expect(await enregistrerVersionAvec(depot, AUTRE, saisie(), CLE)).toMatchObject({ statut: "ok" });
     // Deuxième consultant, ouvert sur la version 1.
-    const r = await enregistrerBrouillonAvec(depot, MOI, saisie({}, { marques_sures: "Autre" }), CLE);
+    const r = await enregistrerVersionAvec(depot, MOI, saisie({}, { marques_sures: "Autre" }), CLE);
     expect(r).toEqual({ statut: "erreur", message: MESSAGES.versionChangee });
     expect(reglages).toHaveLength(2);
   });
@@ -168,21 +156,21 @@ describe("enregistrerBrouillonAvec", () => {
   it("refuse sur une course au même numéro, sans réessayer par-dessus", async () => {
     const { depot, reglages, simulerCourse } = base(ORG_A);
     simulerCourse();
-    const r = await enregistrerBrouillonAvec(depot, MOI, saisie(), CLE);
+    const r = await enregistrerVersionAvec(depot, MOI, saisie(), CLE);
     expect(r).toEqual({ statut: "erreur", message: MESSAGES.versionChangee });
     expect(reglages).toHaveLength(1);
   });
 
   it("refuse un groupe d'une autre organisation", async () => {
     const { depot, reglages } = base(ORG_A);
-    const r = await enregistrerBrouillonAvec(depot, MOI, saisie({ groupeId: "g-b" }), CLE);
+    const r = await enregistrerVersionAvec(depot, MOI, saisie({ groupeId: "g-b" }), CLE);
     expect(r).toEqual({ statut: "erreur", message: MESSAGES.groupeIntrouvable });
     expect(reglages).toHaveLength(1);
   });
 
   it("ajoute une famille par son empreinte, jamais par son nom", async () => {
     const { depot, reglages } = base(ORG_A);
-    const r = await enregistrerBrouillonAvec(
+    const r = await enregistrerVersionAvec(
       depot,
       MOI,
       saisie({ famillesAjoutees: "Nom Zorglub\n  dupont " }),
@@ -201,38 +189,38 @@ describe("enregistrerBrouillonAvec", () => {
 
   it("retire toutes les familles", async () => {
     const { depot, reglages } = base(ORG_A);
-    await enregistrerBrouillonAvec(depot, MOI, saisie({ retirerFamilles: true }), CLE);
+    await enregistrerVersionAvec(depot, MOI, saisie({ retirerFamilles: true }), CLE);
     expect(reglages.find((x) => x.version === 2)!.contenu.familles_exclues_empreintes).toEqual([]);
   });
 
   it("refuse d'ajouter une famille sans clé d'empreinte", async () => {
     const { depot, reglages } = base(ORG_A);
-    const r = await enregistrerBrouillonAvec(depot, MOI, saisie({ famillesAjoutees: "Nom Fictif" }), null);
+    const r = await enregistrerVersionAvec(depot, MOI, saisie({ famillesAjoutees: "Nom Fictif" }), null);
     expect(r).toEqual({ statut: "erreur", message: MESSAGES.cleManquante });
     expect(reglages).toHaveLength(1);
   });
 
   it("enregistre sans clé quand aucune famille n'est ajoutée", async () => {
     const { depot } = base(ORG_A);
-    expect(await enregistrerBrouillonAvec(depot, MOI, saisie(), null)).toMatchObject({ statut: "ok" });
+    expect(await enregistrerVersionAvec(depot, MOI, saisie(), null)).toMatchObject({ statut: "ok" });
   });
 
   it("refuse une saisie invalide, en français", async () => {
     const { depot, reglages } = base(ORG_A);
-    const r = await enregistrerBrouillonAvec(depot, MOI, saisie({}, { exclus: "775 670 417\n12345" }), CLE);
+    const r = await enregistrerVersionAvec(depot, MOI, saisie({}, { exclus: "775 670 417\n12345" }), CLE);
     expect(r).toEqual({ statut: "erreur", message: "SIREN exclus, valeur n° 2 : un SIREN fait 9 chiffres." });
     expect(reglages).toHaveLength(1);
   });
 
   it("accepte un SIREN écrit avec des espaces", async () => {
     const { depot, reglages } = base(ORG_A);
-    await enregistrerBrouillonAvec(depot, MOI, saisie({}, { exclus: "775 670 417" }), CLE);
+    await enregistrerVersionAvec(depot, MOI, saisie({}, { exclus: "775 670 417" }), CLE);
     expect(reglages.find((x) => x.version === 2)!.contenu.exclus).toEqual(["775670417"]);
   });
 
   it("ne crée pas de version si rien n'a changé", async () => {
     const { depot, reglages } = base(ORG_A);
-    const r = await enregistrerBrouillonAvec(depot, MOI, saisie({}, { marques_sures: "Marque Fictive" }), CLE);
+    const r = await enregistrerVersionAvec(depot, MOI, saisie({}, { marques_sures: "Marque Fictive" }), CLE);
     expect(r).toEqual({ statut: "erreur", message: MESSAGES.rienNaChange });
     expect(reglages).toHaveLength(1);
   });
@@ -240,82 +228,41 @@ describe("enregistrerBrouillonAvec", () => {
   it("crée la version 1 d'un groupe neuf", async () => {
     const { depot, reglages } = base(ORG_A);
     reglages.length = 0;
-    const r = await enregistrerBrouillonAvec(depot, MOI, saisie({ baseVersion: 0 }), CLE);
+    const r = await enregistrerVersionAvec(depot, MOI, saisie({ baseVersion: 0 }), CLE);
     expect(r).toMatchObject({ statut: "ok", version: 1 });
   });
 });
 
-describe("validerAvec", () => {
-  const maintenant = () => new Date("2026-10-07T12:00:00.000Z");
-
-  it("valide la dernière version, avec validateur et date (C4)", async () => {
-    const { depot, reglages } = base(ORG_A);
-    await enregistrerBrouillonAvec(depot, AUTRE, saisie(), CLE);
-    const r = await validerAvec(depot, MOI, { groupeId: "g-a", version: 2 }, maintenant);
-    expect(r).toMatchObject({ statut: "ok", version: 2 });
-    const v2 = reglages.find((x) => x.version === 2)!;
-    expect(v2).toMatchObject({ creePar: AUTRE, validePar: MOI, valideLe: "2026-10-07T12:00:00.000Z" });
-  });
-
-  it("refuse une validation qui ne part pas de la dernière version (C2)", async () => {
-    const { depot, reglages } = base(ORG_A);
-    await enregistrerBrouillonAvec(depot, MOI, saisie(), CLE);
-    await enregistrerBrouillonAvec(depot, AUTRE, saisie({ baseVersion: 2 }, { marques_sures: "X" }), CLE);
-    const r = await validerAvec(depot, MOI, { groupeId: "g-a", version: 2 }, maintenant);
-    expect(r).toEqual({ statut: "erreur", message: MESSAGES.versionChangee });
-    expect(reglages.find((x) => x.version === 2)!.valideLe).toBeNull();
-  });
-
-  it("refuse une version déjà validée", async () => {
-    const { depot } = base(ORG_A);
-    expect(await validerAvec(depot, MOI, { groupeId: "g-a", version: 1 })).toEqual({
-      statut: "erreur",
-      message: MESSAGES.dejaValidee,
-    });
-  });
-
-  it("refuse si la version a été validée entre-temps", async () => {
-    const { depot, reglages } = base(ORG_A);
-    await enregistrerBrouillonAvec(depot, MOI, saisie(), CLE);
-    const marquer = depot.marquerValidee;
-    depot.marquerValidee = async (id, par, le) => {
-      reglages.find((x) => x.id === id)!.valideLe = "2026-10-07T11:59:00.000Z";
-      return marquer(id, par, le);
-    };
-    expect(await validerAvec(depot, MOI, { groupeId: "g-a", version: 2 })).toEqual({
-      statut: "erreur",
-      message: MESSAGES.dejaValidee,
-    });
-  });
-
-  it("refuse un groupe d'une autre organisation", async () => {
-    const { depot } = base(ORG_B);
-    expect(await validerAvec(depot, MOI, { groupeId: "g-a", version: 1 })).toEqual({
-      statut: "erreur",
-      message: MESSAGES.groupeIntrouvable,
-    });
-  });
-
-  it("refuse un groupe sans réglages", async () => {
-    const { depot, reglages } = base(ORG_A);
-    reglages.length = 0;
-    expect(await validerAvec(depot, MOI, { groupeId: "g-a", version: 1 })).toEqual({
-      statut: "erreur",
-      message: MESSAGES.rienAValider,
-    });
-  });
-
-  it("ne valide pas un contenu mal formé", async () => {
-    const { depot, reglages } = base(ORG_A);
-    reglages.push({
-      ...reglages[0],
+describe("enregistrerVersionAvec, une proposition de l'IA en attente (T051)", () => {
+  function avecProposition() {
+    const b = base(ORG_A);
+    b.reglages.push({
+      ...b.reglages[0],
       id: "r-a-2",
       version: 2,
-      valideLe: null,
-      contenu: { groupe: "Groupe Fictif", tete: "123" } as Reglages,
+      origine: "proposition",
+      contenu: {
+        groupe: "Groupe Fictif",
+        tete: "123456789",
+        marques_sures: ["Marque Proposee Par IA"],
+        familles_exclues_empreintes: [],
+      },
     });
-    const r = await validerAvec(depot, MOI, { groupeId: "g-a", version: 2 });
-    expect(r.statut).toBe("erreur");
-    expect(reglages[1].valideLe).toBeNull();
+    return b;
+  }
+
+  it("part de la dernière version enregistrée, pas de la proposition : rien n'a changé", async () => {
+    const { depot } = avecProposition();
+    const r = await enregistrerVersionAvec(depot, MOI, saisie({ baseVersion: 2 }, { marques_sures: "Marque Fictive" }), CLE);
+    expect(r).toEqual({ statut: "erreur", message: MESSAGES.rienNaChange });
+  });
+
+  it("garde les empreintes de la version enregistrée, et prend le numéro après la proposition", async () => {
+    const { depot, reglages } = avecProposition();
+    const r = await enregistrerVersionAvec(depot, MOI, saisie({ baseVersion: 2 }), CLE);
+    expect(r).toMatchObject({ statut: "ok", version: 3 });
+    const v3 = reglages.find((x) => x.version === 3)!;
+    expect(v3.contenu.marques_sures).toEqual(["Marque Fictive", "Nouvelle Marque"]);
+    expect(v3.contenu.familles_exclues_empreintes).toEqual([empreinte("Dupont", CLE)]);
   });
 });

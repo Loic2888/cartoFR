@@ -1,6 +1,7 @@
 "use client";
 
-// Saisie des réglages et validation de la dernière version (T020).
+// Saisie des corrections d'un groupe ; enregistrer relance la carto (T020, T051).
+// Aucune validation : la version enregistrée s'applique (principe 2).
 // Une colonne, cibles de 44 px, un <label> par champ (C3), tout au clavier.
 // Les noms de famille saisis partent au serveur, qui n'en garde que
 // l'empreinte : ils ne reviennent jamais à l'écran (garde-fou 6).
@@ -11,12 +12,11 @@ import { Label } from "@/components/ui/label";
 import type { Resultat } from "@/lib/reglages/operations";
 import { type CleListe, LISTES } from "@/lib/reglages/schema";
 
-import { enregistrerBrouillon, validerVersion } from "./actions";
+import { enregistrerEtRecalculer } from "./actions";
 
 type Props = {
   groupeId: string;
   baseVersion: number;
-  aValider: boolean;
   listes: Record<CleListe, string>;
   nbFamilles: number;
 };
@@ -58,48 +58,10 @@ export function EditeurReglages(props: Props) {
       <div id="reglages-etat" aria-live="polite" className="empty:absolute">
         <Message resultat={resultat} />
       </div>
-      {props.aValider ? (
-        <Validation groupeId={props.groupeId} version={props.baseVersion} onResultat={setResultat} />
-      ) : null}
       {/* Une nouvelle version remonte le formulaire : il repart de ce que le
           serveur a enregistré, et le champ des familles se vide. */}
       <Formulaire key={props.baseVersion} {...props} onResultat={setResultat} />
     </div>
-  );
-}
-
-function Validation({
-  groupeId,
-  version,
-  onResultat,
-}: {
-  groupeId: string;
-  version: number;
-  onResultat: (r: Resultat) => void;
-}) {
-  const [enCours, demarrer] = useTransition();
-  return (
-    <section aria-labelledby="titre-valider" className="flex flex-col gap-2 rounded-lg border px-4 py-3">
-      <h2 id="titre-valider" className="text-lg font-medium">
-        Valider la version {version}
-      </h2>
-      <p className="text-sm text-muted-foreground">
-        Relisez les réglages ci-dessous. Une fois validée, la version ne change plus et sert aux
-        prochaines cartos.
-      </p>
-      <Button
-        type="button"
-        disabled={enCours}
-        className="w-full md:w-auto md:self-start"
-        onClick={() =>
-          demarrer(async () => {
-            onResultat(await validerVersion({ groupeId, version }));
-          })
-        }
-      >
-        {enCours ? "Validation en cours…" : `Valider la version ${version}`}
-      </Button>
-    </section>
   );
 }
 
@@ -119,7 +81,7 @@ function Formulaire({
     e.preventDefault();
     demarrer(async () => {
       onResultat(
-        await enregistrerBrouillon({ groupeId, baseVersion, listes, famillesAjoutees, retirerFamilles }),
+        await enregistrerEtRecalculer({ groupeId, baseVersion, listes, famillesAjoutees, retirerFamilles }),
       );
     });
   }
@@ -127,11 +89,11 @@ function Formulaire({
   return (
     <form onSubmit={enregistrer} className="flex flex-col gap-6" aria-labelledby="titre-saisie">
       <h2 id="titre-saisie" className="text-lg font-medium">
-        Modifier les réglages
+        Modifier les corrections
       </h2>
       <p className="text-sm text-muted-foreground">
-        Une valeur par ligne. Enregistrer crée une nouvelle version en brouillon ; les versions
-        précédentes sont conservées.
+        Une valeur par ligne. Enregistrer crée une nouvelle version, à votre nom et datée, puis
+        recalcule la carto du groupe avec elle. Les versions précédentes sont conservées.
       </p>
 
       {LISTES.map((l) => {
@@ -199,7 +161,7 @@ function Formulaire({
       </fieldset>
 
       <Button type="submit" disabled={enCours} className="w-full md:w-auto md:self-start">
-        {enCours ? "Enregistrement en cours…" : "Enregistrer le brouillon"}
+        {enCours ? "Enregistrement et recalcul…" : "Enregistrer et recalculer"}
       </Button>
     </form>
   );

@@ -4,8 +4,9 @@
 // « Proposer », puis la revue élément par élément.
 //
 // Chaque élément affiche sa source (C1) et se garde, se corrige ou se rejette ;
-// le consultant peut aussi ajouter ce qui manque. « Valider » crée et valide
-// une nouvelle version, avec le nombre de corrections (C2). Une colonne,
+// le consultant peut aussi ajouter ce qui manque. « Enregistrer » crée une
+// nouvelle version, avec le nombre de corrections (C2), et relance la carto
+// (T051, sans validation). Une colonne,
 // cibles de 44 px, un <label> par champ, tout au clavier, focus visible.
 import { useState, useTransition } from "react";
 
@@ -23,7 +24,7 @@ import {
   sourceSure,
 } from "@/lib/reglages/proposition";
 
-import { demanderProposition, validerProposition } from "./actions-proposition";
+import { demanderProposition, enregistrerProposition } from "./actions-proposition";
 
 const CHAMP =
   "min-h-11 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-2 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring md:text-sm dark:bg-input/30";
@@ -76,7 +77,7 @@ export function DemandeProposition({
       <p className="text-sm text-muted-foreground">
         L&apos;IA lit le site et le rapport annuel du groupe et propose des marques, des sigles, des
         maisons et des exclusions, chacun avec sa source. Elle ne reçoit que des données de sociétés.
-        Rien n&apos;est utilisé avant votre revue et votre validation.
+        Rien n&apos;est utilisé avant que vous l&apos;ayez revu et enregistré.
       </p>
       {etat ? <p className="text-sm font-medium">{etat}</p> : null}
       <div aria-live="polite" className="empty:absolute">
@@ -92,7 +93,7 @@ export function DemandeProposition({
           })
         }
       >
-        {enCours ? "Demande en cours…" : "Proposer des réglages"}
+        {enCours ? "Demande en cours…" : "Proposer des corrections"}
       </Button>
     </section>
   );
@@ -104,7 +105,7 @@ function decision(s: Saisie): Decision {
   return s.choix === "corriger" ? { choix: "corriger", valeur: s.valeur, liste: s.liste } : { choix: s.choix };
 }
 
-/** La revue d'une proposition : un bloc par élément, les ajouts, la validation. */
+/** La revue d'une proposition : un bloc par élément, les ajouts, l'enregistrement. */
 export function RevueProposition({
   groupeId,
   version,
@@ -140,15 +141,15 @@ export function RevueProposition({
     setValeurAjout("");
   }
 
-  function valider(e: React.FormEvent<HTMLFormElement>) {
+  function enregistrer(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     demarrer(async () => {
-      setResultat(await validerProposition({ groupeId, version, decisions, ajouts }));
+      setResultat(await enregistrerProposition({ groupeId, version, decisions, ajouts }));
     });
   }
 
   return (
-    <form onSubmit={valider} aria-labelledby="titre-revue" className="flex flex-col gap-6">
+    <form onSubmit={enregistrer} aria-labelledby="titre-revue" className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h2 id="titre-revue" className="text-lg font-medium">
           Revoir la proposition (version {version})
@@ -156,7 +157,7 @@ export function RevueProposition({
         <p className="text-sm text-muted-foreground">
           Pour chaque élément, ouvrez sa source, puis gardez-le, corrigez-le ou rejetez-le. Une
           marque qui a des homonymes au registre est rangée en marque ambiguë : le moteur exigera une
-          deuxième preuve. Les éléments déjà validés que l&apos;IA n&apos;a pas reproposés sont
+          deuxième preuve. Les éléments déjà enregistrés que l&apos;IA n&apos;a pas reproposés sont
           gardés ; les rejeter ne compte pas comme une correction de l&apos;IA.
         </p>
       </div>
@@ -175,11 +176,11 @@ export function RevueProposition({
                   <legend className="px-1 font-medium break-words">{e.valeur}</legend>
                   {e.origine === "validee" ? (
                     <p className="text-sm font-medium">
-                      Déjà validé, non reproposé par l&apos;IA : gardé si vous ne le rejetez pas.
+                      Déjà enregistré, non reproposé par l&apos;IA : gardé si vous ne le rejetez pas.
                     </p>
                   ) : e.deja_valide_en ? (
                     <p className="text-sm font-medium">
-                      Déjà validé en {LIBELLES_LISTES[e.deja_valide_en]}
+                      Déjà enregistré en {LIBELLES_LISTES[e.deja_valide_en]}
                       {e.deja_valide_en !== e.liste ? " : l'IA le range dans une autre liste." : "."}
                     </p>
                   ) : null}
@@ -343,11 +344,11 @@ export function RevueProposition({
           disabled={enCours || n === null || resultat?.statut === "ok"}
           className="w-full md:w-auto md:self-start"
         >
-          {enCours ? "Validation en cours…" : "Valider ces réglages"}
+          {enCours ? "Enregistrement et recalcul…" : "Enregistrer et recalculer"}
         </Button>
         <p className="text-sm text-muted-foreground">
-          Valider crée une nouvelle version, validée, qui servira aux prochaines cartos. La
-          proposition reste dans l&apos;historique.
+          Enregistrer crée une nouvelle version des corrections, à votre nom et datée, puis
+          recalcule la carto du groupe avec elle. La proposition reste dans l&apos;historique.
         </p>
       </div>
     </form>

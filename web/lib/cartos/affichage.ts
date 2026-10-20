@@ -67,22 +67,39 @@ export function dateDonneesFr(iso: string | null | undefined): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "—";
 }
 
+/** L'effet des corrections (T051, C2) : sociétés ajoutées et retirées par rapport à la carto
+ * sans correction (même tête, même document), calculées par le worker. Null si l'effet n'est pas
+ * connu (carto pas terminée, ou d'avant T051) : on n'affiche rien plutôt qu'un faux 0. */
+export function effetFr(
+  ajoutees: number | null | undefined,
+  retirees: number | null | undefined,
+): string | null {
+  if (ajoutees === null || ajoutees === undefined || retirees === null || retirees === undefined) return null;
+  if (ajoutees === 0 && retirees === 0) return "Les corrections n'ajoutent ni ne retirent aucune société.";
+  const nb = (n: number) => n.toLocaleString("fr-FR");
+  const plus =
+    ajoutees === 0 ? "Aucune société ajoutée" : ajoutees === 1 ? "1 société ajoutée" : `${nb(ajoutees)} sociétés ajoutées`;
+  const moins = retirees === 0 ? "aucune retirée" : retirees === 1 ? "1 retirée" : `${nb(retirees)} retirées`;
+  return `${plus}, ${moins} par rapport à la carto sans correction.`;
+}
+
 export const MESSAGES = {
   groupeIntrouvable: "Ce groupe n'existe pas, ou vous n'y avez pas accès.",
-  aucuneVersionValidee:
-    "Aucune version des réglages n'est validée : le moteur ne tourne que sur des réglages validés. Validez une version dans les réglages, puis lancez la carto.",
+  aucuneVersion:
+    "Ce groupe n'a pas encore de version des corrections : sa carto est celle du pays. Pour une carto corrigée, ouvrez les corrections et enregistrez-les.",
   dejaEnCours:
     "Une carto de ce groupe est déjà en attente ou en cours. Attendez qu'elle se termine avant d'en lancer une autre.",
   lancee: "Carto lancée. Elle apparaît ci-dessous, et la page se met à jour toute seule.",
   base: "Le lancement a échoué. Réessayez dans un instant, et si cela persiste, prévenez l'administrateur.",
 } as const;
 
-/** Peut-on lancer une carto ? Il faut une version validée, et aucune carto déjà active. */
+/** Peut-on lancer une carto ? Il faut une version enregistrée des corrections (pas une
+ * proposition de l'IA), et aucune carto déjà active. */
 export function peutLancer(etat: {
-  versionValidee: boolean;
+  version: boolean;
   cartoActive: boolean;
 }): { ok: true } | { ok: false; message: string } {
-  if (!etat.versionValidee) return { ok: false, message: MESSAGES.aucuneVersionValidee };
+  if (!etat.version) return { ok: false, message: MESSAGES.aucuneVersion };
   if (etat.cartoActive) return { ok: false, message: MESSAGES.dejaEnCours };
   return { ok: true };
 }

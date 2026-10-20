@@ -1,7 +1,7 @@
 "use server";
 
-// Proposition des réglages par l'IA : la demander, valider la revue (T026,
-// FR-008, SC-007). La logique est dans lib/reglages/proposition.ts (testée) ;
+// Proposition des réglages par l'IA : la demander, enregistrer la revue puis
+// relancer la carto (T026, T051, FR-008, SC-007). La logique est dans lib/reglages/proposition.ts (testée) ;
 // ici, Zod vérifie la forme de l'appel, on identifie l'appelant et on branche
 // la base. Next met en file et enregistre ce que l'humain a choisi ; il ne
 // décide rien sur le groupe (principe 7).
@@ -13,8 +13,9 @@ import { MESSAGES, type Resultat } from "@/lib/reglages/operations";
 import {
   LISTES_PROPOSEES,
   demanderPropositionAvec,
-  validerPropositionAvec,
+  enregistrerPropositionAvec,
 } from "@/lib/reglages/proposition";
+import { relancerApres } from "@/lib/reglages/relancer";
 import { utilisateurCourant } from "@/lib/session";
 import { creerClientAdmin } from "@/lib/supabase/admin";
 
@@ -61,20 +62,18 @@ export async function demanderProposition(entree: unknown): Promise<Resultat> {
   }
 }
 
-export async function validerProposition(entree: unknown): Promise<Resultat> {
+export async function enregistrerProposition(entree: unknown): Promise<Resultat> {
   const { supabase, user } = await utilisateurCourant();
   const revue = schemaRevue.safeParse(entree);
   if (!revue.success) return MAL_FORME;
+  const groupeId = revue.data.groupeId;
+
+  let resultat: Resultat;
   try {
-    const resultat = await validerPropositionAvec(
-      depotProposition(supabase, creerClientAdmin),
-      user.id,
-      revue.data,
-    );
-    if (resultat.statut === "ok") revalidatePath(`/groupes/${revue.data.groupeId}/reglages`);
-    return resultat;
+    resultat = await enregistrerPropositionAvec(depotProposition(supabase, creerClientAdmin), user.id, revue.data);
   } catch {
-    console.error("proposition : validation impossible");
+    console.error("proposition : enregistrement de la revue impossible");
     return { statut: "erreur", message: MESSAGES.base };
   }
+  return relancerApres(resultat, supabase, creerClientAdmin, groupeId);
 }

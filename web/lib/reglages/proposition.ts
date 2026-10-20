@@ -1,23 +1,25 @@
-// Proposition des réglages par l'IA : la demander, la revoir, valider ce qui
-// en sort (T026, FR-008, SC-007).
+// Proposition des réglages par l'IA : la demander, la revoir, enregistrer ce
+// qui en sort (T026, T051, FR-008, SC-007).
 //
 // L'IA propose dans le worker (travail `proposition`, T025) ; ici on ne
 // décide rien sur le groupe (principe 7). On met un travail en file, puis on
 // applique ce que le consultant a choisi pour chaque élément : accepter,
-// corriger ou rejeter, plus ses ajouts. La version qui en sort est validée
-// d'un coup, avec son nombre de corrections (SC-007) ; la proposition, elle,
-// n'est jamais validée telle quelle (migration 0004, principe 1).
+// corriger ou rejeter, plus ses ajouts. La version qui en sort est enregistrée
+// d'un coup, avec son nombre de corrections (SC-007), et s'applique à la carto
+// suivante sans validation (T051) ; la proposition, elle, ne sert jamais telle
+// quelle (migrations 0004 et 0007, principe 1).
 //
 // Une correction, c'est : un élément de l'IA rejeté, un élément de l'IA
 // corrigé dont la valeur ou la liste change, ou un élément ajouté. Accepter,
 // ou « corriger » sans rien changer, n'en est pas une.
 //
-// Éléments « déjà validés » (origine `validee`, principe 2) : la proposition
-// reprend ce que la dernière version validée contenait et que l'IA n'a pas
+// Éléments déjà enregistrés (origine `validee`, nom gardé du temps de la
+// validation ; principe 2) : la proposition
+// reprend ce que la dernière version enregistrée contenait et que l'IA n'a pas
 // reproposé (worker, `garder_validees`). Ils sont gardés par défaut. Les
 // rejeter ou les modifier n'est pas une correction de l'IA (décision du
 // 2026-10-08) : SC-007 mesure les erreurs de l'IA, pas les changements d'avis
-// sur un réglage déjà validé.
+// sur un réglage déjà enregistré.
 //
 // Logique testée sans base ni session (proposition.test.ts) ; le dépôt
 // Supabase est dans depot-proposition.ts.
@@ -147,7 +149,6 @@ export type VersionProposee = {
   origine: string;
   contenu: Reglages;
   proposition: unknown;
-  valideLe: string | null;
 };
 
 export type TravailProposition = {
@@ -169,9 +170,9 @@ export interface DepotProposition {
     groupeId: string;
     demandePar: string;
   }): Promise<"ok" | "erreur">;
-  /** Insère une version déjà validée, tirée d'une proposition ; "conflit" si
-   * ce numéro existe déjà. */
-  insererVersionValidee(ligne: {
+  /** Insère la version tirée d'une proposition revue ; "conflit" si ce
+   * numéro existe déjà. */
+  insererVersion(ligne: {
     groupeId: string;
     organisationId: string;
     version: number;
@@ -179,7 +180,6 @@ export interface DepotProposition {
     propositionId: string;
     corrections: number;
     par: string;
-    le: string;
   }): Promise<"ok" | "conflit" | "erreur">;
 }
 
@@ -245,17 +245,16 @@ export type EntreeRevue = {
   ajouts: Ajout[];
 };
 
-export async function validerPropositionAvec(
+export async function enregistrerPropositionAvec(
   depot: DepotProposition,
   userId: string,
   entree: EntreeRevue,
-  maintenant: () => Date = () => new Date(),
 ): Promise<Resultat & { corrections?: number }> {
   const groupe = await depot.lireGroupe(entree.groupeId);
   if (!groupe) return { statut: "erreur", message: MESSAGES.groupeIntrouvable };
 
   const derniere = await depot.derniereVersion(groupe.id);
-  if (!derniere || derniere.origine !== "proposition" || derniere.valideLe) {
+  if (!derniere || derniere.origine !== "proposition") {
     return { statut: "erreur", message: MESSAGES_PROPOSITION.pasDeProposition };
   }
   if (derniere.version !== entree.version) return { statut: "erreur", message: MESSAGES.versionChangee };
@@ -269,7 +268,7 @@ export async function validerPropositionAvec(
   if (!verdict.ok) return { statut: "erreur", message: verdict.erreurs.join(" ") };
 
   const numero = derniere.version + 1;
-  const insertion = await depot.insererVersionValidee({
+  const insertion = await depot.insererVersion({
     groupeId: groupe.id,
     organisationId: groupe.organisationId,
     version: numero,
@@ -277,7 +276,6 @@ export async function validerPropositionAvec(
     propositionId: derniere.id,
     corrections: revue.corrections,
     par: userId,
-    le: maintenant().toISOString(),
   });
   if (insertion === "conflit") return { statut: "erreur", message: MESSAGES.versionChangee };
   if (insertion === "erreur") return { statut: "erreur", message: MESSAGES.base };
@@ -286,6 +284,6 @@ export async function validerPropositionAvec(
     statut: "ok",
     version: numero,
     corrections: n,
-    message: `Version ${numero} validée, ${n === 0 ? "sans correction" : n === 1 ? "avec 1 correction" : `avec ${n} corrections`} de la proposition. Elle servira aux prochaines cartos.`,
+    message: `Version ${numero} enregistrée, ${n === 0 ? "sans correction" : n === 1 ? "avec 1 correction" : `avec ${n} corrections`} apportées à la proposition.`,
   };
 }

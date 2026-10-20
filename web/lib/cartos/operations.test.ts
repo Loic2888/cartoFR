@@ -22,14 +22,15 @@ function base(organisationDuLecteur: string, options: { echecTravail?: boolean; 
   const groupes = [
     { id: "g-a", organisationId: ORG_A },
     { id: "g-b", organisationId: ORG_B },
-    { id: "g-a-brouillon", organisationId: ORG_A },
+    { id: "g-a-proposition", organisationId: ORG_A },
   ];
   const reglages = [
-    { id: "r-a-1", groupeId: "g-a", version: 1, valide: true },
-    { id: "r-a-2", groupeId: "g-a", version: 2, valide: true },
-    { id: "r-a-3", groupeId: "g-a", version: 3, valide: false },
-    { id: "r-b-1", groupeId: "g-b", version: 1, valide: true },
-    { id: "r-ab-1", groupeId: "g-a-brouillon", version: 1, valide: false },
+    // T051 : une version enregistrée sert sans validation ; une proposition de l'IA, jamais.
+    { id: "r-a-1", groupeId: "g-a", version: 1, proposition: false },
+    { id: "r-a-2", groupeId: "g-a", version: 2, proposition: false },
+    { id: "r-a-3", groupeId: "g-a", version: 3, proposition: true },
+    { id: "r-b-1", groupeId: "g-b", version: 1, proposition: false },
+    { id: "r-ap-1", groupeId: "g-a-proposition", version: 1, proposition: true },
   ];
   const cartos: Carto[] = [];
   const travaux: Travail[] = [];
@@ -38,9 +39,9 @@ function base(organisationDuLecteur: string, options: { echecTravail?: boolean; 
     async lireGroupe(id) {
       return groupes.find((g) => g.id === id && g.organisationId === organisationDuLecteur) ?? null;
     },
-    async derniereVersionValidee(groupeId) {
+    async derniereVersion(groupeId) {
       const v = reglages
-        .filter((r) => r.groupeId === groupeId && r.valide)
+        .filter((r) => r.groupeId === groupeId && !r.proposition)
         .sort((a, b) => b.version - a.version)[0];
       return v ? { id: v.id, version: v.version } : null;
     },
@@ -80,7 +81,7 @@ function base(organisationDuLecteur: string, options: { echecTravail?: boolean; 
 }
 
 describe("lancerCartoAvec", () => {
-  it("lance sur la dernière version validée, dans l'organisation du groupe", async () => {
+  it("lance sur la dernière version enregistrée, dans l'organisation du groupe", async () => {
     const { depot, cartos, travaux } = base(ORG_A);
     const r = await lancerCartoAvec(depot, "g-a");
     expect(r).toEqual({ statut: "ok", cartoId: "c-1", message: MESSAGES.lancee });
@@ -89,7 +90,7 @@ describe("lancerCartoAvec", () => {
         id: "c-1",
         organisationId: ORG_A,
         groupeId: "g-a",
-        reglagesId: "r-a-2", // la v3 n'est pas validée
+        reglagesId: "r-a-2", // la v3 est une proposition de l'IA
         statut: "en_attente",
         travailId: 100,
       },
@@ -104,11 +105,11 @@ describe("lancerCartoAvec", () => {
     expect(travaux).toEqual([]);
   });
 
-  it("refuse sans version validée, en français", async () => {
+  it("refuse quand la seule version est une proposition de l'IA, en français", async () => {
     const { depot, cartos } = base(ORG_A);
-    expect(await lancerCartoAvec(depot, "g-a-brouillon")).toEqual({
+    expect(await lancerCartoAvec(depot, "g-a-proposition")).toEqual({
       statut: "erreur",
-      message: MESSAGES.aucuneVersionValidee,
+      message: MESSAGES.aucuneVersion,
     });
     expect(cartos).toEqual([]);
   });

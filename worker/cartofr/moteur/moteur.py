@@ -7,7 +7,8 @@ lit `registre.duckdb` en lecture seule.
 Usage :
     from cartofr.moteur import cartographier
     carto = cartographier(reglages, Path("data/registre.duckdb"))
-Entrées : les réglages d'un groupe (config/<groupe>.json, validés par un humain), le registre.
+Entrées : les réglages d'un groupe (config/<groupe>.json, ou une version des corrections saisie et
+versionnée dans l'app), le registre.
 Sortie : une `Carto` (modele.py).
 
 Ordre : l'ordre des indices compte (une société retenue plus tôt dans un tour peut en
@@ -298,7 +299,7 @@ class _Moteur:
         return out
 
     def add_organigramme(self) -> None:
-        """Organigramme public du groupe (liste des maisons, validée par un humain dans les réglages) :
+        """Organigramme public du groupe (liste des maisons, saisie par un humain dans les corrections) :
         pour chaque maison, la plus grande société active qui porte ce nom devient sa tête."""
         maisons = self.cfg.get("organigramme", [])
         if not maisons:

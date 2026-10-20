@@ -1,4 +1,4 @@
-// Enregistrer un brouillon de réglages, valider une version (T020, FR-005).
+// Enregistrer une version des corrections d'un groupe (T020, T051, FR-005).
 //
 // La logique de décision vit ici, séparée de actions.ts, pour être testée
 // sans base ni session (operations.test.ts, C2) : actions.ts ne fait que
@@ -6,11 +6,11 @@
 //
 // Règles :
 // - on lit le groupe avec la session de l'utilisateur (RLS) : un groupe d'une
-//   autre organisation est introuvable, donc ni brouillon ni validation ;
-// - un brouillon ne s'enregistre que sur la dernière version ouverte, et une
-//   validation ne porte que sur la dernière version, encore en brouillon (C2) ;
-// - chaque version porte son auteur ; la validation, son validateur et sa
-//   date (C4) ;
+//   autre organisation est introuvable, rien n'est enregistré ;
+// - une version ne s'enregistre que sur la dernière version ouverte (C2) ;
+// - aucune validation (principe 2 amendé le 2026-10-16, T051) : la version
+//   enregistrée s'applique à la carto suivante. Elle porte son auteur et sa
+//   date, et la base la fige (migration 0007) ;
 // - les familles exclues : le nom saisi devient une empreinte, ici, et n'est
 //   ni stocké, ni journalisé, ni renvoyé (garde-fou 6). Les empreintes déjà
 //   enregistrées viennent de la base, jamais du navigateur.
@@ -20,10 +20,9 @@ import { LISTES, type CleListe, type Reglages, validerReglages } from "./schema"
 export type Groupe = { id: string; organisationId: string; teteSiren: string; nom: string };
 
 export type Version = {
-  id: string;
   version: number;
+  origine: string;
   contenu: Reglages;
-  valideLe: string | null;
 };
 
 export interface Depot {
@@ -32,6 +31,8 @@ export interface Depot {
   lireGroupe(groupeId: string): Promise<Groupe | null>;
   /** La version de numéro le plus haut du groupe, ou null. */
   derniereVersion(groupeId: string): Promise<Version | null>;
+  /** La version enregistrée de numéro le plus haut (pas une proposition de l'IA), ou null. */
+  derniereEnregistree(groupeId: string): Promise<Version | null>;
   /** Insère une version ; "conflit" si ce numéro existe déjà (course). */
   insererVersion(ligne: {
     groupeId: string;
@@ -40,39 +41,23 @@ export interface Depot {
     contenu: Reglages;
     creePar: string;
   }): Promise<"ok" | "conflit" | "erreur">;
-  /** Pose valide_le et valide_par, seulement si la version n'est pas encore
-   * validée. Rend false si aucune ligne n'a changé. */
-  marquerValidee(versionId: string, validePar: string, valideLe: string): Promise<boolean | "erreur">;
 }
 
 export type Resultat = { statut: "ok"; version: number; message: string } | { statut: "erreur"; message: string };
 
 export const MESSAGES = {
   groupeIntrouvable: "Ce groupe n'existe pas, ou vous n'y avez pas accès.",
-  versionChangee: "Les réglages ont changé depuis votre ouverture : rechargez la page.",
-  dejaValidee: "Cette version est déjà validée.",
-  rienAValider: "Ce groupe n'a encore aucune version de réglages à valider.",
+  versionChangee: "Les corrections ont changé depuis votre ouverture : rechargez la page.",
   rienNaChange: "Rien n'a changé : aucune nouvelle version n'a été créée.",
   cleManquante:
     "Le serveur n'a pas de clé d'empreinte : impossible d'ajouter une famille exclue. Prévenez l'administrateur.",
   base: "L'enregistrement a échoué. Réessayez dans un instant, et si cela persiste, prévenez l'administrateur.",
 } as const;
 
-/** Un brouillon part de la version que l'utilisateur a ouverte : elle doit
+/** Une version part de la version que l'utilisateur a ouverte : elle doit
  * être encore la dernière (0 quand le groupe n'a aucune version). */
 export function peutEnregistrer(derniere: number | null, base: number): boolean {
   return (derniere ?? 0) === base;
-}
-
-/** Une validation porte sur la dernière version, si elle est en brouillon. */
-export function peutValider(
-  derniere: { version: number; valideLe: string | null } | null,
-  demandee: number,
-): "ok" | "pas_la_derniere" | "deja_validee" | "aucune" {
-  if (!derniere) return "aucune";
-  if (derniere.version !== demandee) return "pas_la_derniere";
-  if (derniere.valideLe) return "deja_validee";
-  return "ok";
 }
 
 /** Une liste saisie dans un champ texte, une valeur par ligne : blancs des
@@ -135,7 +120,7 @@ function normaliserPourComparer(contenu: unknown): Record<string, unknown> {
   return sortie;
 }
 
-export async function enregistrerBrouillonAvec(
+export async function enregistrerVersionAvec(
   depot: Depot,
   userId: string,
   saisie: Saisie,
@@ -149,10 +134,15 @@ export async function enregistrerBrouillonAvec(
     return { statut: "erreur", message: MESSAGES.versionChangee };
   }
 
+  // Une proposition de l'IA en attente de revue ne sert pas de point de départ : l'éditeur part
+  // de la dernière version enregistrée (principe 1). Sinon, une ligne changée dans l'éditeur
+  // enregistrerait toute la proposition sans revue.
+  const enVigueur = derniere?.origine === "proposition" ? await depot.derniereEnregistree(groupe.id) : derniere;
+
   const construit = construireContenu(
     groupe,
     saisie,
-    derniere?.contenu.familles_exclues_empreintes ?? [],
+    enVigueur?.contenu.familles_exclues_empreintes ?? [],
     cle,
   );
   if (!construit.ok) return { statut: "erreur", message: construit.message };
@@ -160,7 +150,7 @@ export async function enregistrerBrouillonAvec(
   const verdict = validerReglages(construit.contenu);
   if (!verdict.ok) return { statut: "erreur", message: verdict.erreurs.join(" ") };
 
-  if (derniere && memeContenu(derniere.contenu, verdict.reglages)) {
+  if (enVigueur && memeContenu(enVigueur.contenu, verdict.reglages)) {
     return { statut: "erreur", message: MESSAGES.rienNaChange };
   }
 
@@ -179,37 +169,6 @@ export async function enregistrerBrouillonAvec(
   return {
     statut: "ok",
     version: numero,
-    message: `Version ${numero} enregistrée en brouillon. Validez-la pour qu'elle serve aux cartos.`,
-  };
-}
-
-export async function validerAvec(
-  depot: Depot,
-  userId: string,
-  entree: { groupeId: string; version: number },
-  maintenant: () => Date = () => new Date(),
-): Promise<Resultat> {
-  const groupe = await depot.lireGroupe(entree.groupeId);
-  if (!groupe) return { statut: "erreur", message: MESSAGES.groupeIntrouvable };
-
-  const derniere = await depot.derniereVersion(groupe.id);
-  const decision = peutValider(derniere, entree.version);
-  if (decision === "aucune") return { statut: "erreur", message: MESSAGES.rienAValider };
-  if (decision === "pas_la_derniere") return { statut: "erreur", message: MESSAGES.versionChangee };
-  if (decision === "deja_validee") return { statut: "erreur", message: MESSAGES.dejaValidee };
-
-  // Le contenu est revérifié avant validation : une version mal formée ne
-  // doit jamais servir au moteur.
-  const verdict = validerReglages(derniere!.contenu);
-  if (!verdict.ok) return { statut: "erreur", message: verdict.erreurs.join(" ") };
-
-  const marque = await depot.marquerValidee(derniere!.id, userId, maintenant().toISOString());
-  if (marque === "erreur") return { statut: "erreur", message: MESSAGES.base };
-  // Aucune ligne changée : validée entre-temps par quelqu'un d'autre.
-  if (!marque) return { statut: "erreur", message: MESSAGES.dejaValidee };
-  return {
-    statut: "ok",
-    version: entree.version,
-    message: `Version ${entree.version} validée : elle servira aux prochaines cartos.`,
+    message: `Version ${numero} des corrections enregistrée.`,
   };
 }

@@ -18,7 +18,7 @@ type Props = {
   groupeId: string;
   /** Raison pour laquelle on ne peut pas lancer, déjà en français ; null si on peut. */
   empechement: string | null;
-  /** Lien vers les réglages, montré quand aucune version n'est validée. */
+  /** Lien vers les corrections, montré quand aucune version n'est enregistrée. */
   lienReglages: React.ReactNode;
   /** Une carto du groupe tourne : la page se rafraîchit. */
   actif: boolean;

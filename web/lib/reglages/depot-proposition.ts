@@ -39,7 +39,7 @@ export function depotProposition(utilisateur: ClientUtilisateur, admin: () => Cl
     async derniereVersion(groupeId) {
       const { data, error } = await utilisateur
         .from("reglages")
-        .select("id, version, origine, contenu, proposition, valide_le")
+        .select("id, version, origine, contenu, proposition")
         .eq("groupe_id", groupeId)
         .order("version", { ascending: false })
         .limit(1)
@@ -55,7 +55,6 @@ export function depotProposition(utilisateur: ClientUtilisateur, admin: () => Cl
         origine: data.origine as string,
         contenu: data.contenu as Reglages,
         proposition: data.proposition as unknown,
-        valideLe: (data.valide_le as string | null) ?? null,
       };
     },
 
@@ -76,7 +75,7 @@ export function depotProposition(utilisateur: ClientUtilisateur, admin: () => Cl
       return "erreur";
     },
 
-    async insererVersionValidee(ligne) {
+    async insererVersion(ligne) {
       const { error } = await admin().from("reglages").insert({
         groupe_id: ligne.groupeId,
         organisation_id: ligne.organisationId,
@@ -86,13 +85,11 @@ export function depotProposition(utilisateur: ClientUtilisateur, admin: () => Cl
         proposition_id: ligne.propositionId,
         corrections: ligne.corrections,
         cree_par: ligne.par,
-        valide_le: ligne.le,
-        valide_par: ligne.par,
       });
       if (!error) return "ok";
       if (error.code === UNICITE) return "conflit";
       // Le code seulement : jamais le contenu.
-      console.error("proposition : insertion de la version validée impossible", { code: error.code });
+      console.error("proposition : insertion de la version revue impossible", { code: error.code });
       return "erreur";
     },
   };

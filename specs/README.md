@@ -119,8 +119,8 @@ Ouverte le 2026-10-16, après la révision de `PRD.md` (US7, US2 réécrite, US8
 - [ ] `T049` — Ranger les groupes mutualistes sans mêler leurs fédérations *(après T048 ; préalable : le DEU de CMAF déposé par Loïc)*
 - [x] `T050` [P] — Lire la carto du groupe d'une société, sans attendre de calcul *(mergée le 2026-10-19 ; C2 page et C4 à vérifier quand la pile tourne)*
 - [x] `T052` [P] — Mesurer la carto du pays : justesse sans correction, fraîcheur, couverture *(mergée le 2026-10-19 ; groupes cotés à mesurer quand la liste sera là)*
-- [ ] `T051` — Corriger la carto d'un groupe sans étape de validation, et en montrer l'effet *(P2, après T050)*
-- [ ] `T053` — Retrouver 90 % de LVMH sans correction *(après T052)*
+- [x] `T051` — Corriger la carto d'un groupe sans étape de validation, et en montrer l'effet *(P2, après T050 ; 2026-10-19)*
+- [x] `T053` — Retrouver 90 % de LVMH sans correction *(mergée le 2026-10-19, #63 : 158/172)*
 
 En parallèle, hors code : Loïc cherche et dépose les documents des groupes cotés à Paris (SC-008), dès que T046 est là.
 

@@ -13,7 +13,7 @@ const LIEN =
 
 const nombre = (n: number) => n.toLocaleString("fr-FR");
 
-/** Une carto du groupe faite par l'organisation, avec ses propres réglages. */
+/** Une carto du groupe faite par l'organisation, avec ses corrections. */
 export type Correction = { groupeId: string; cartoId: string } | null;
 
 export function nomAffiche(c: { siren: string; nom: string | null }): string {
@@ -71,7 +71,7 @@ export function EnTete({ carto, correction }: { carto: CartoPays; correction: Co
 
       {correction ? (
         <p className="text-sm">
-          Votre organisation a aussi une carto corrigée de cette société, avec ses propres réglages.{" "}
+          Votre organisation a aussi une carto corrigée de cette société.{" "}
           <Link href={`/groupes/${correction.groupeId}/cartos/${correction.cartoId}`} className={LIEN}>
             Voir la carto corrigée
           </Link>
