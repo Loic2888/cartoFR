@@ -713,3 +713,87 @@ Mesure du jour (`worker/scripts/mesure_corrections.py`) : les réglages de `conf
 - Durée : deux passages du moteur, mais la correspondance du document au registre n'est faite qu'une fois. Moins de 5 min (SC-004).
 - Le moteur n'est pas modifié par T051 (seul le travail `carto` change) : la non-régression n'a pas été relancée.
 - Revue adverse du jour, corrigé aussi : texte exporté « réglages validés » dans l'export skill, devenu « corrections du groupe » ; bloc « enregistrer puis relancer » dédoublé dans une fonction ; un échec de relance est journalisé (nom de classe seulement) ; test C5 (aucun « valider » à l'écran) étendu aux messages renvoyés par la logique.
+
+## 2026-10-20
+
+### Groupes mutualistes : la mesure (T049, C1)
+
+Le DEU de CMAF a été trouvé sans contournement : la base BDIF de l'AMF publie le paquet ESEF officiel (DEU 2025, D.26-0233, déposé le 08/04/2026, 30 Mo, dont un xhtml de 96 Mo). Il est rangé hors git dans `out/perimetre/cmaf-deu-2025-esef.zip`. Le site investisseurs de la BFCM répond toujours 403 au PDF.
+
+**Ce que dit le DEU.** La note 3a liste les entités de la « société mère » : la Caisse fédérale de Crédit Mutuel, 14 fédérations (Centre Est Europe, Sud-Est, Île-de-France, Savoie-Mont Blanc, Midi-Atlantique, Loire-Atlantique Centre Ouest, Centre, Dauphiné-Vivarais, Méditerranée, Normandie, Anjou, Massif Central, Antilles-Guyane, Nord Europe), leurs caisses régionales et leurs caisses locales. Puis un tableau de 191 sociétés (nom, pays, % de contrôle, % d'intérêt, méthode IG/ME), dont 133 en France.
+
+**Trois erreurs dans la référence Basile.** Elle compte dans CMAF la caisse fédérale de Maine-Anjou et Basse-Normandie, celle d'Océan et la Confédération nationale. Aucune n'est dans CMAF d'après le DEU. Sur 52 sociétés, 49 sont justes. La cible de SC-001 (43/52) ne change pas.
+
+**Pourquoi le registre mêle les fédérations.** Le registre n'a aucun lien de la caisse fédérale de CMAF vers BFCM. Le seul mandat sur BFCM, hors commissaires aux comptes, est celui d'administrateur de la caisse fédérale de Maine-Anjou : l'arbre (T045) range donc BFCM, le CIC et leurs filiales sous Maine-Anjou (604 sociétés). De même, ACM Vie SA et ses SCI sont rangées sous Océan. Les caisses locales (1 721 actives au registre) n'ont aucune mère. Elles sont « membre » (rôle 11) de GIE :
+
+| GIE | Caisses membres | Départements les plus nombreux |
+|---|---|---|
+| Centre de Conseil et de Service (CCS), dans le DEU, dont la caisse fédérale de CMAF est membre | 1 411 | 67, 85, 44, 59, 57, 68 |
+| Federal Service (Arkéa) | 190 | 29, 33, 56, 35, 16 |
+| Inter-Mutuel Services (Maine-Anjou et Basse-Normandie) | 79 ; parmi ses membres, 84 le sont aussi de CCS et 5 non | 53, 50, 72, 61 |
+| SIREN 321251084, sans siège actif (Normandie) | 48 | 76, 14, 27 |
+| SCI Union Immobilière Océan (associées, rôle 75) | 44 | 85, 79, 17 |
+
+**Mesure** (`worker/scripts/mesure_mutualiste.py`, registre du 2026-03-04, référence de 52 SIREN). « Hors CMAF » : caisses membres du GIE d'une autre fédération, caisses au nom d'une autre fédération, et sociétés sous une caisse fédérale hors CMAF par un rôle fort (un mandat d'administrateur seul ne compte pas, sinon BFCM serait « hors CMAF »).
+
+| Piste | Retrouvées | En plus | Caisses | Hors CMAF |
+|---|---|---|---|---|
+| 0. Tête seule, sans document (la carto du pays d'aujourd'hui) | 1/52 | 6 | 1 | 0 |
+| A. Tête seule + DEU (note 3 lue par T042, moteur de T043) | **39/52** | 525 | 2 | **0** |
+| B1. Caisse fédérale, et ce dont elle est mandataire, de proche en proche | 6/52 | 19 | 1 | 1 |
+| B2. Caisse fédérale + caisses membres du même GIE (CCS) | 5/52 | 1 406 | 1 411 | 128 |
+| B3. B2 sans les caisses membres d'un autre GIE | 3/52 | 1 278 | 1 281 | 0 repéré |
+| C. Nom d'une fédération de CMAF dans la dénomination | 3/52 | 26 | 29 | 4 |
+| A + B3 | 40/52 | 1 803 | 1 281 | 0 repéré |
+
+Lecture :
+- **Le document fait presque tout** : 39/52 (40/49 sur les sociétés justes), sans aucune société d'une autre fédération. Avec lui, BFCM, le CIC et ACM Vie SA quittent les arbres de Maine-Anjou et d'Océan par le départage de T047 (le document l'emporte sur l'arbre).
+- Pour le mesurer sans toucher au code de T042, la note 3 est réécrite au format VINCI. Le dépôt dans l'app refuserait le xhtml (plus de 50 Mo) et l'extraction ne connaît pas ce format de tableau.
+- Les 9 sociétés justes manquées par A : 7 lignes du DEU que la correspondance rate (« Banque Transatlantique (BT) », « CIC Nord Ouest » contre « BANQUE CIC NORD OUEST », « CCLS Leasing Solutions » contre « CM-CIC LEASING SOLUTIONS », « L'Est Républicain » contre « SOCIETE DU JOURNAL L'EST REPUBLICAIN », « ACM Vie, Société d'Assurance Mutuelle », Lyf SAS, Sofinaction) ; la Fédération du Crédit Mutuel et l'association Crédit Mutuel Alliance Fédérale, que la note 3a nomme mais que le tableau ne liste pas.
+- Les « en plus » de A : 49 sociétés inscrites au DEU, et 476 entrées par les règles du registre, dont 336 par l'adresse du groupe (fonds et véhicules domiciliés au siège de Strasbourg : Goodman France, GELF France Holding…). Non vérifiées une à une.
+- **Les caisses locales ne se rangent pas proprement par le registre seul.** Le GIE CCS les réunit presque toutes (1 411, pour environ 1 414 attendues), mais des caisses d'autres groupes en sont aussi membres. B3 en retire 128 (membres d'Inter-Mutuel Services, au nom d'une autre fédération, ou sous une caisse fédérale hors CMAF). Il en reste environ 112 de Vendée, Charente-Maritime et Deux-Sèvres, le territoire d'Océan, qui n'ont pas de GIE propre (44 seulement sont associées de la SCI Union Immobilière Océan). B3 garde donc encore une centaine de caisses d'Océan. Le nom de la caisse ne nomme presque jamais sa fédération (piste C : 29 caisses sur 1 721).
+- La référence n'a aucune caisse locale (une ligne agrégée, sans SIREN) : les caisses ne changent pas le score de SC-001.
+
+Décisions de Loïc du jour : le DEU entre au format ESEF de l'AMF ; les caisses locales sont rangées par le GIE de la caisse fédérale, avec une table des territoires (ci-dessous).
+
+### Groupes mutualistes : la règle (T049)
+
+**Le document.** `texte_document` lit un paquet ESEF de l'AMF (.zip, ou le .xhtml seul jusqu'à 300 Mo) : une ligne par rangée de tableau, cellules séparées par « | ». Nouveau format d'extraction, la note de périmètre d'un DEU : « <nom> | <pays> | <% contrôle> | <% intérêt> | <méthode> », puis l'exercice d'avant, ignoré. Ne sont pas lues : une société sortie (colonnes vides), fusionnée (FU) ou une succursale. Candidats : le nom, le nom sans son sigle entre parenthèses, le nom sans sa forme juridique en toutes lettres (« ACM Vie, Société d'Assurance Mutuelle »). De secours, cherchés parmi les **sigles** de SIRENE : le nom (« CIC Est », sigle de BANQUE CIC EST), le nom suivi de sa forme abrégée (« ACM Vie SAM »), le sigle entre parenthèses s'il a 3 caractères au moins. Les formats VINCI et LVMH n'ont jamais de candidat de sigle : leurs résultats ne changent pas.
+
+Sur le DEU 2025 de CMAF : 239 lignes en France (le tableau de CMAF, puis celui de BFCM), 158 retrouvées au dépôt, contre 70 avec la réécriture au format VINCI de la mesure du matin.
+
+**Les caisses locales** (`cartofr.pays.mutualiste`, étape 4 du calcul du pays, avant le départage). Pour un groupe à document dont la tête est une caisse de Crédit Mutuel :
+1. ses GIE : les GIE actifs dont la tête est membre et qui comptent plus de 20 caisses. Un GIE fermé ne compte pas (celui des caisses de Normandie aurait exclu 50 caisses de CMAF) ;
+2. une caisse membre de plusieurs GIE va au plus petit : les caisses de Maine-Anjou (CCS, 1 411 caisses, et Inter-Mutuel Services, 79) ne vont pas à CMAF ;
+3. territoires (table fixe dans le code : Océan 85, 17, et 79 partagé ; Maine-Anjou et Basse-Normandie 53, 72, 50, 61 ; Bretagne 29, 22, 56, 35 ; Sud-Ouest 33, 24, 16, et 47 partagé). Une tête de la table ne garde que les caisses de son territoire et de celui des fédérations que son document nomme. Pour une autre tête (CMAF), on retire les caisses des fédérations de la table que le document ne nomme pas (note 3a).
+Chaque caisse a la tête pour mère, confiance B, preuve « Caisse membre du GIE CENTRE DE CONSEIL ET DE SERVICE -CCS (504514555), comme la caisse fédérale ». Le groupe est marqué `mutualiste` dans `pays_groupes`.
+
+**Mesure** (`non_regression.py --depuis-pays`, `pays.duckdb` recalculé avec le DEU déposé) :
+
+| | Avant | Après |
+|---|---|---|
+| CMAF sans correction | 1/52 | **43/52** (83 %), 42 sur les 49 sociétés justes |
+| LVMH sans correction | 158/172, 75 en plus | 158/172, 75 en plus |
+| VINCI sans correction | 836/1 007, 624 en plus | 836/1 007, 624 en plus |
+
+- CMAF compte 1 800 sociétés : 1 229 caisses locales, 54 sociétés inscrites hors référence, 421 entrées par un mandat fort sous une société du groupe, le reste par l'adresse ou deux indices. Au registre réel, la règle ne retient aucune caisse de Vendée, de Charente-Maritime, de Mayenne, de Sarthe, de la Manche ni de l'Orne. Elle en garde 19 des Deux-Sèvres, département partagé avec Océan : une partie est sans doute à Océan.
+- Encore manquées : Fédération du Crédit Mutuel et association Crédit Mutuel Alliance Fédérale (aucun lien au registre, et le moteur écarte les associations) ; Sofinaction (absente du tableau) ; CM-CIC Leasing Solutions (« CCLS Leasing Solutions ») ; Société du journal L'Est Républicain (« L'Est Républicain ») ; Lyf SAS (mise en équivalence, n'entre pas par la règle de T043).
+- Calcul du pays : 114 à 238 s selon la charge de la machine, contre 114 s la veille. La lecture du xhtml de 96 Mo prend environ 7 s.
+- La non-régression du moteur avec les réglages de `config/` n'a pas été relancée : le moteur n'est pas modifié, et la correspondance ne change que pour les candidats de sigle.
+
+**Revue adverse du jour.** Corrigé :
+- la caisse fédérale d'Océan ou de Maine-Anjou, membre aussi de CCS, aurait pris les ~1 250 caisses de CMAF dès son premier document (plus petit SIREN au départage) : d'où la limite au territoire de la tête (règle 3). Test : CF2, de plus petit SIREN, membre du GIE de CF ;
+- un document sans liste des fédérations retirait à une tête de la table sa propre fédération, hors de son département (Arkéa : 47 caisses au lieu de 189) ;
+- la taille passée au départage comptait les caisses : un groupe mutualiste aurait gagné les égalités de la règle 4 de T047 ;
+- motifs de la table bornés au mot (« Océanie » n'est pas « Océan ») ;
+- zip chiffré ou compressé autrement : refus en français au lieu d'une trace d'erreur ;
+- xhtml seul refusé au-delà de 50 Mo, contrairement à la docstring ;
+- rangée à cellule vide en tête, appel de note (« IG (1) ») ou « % » : ignorées sans signal. Une cellule vide au milieu reste, pour qu'une société sortie ne soit pas lue avec l'exercice d'avant ;
+- le sigle de secours « LB » (2 lettres) donnait 106 homonymes : 3 caractères au moins.
+
+Gardés tels quels, notés :
+- « SCI ACM » et « ACM GIE » retiennent toutes deux la société ACM (440536555) : `cle` retire SCI et GIE, donc pas de conflit. Comparer le texte des lignes ferait des faux conflits, car le DEU liste deux fois les mêmes sociétés (tableaux de CMAF et de BFCM) ;
+- 23 sociétés de l'arbre, sous 9 caisses de CMAF, forment leurs propres groupes : la règle du 2026-10-18 (une société dont la mère est prise par un groupe à document est la tête de son groupe) s'applique aussi aux caisses ;
+- la règle n'est pas étendue à BPCE, au Crédit Agricole ni à Groupama : elle repose sur les GIE et la table des fédérations du Crédit Mutuel. Aucun de ces groupes n'a de document déposé. À mesurer quand leurs DEU le seront.
+
+Tests : `worker/tests/perimetre/test_esef.py` (23) et `worker/tests/pays/test_mutualiste.py` (15), sur des documents et mini-registres inventés. Suite worker : 758 réussis, 142 sautés (sans Postgres).

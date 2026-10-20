@@ -74,6 +74,8 @@ class _Societe:
     diffusion_commerciale: bool
     active: bool
     commune: str = "PARIS"
+    cp: str = "75000"
+    sigle: str | None = None
 
 
 @dataclass
@@ -97,11 +99,13 @@ class MiniRegistre:
         diffusion_commerciale: bool = True,
         active: bool = True,
         commune: str = "PARIS",
+        cp: str = "75000",
+        sigle: str | None = None,
     ) -> str:
         """Ajoute une société ; par défaut une SAS de 10 à 19 salariés, seule à son adresse, à Paris."""
         self.societes.append(
             _Societe(siren, nom, cj, naf, tranche, adresse or f"{siren} RUE INVENTEE 75000", salaries,
-                     diffusion_commerciale, active, commune)
+                     diffusion_commerciale, active, commune, cp, sigle)
         )  # fmt: skip
         return siren
 
@@ -134,13 +138,23 @@ class MiniRegistre:
                 etat = "A" if s.active else "C"
                 if s.active:
                     con.execute(
-                        "insert into sieges values (?, ?, '1', 'RUE', 'INVENTEE', '75000', ?, ?, ?, ?, ?, ?)",
-                        [s.siren, s.siren + "00011", s.commune, s.adresse, s.nom, s.cj, s.naf, s.tranche],
+                        "insert into sieges values (?, ?, '1', 'RUE', 'INVENTEE', ?, ?, ?, ?, ?, ?, ?)",
+                        [
+                            s.siren,
+                            s.siren + "00011",
+                            s.cp,
+                            s.commune,
+                            s.adresse,
+                            s.nom,
+                            s.cj,
+                            s.naf,
+                            s.tranche,
+                        ],
                     )
                 con.execute(
-                    "insert into unites_legales (siren, denomination, categorie_juridique, naf,"
-                    " tranche_effectifs, etat_administratif, debut) values (?, ?, ?, ?, ?, ?, ?)",
-                    [s.siren, s.nom, s.cj, s.naf, s.tranche, etat, DEBUT],
+                    "insert into unites_legales (siren, denomination, sigle, categorie_juridique, naf,"
+                    " tranche_effectifs, etat_administratif, debut) values (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [s.siren, s.nom, s.sigle, s.cj, s.naf, s.tranche, etat, DEBUT],
                 )
                 con.execute(
                     "insert into societes (siren, denomination, diffusion_commerciale,"

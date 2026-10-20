@@ -13,7 +13,14 @@ from cartofr.perimetre.correspondance import (
     correspondre_plusieurs,
     descendants,
 )
-from cartofr.perimetre.extraction import Candidat, LignePerimetre, PerimetrePublie, extraire, texte_document
+from cartofr.perimetre.extraction import (
+    Candidat,
+    LignePerimetre,
+    PerimetrePublie,
+    extraire,
+    passage_federations,
+    texte_document,
+)
 
 __all__ = [
     "Candidat",
@@ -25,5 +32,6 @@ __all__ = [
     "correspondre_plusieurs",
     "descendants",
     "extraire",
+    "passage_federations",
     "texte_document",
 ]

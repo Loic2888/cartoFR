@@ -16,7 +16,9 @@ y compte les sociétés rangées, `fermes` les groupes.
 3. le moteur, tête seule + périmètre, pour chaque groupe à document. Un document illisible, ou un
    groupe dont la tête n'est pas une société active, est compté en échec : ses sociétés restent
    dans les arbres ;
-4. *(traitement mutualiste : T049)* ;
+4. les groupes mutualistes (T049, `pays.mutualiste`) : un groupe à document dont la tête est une
+   caisse de Crédit Mutuel reçoit ses caisses locales, membres du GIE de sa caisse fédérale, sans
+   celles d'une autre fédération. Elles passent ensuite par le départage comme ses autres sociétés ;
 5. le départage entre groupes à document (T047). Les sociétés qu'aucun groupe à document ne garde
    forment les groupes des arbres, sans passer par le moteur : preuve « Mandat au registre :
    <rôle> », confiance A. Un arbre non réclamé perd toujours (règle 2 de T047) : il n'a donc pas
@@ -58,6 +60,7 @@ import pyarrow as pa
 from cartofr.moteur import cartographier
 from cartofr.moteur.modele import Carto, Confiance, Societe
 from cartofr.moteur.moteur import ROLE_LABEL, ciblable_par_fiche, date_des_donnees, ouvrir_registre
+from cartofr.pays import mutualiste
 from cartofr.pays.departage import Groupe, Maniere, Reclamation, departager
 from cartofr.pays.schema import DDL
 from cartofr.perimetre import (
@@ -66,6 +69,7 @@ from cartofr.perimetre import (
     PerimetrePublie,
     correspondre_plusieurs,
     extraire,
+    passage_federations,
     texte_document,
 )
 from cartofr.registre import arbre, journal
@@ -141,6 +145,12 @@ class _GroupeDocument:
     fichier: str
     carto: Carto
     inscrites: dict[str, float]  # SIREN inscrit en intégration globale -> taux le plus haut
+    passage: str = ""  # la liste des fédérations lue dans le document (groupes mutualistes, T049)
+    caisses: int = 0  # caisses locales ajoutées à l'étape 4 (groupes mutualistes, T049)
+
+    @property
+    def mutualiste(self) -> bool:
+        return self.caisses > 0
 
 
 def reglages_tete_seule(tete: str, nom: str | None) -> dict[str, Any]:
@@ -172,17 +182,19 @@ def documents_en_vigueur(con: duckdb.DuckDBPyConnection) -> list[tuple[str, str]
 
 def _lire_documents(
     documents: Sequence[tuple[str, str]], dossier: Path
-) -> tuple[list[tuple[str, str, list[LignePerimetre]]], int]:
-    """Les lignes de chaque document lisible, et le nombre de documents illisibles."""
+) -> tuple[list[tuple[str, str, list[LignePerimetre], str]], int]:
+    """Les lignes de chaque document lisible et sa liste des fédérations, et le nombre de documents
+    illisibles."""
     lus, echecs = [], 0
     for tete, fichier in documents:
         try:
-            lignes = extraire(texte_document(dossier / fichier))
+            texte = texte_document(dossier / fichier)
+            lignes = extraire(texte)
         except Exception as exc:  # pypdf lève bien plus que PyPdfError sur un fichier abîmé
             log.warning("pays : document illisible (%s)", type(exc).__name__)
             echecs += 1
             continue
-        lus.append((tete, fichier, lignes))
+        lus.append((tete, fichier, lignes, passage_federations(texte)))
     return lus, echecs
 
 
@@ -203,22 +215,23 @@ def groupes_a_document(
     vigueur et le nombre en échec."""
     documents = documents_en_vigueur(con)
     lus, echecs = _lire_documents(documents, dossier_documents)
-    actives = _actives(con, (t for t, _, _ in lus))
+    actives = _actives(con, (t for t, _, _, _ in lus))
     retenus = []
-    for tete, fichier, lignes in lus:
+    for tete, fichier, lignes, passage in lus:
         if tete in actives:
-            retenus.append((tete, fichier, lignes))
+            retenus.append((tete, fichier, lignes, passage))
         else:
             log.warning("pays : tête de document sans siège actif, groupe ignoré")
             echecs += 1
     if not retenus:
         return [], len(documents), echecs
+    tetes = [t for t, _, _, _ in retenus]
     noms = dict(con.execute(
-        "select siren, nom from sieges where siren in (select unnest($s))", {"s": [t for t, _, _ in retenus]}
+        "select siren, nom from sieges where siren in (select unnest($s))", {"s": tetes}
     ).fetchall())  # fmt: skip
-    resultats = correspondre_plusieurs(con, [(t, li) for t, _, li in retenus])
+    resultats = correspondre_plusieurs(con, [(t, li) for t, _, li, _ in retenus])
     groupes = []
-    for (tete, fichier, lignes), res in zip(retenus, resultats, strict=True):
+    for (tete, fichier, lignes, passage), res in zip(retenus, resultats, strict=True):
         try:
             carto = cartographier(
                 reglages_tete_seule(tete, noms.get(tete)),
@@ -230,8 +243,48 @@ def groupes_a_document(
             log.error("pays : moteur en échec pour un groupe (%s)", type(exc).__name__)
             echecs += 1
             continue
-        groupes.append(_GroupeDocument(tete, fichier, carto, _taux_integration_globale(res, tete)))
+        groupes.append(_GroupeDocument(tete, fichier, carto, _taux_integration_globale(res, tete), passage))
     return groupes, len(documents), echecs
+
+
+_FICHE_CAISSE = """
+select s.siren, s.siret_siege, s.nom, s.cj, s.naf, s.tranche, o.salaries, o.opposition_prospection,
+       o.non_diffusible, s.adresse_cle, s.commune
+  from sieges s left join societes o on o.siren = s.siren
+ where s.siren in (select unnest($s))
+"""
+
+
+def avec_caisses(con: duckdb.DuckDBPyConnection, groupes: Sequence[_GroupeDocument]) -> list[_GroupeDocument]:
+    """Étape 4 : chaque groupe dont la tête est une caisse de Crédit Mutuel reçoit ses caisses
+    locales (`pays.mutualiste`), sous la tête, sauf celles que sa carto a déjà."""
+    sortie = []
+    for g in groupes:
+        dans = {s.siren for s in g.carto.societes}
+        trouvees = [c for c in mutualiste.caisses(con, g.tete, g.passage) if c.siren not in dans]
+        if not trouvees:
+            sortie.append(g)
+            continue
+        tete = next(s for s in g.carto.societes if s.siren == g.tete)
+        fiches = {r[0]: r for r in con.execute(_FICHE_CAISSE, {"s": [c.siren for c in trouvees]}).fetchall()}
+        ajout = []
+        for c in trouvees:
+            fiche = fiches[c.siren]
+            _, siret, nom, cj, naf, tranche, salaries, opposition, non_diffusible, adresse, commune = fiche
+            ciblable, raison_ciblable = ciblable_par_fiche(cj, naf, tranche, salaries)
+            ajout.append(Societe(
+                siren=c.siren, nom=nom, niveau=1, siret_siege=siret, maison_mere_siren=g.tete,
+                maison_mere_nom=tete.nom, preuve=c.preuve, confiance="B",
+                pourquoi_dans_le_groupe="Caisse locale de la fédération (groupe mutualiste)",
+                indices=("mutualiste",), ciblable=ciblable, raison_ciblable=raison_ciblable, naf=naf,
+                forme_juridique=None if cj is None else str(cj), tranche_effectif=tranche,
+                salaries_rne=salaries, opposition_prospection=bool(opposition),
+                non_diffusible=non_diffusible, adresse_siege=adresse, commune=commune,
+                compte_de_rattachement=c.siren if ciblable else tete.compte_de_rattachement,
+            ))  # fmt: skip
+        carto = replace(g.carto, societes=(*g.carto.societes, *ajout))
+        sortie.append(replace(g, carto=carto, caisses=len(ajout)))
+    return sortie
 
 
 # --- Groupes à document -------------------------------------------------------------------------
@@ -254,7 +307,9 @@ def _lignes_documents(groupes: Sequence[_GroupeDocument]) -> tuple[list[Ligne], 
     reclamations = _reclamations(groupes)
     tetes = {g.tete for g in groupes}
     descriptions = [
-        Groupe(g.tete, len(g.carto.societes), frozenset(set(g.inscrites) & (tetes - {g.tete})))
+        # La taille sans les caisses locales : 1 200 caisses ne doivent pas faire gagner à un groupe
+        # mutualiste les égalités de la règle 4 du départage (revue adverse T049).
+        Groupe(g.tete, len(g.carto.societes) - g.caisses, frozenset(set(g.inscrites) & (tetes - {g.tete})))
         for g in groupes
     ]
     resultat = departager(reclamations, descriptions)
@@ -405,6 +460,7 @@ def ranger(con: duckdb.DuckDBPyConnection, registre: Path, dossier_documents: Pa
     """Étapes 2 à 5, sur un registre ouvert en lecture (l'arbre doit être à jour)."""
     date_donnees = date_des_donnees(con)
     groupes_doc, documents, echecs = groupes_a_document(con, registre, dossier_documents)
+    groupes_doc = avec_caisses(con, groupes_doc)
     lignes_doc, parent_de = _lignes_documents(groupes_doc) if groupes_doc else ([], {})
     lignes_doc = _niveaux(lignes_doc)
     pris = {li.siren for li in lignes_doc}
@@ -416,7 +472,7 @@ def ranger(con: duckdb.DuckDBPyConnection, registre: Path, dossier_documents: Pa
     tetes_doc = {g.tete for g in groupes_doc}
     groupes = [
         LigneGroupe(tete=g.tete, nom=noms.get(g.tete), taille=taille[g.tete], document=g.fichier,
-                    mutualiste=False, parent=parent_de.get(g.tete), date_donnees=date_donnees)
+                    mutualiste=g.mutualiste, parent=parent_de.get(g.tete), date_donnees=date_donnees)
         for g in groupes_doc
     ] + [
         LigneGroupe(tete=t, nom=noms.get(t), taille=n, document=None, mutualiste=False, parent=None,
