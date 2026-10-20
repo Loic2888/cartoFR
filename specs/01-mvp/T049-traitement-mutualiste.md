@@ -30,12 +30,19 @@ Mesure du 2026-10-15 : les arbres du Crédit Mutuel mêlent plusieurs fédérati
 | P5 Pas de régression silencieuse | ⚠️ | LVMH et VINCI inchangés dans `pays.duckdb` (C3) |
 
 ## Critères de succès
-- [ ] **C1** : `rapport.md` donne la mesure : pour chaque piste essayée, sociétés de la référence CMAF retrouvées, « en plus », et sociétés d'autres fédérations entrées à tort
-- [ ] **C2** : la règle retenue est testée sur des mini-registres inventés : deux fédérations dans un même arbre sont séparées ; une caisse locale rejoint sa fédération
-- [ ] **C3** : dans `pays.duckdb`, CMAF ≥ 43/52 (83 %, PRD SC-001), sans correction ; LVMH et VINCI inchangés
-- [ ] **C4** : aucune société n'est dans deux groupes mutualistes (test)
+- [x] **C1** : `rapport.md` donne la mesure : pour chaque piste essayée, sociétés de la référence CMAF retrouvées, « en plus », et sociétés d'autres fédérations entrées à tort
+- [x] **C2** : la règle retenue est testée sur des mini-registres inventés : deux fédérations dans un même arbre sont séparées ; une caisse locale rejoint sa fédération
+- [x] **C3** : dans `pays.duckdb`, CMAF ≥ 43/52 (83 %, PRD SC-001), sans correction ; LVMH et VINCI inchangés
+- [x] **C4** : aucune société n'est dans deux groupes mutualistes (test)
 
 ## Dépendances
 **À finir avant** : T048
-**Préalable humain** : le document d'enregistrement universel 2024 de CMAF, déposé par Loïc
+**Préalable humain** : le document d'enregistrement universel 2024 de CMAF, déposé par Loïc *(levé le 2026-10-20 : DEU 2025 au format ESEF, pris dans la base BDIF de l'AMF, décision de Loïc)*
 **Fichiers partagés avec** : `pays/calcul.py` (T048)
+
+## Fait le 2026-10-20
+
+- C1 : `rapport.md`, « Groupes mutualistes : la mesure » (`worker/scripts/mesure_mutualiste.py`).
+- C2, C4 : `worker/tests/pays/test_mutualiste.py` ; C4 testé aussi par une caisse fédérale de plus petit SIREN membre du GIE d'une autre.
+- C3 : CMAF 43/52 dans `pays.duckdb`, sans correction ; LVMH 158/172 et VINCI 836/1 007 inchangés.
+- Point 3 (autres groupes mutualistes) : non étendu, raison dans `rapport.md` (la règle repose sur les GIE et la table des fédérations du Crédit Mutuel ; aucun document de BPCE, du Crédit Agricole ni de Groupama).
