@@ -11,9 +11,9 @@ version = "0.1.0"
 description = "Worker cartoFR : registre des sociétés, synchro INPI et INSEE, moteur de cartographie"
 requires-python = ">=3.12"
 dependencies = [
-    "duckdb>=1.5",          # registre et moteur
+    "duckdb>=1.5,<2",       # registre et moteur ; 2.0 change les types (pyright rouge), à migrer à part
     "pandas>=3.0",          # moteur (repris du prototype)
-    "pyarrow>=25",          # lecture des parquets du prototype
+    "pyarrow>=25,<26",      # lecture des parquets du prototype
     "psycopg[binary]>=3.2", # base de l'app (file de travaux, cartos)
     "pydantic>=2.10",       # schéma des réglages, partagé avec Zod côté web
     "httpx>=0.28",          # API INPI, API Sirene et OpenRouter (proposition IA, T037)
