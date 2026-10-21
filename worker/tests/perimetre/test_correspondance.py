@@ -16,6 +16,7 @@ from cartofr.perimetre import Correspondance, LignePerimetre, cle, correspondre,
 from cartofr.perimetre.correspondance import (
     COMMUNE,
     CONFLIT,
+    FERMEE,
     HOMONYMES,
     INTROUVABLE,
     REGISTRE,
@@ -128,7 +129,8 @@ def test_societe_fermee_introuvable(tmp_path: Path):
     mini = _mini()
     mini.societe(siren(10), "ALPHAMARK", active=False)
     (c,) = _correspondre(mini, tmp_path, _vinci("Alphamark"))
-    assert (c.raison, c.siren, c.porteurs, c.retenue) == (INTROUVABLE, None, 0, False)
+    # T055 : le refus dit pourquoi, la société est fermée (fusionnée depuis la liste).
+    assert (c.raison, c.siren, c.porteurs, c.retenue) == (FERMEE, None, 0, False)
 
 
 def test_societe_fermee_ne_compte_pas_comme_homonyme(tmp_path: Path):

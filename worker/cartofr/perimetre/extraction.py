@@ -361,10 +361,11 @@ def passage_federations(texte: str) -> str:
     return " ".join(m["liste"].split()) if m else ""
 
 
-def _candidats_tableau(nom: str) -> tuple[Candidat, ...]:
+def _candidats_tableau(nom: str, sigle_seul: bool = True) -> tuple[Candidat, ...]:
     """Format ESEF : le nom, le nom sans son sigle final ou sans sa forme juridique en toutes lettres,
     puis, de secours, parmi les sigles de SIRENE : le nom sans sigle, le nom suivi de sa forme
-    abrégée, et le sigle seul."""
+    abrégée, et le sigle seul (sauf `sigle_seul=False` : « (FMU) » chez Crédit Agricole S.A. est un
+    type de fonds, pas le sigle de la société)."""
     m = _SIGLE_FINAL.match(nom)
     court = m["nom"] if m else nom
     candidats = [Candidat(nom, None), Candidat(court, None)]
@@ -373,9 +374,82 @@ def _candidats_tableau(nom: str) -> tuple[Candidat, ...]:
         abregee = _FORMES_EN_LETTRES[_cle_forme(f["forme"])]
         candidats.append(Candidat(f["nom"], None))
         secours.append(Candidat(f"{f['nom']} {abregee}", None, secours=True, sigle=True))
-    if m and len(m["sigle"].replace(" ", "")) >= SIGLE_MIN:
+    if sigle_seul and m and len(m["sigle"].replace(" ", "")) >= SIGLE_MIN:
         secours.append(Candidat(m["sigle"], None, secours=True, sigle=True))
-    return _unique(candidats + secours)
+    return _unique(candidats + secours + _cotes_du_tiret(court))
+
+
+# « GENECAR - SOCIETE GENERALE DE COURTAGE… », « SOCIETE D'INGENIERIE… - SIME » : un nom et son sigle
+# séparés par un tiret entouré d'espaces (T055).
+_TIRET = re.compile(r" [-–] ")
+_SIGLE_SEUL = re.compile(r"^[A-Z0-9.& ]{3,12}$")
+# Une ligne de fonds n'est pas une société (T055) : un fonds n'a pas de SIREN. Une SICAV ou une
+# SPPICAV en ont un (ce sont des sociétés) : elles ne sont pas dans la liste.
+MOTIF_FONDS = re.compile(
+    r"(?i:\b(?:FCP|FCPE|FCPR|FCPI|FCT|FPCI|FPS|FIP|OPC|OPCVM|compartiment)\b|^fonds\b|\bfund$)"
+    # Une part de fonds : « CAP SANTE 3 PART A ». La lettre est en capitale : « part de » n'en est pas une.
+    r"|\b(?:PARTS?|[Pp]arts?) [A-Z0-9]{1,2}\b"
+)
+_FORMES_MOTS = {
+    "SA",
+    "SAS",
+    "SASU",
+    "SARL",
+    "SNC",
+    "SCI",
+    "SE",
+    "EURL",
+    "SCA",
+    "GIE",
+    "SCS",
+    "SAS.",
+    "S.A.",
+    "S.A.S.",
+}
+
+
+def _mots_du_nom(cote: str) -> int:
+    """Les mots d'un nom hors formes juridiques : « SNC Viparis » n'en a qu'un."""
+    return sum(m.upper() not in _FORMES_MOTS for m in cote.split())
+
+
+_PETITS_MOTS = {"DE", "DU", "DES", "D", "L", "LA", "LE", "LES", "ET", "EN", "A", "AU", "AUX"}
+
+
+def _initiales(sigle: str, nom: str) -> bool:
+    """`sigle` (3 caractères au moins) se lit, dans l'ordre, dans les initiales des mots de `nom`,
+    petits mots retirés, et commence par la première : « SPIF » dans « Soc Participation Île de France »."""
+    if not _SIGLE_SEUL.match(sigle):
+        return False
+    lettres = [c for c in sigle if c.isalnum()]
+    initiales = [m[0] for m in cle_pays(nom).split() if m not in _PETITS_MOTS]
+    if len(lettres) < SIGLE_MIN or not initiales or lettres[0] != initiales[0]:
+        return False
+    reste = iter(initiales)
+    return all(lettre in reste for lettre in lettres)
+
+
+def _cotes_du_tiret(nom: str) -> list[Candidat]:
+    """De secours, chaque côté d'un nom coupé par un seul tiret entre un nom et son sigle : le nom, de
+    deux mots au moins hors formes juridiques, parmi les dénominations ; le sigle (« SIME »,
+    « V S P U ») parmi les sigles de SIRENE."""
+    cotes = _TIRET.split(nom)
+    # « Bureau Veritas SA – Nouvelle Calédonie » : une succursale, le côté est un lieu. Un fonds
+    # (« SOGECAP - DIVERSIFIED LOANS FUND ») n'est pas une société : aucun de ses côtés n'en est une.
+    if len(cotes) != 2 or MOTIF_FONDS.search(nom) or any(est_pays(c) for c in cotes):
+        return []
+    # Un nom et son sigle seulement, le sigle tiré des initiales du nom (« SIME », Société
+    # d'Ingénierie Maintenance Exploitation) : « SNC VIPARIS - PORTE DE VERSAILLES » est un nom et un
+    # lieu, « HOTEL INVENTE - LYON » une ville, et « LYON » est le sigle d'une autre société (revue T055).
+    if not (_initiales(cotes[1], cotes[0]) or _initiales(cotes[0], cotes[1])):
+        return []
+    sortie = []
+    for cote in cotes:
+        if _SIGLE_SEUL.match(cote) and len(cote.replace(" ", "").replace(".", "")) >= SIGLE_MIN:
+            sortie.append(Candidat(cote, None, secours=True, sigle=True))
+        elif _mots_du_nom(cote) > 1:
+            sortie.append(Candidat(cote, None, secours=True))
+    return sortie
 
 
 def _unique(candidats: list[Candidat]) -> tuple[Candidat, ...]:
@@ -482,6 +556,9 @@ _CASA_METHODES = {"■": "IG", "●": "IG", "▲": "MEE", "X": "autre"}
 _BNP = re.compile(
     r"^(?P<corps>.+?) France (?P<meth>IG|ME|MEE)(?:\(\d+\))? (?:\d{1,3},\d%) (?P<taux>\d{1,3},\d)%(?: .*)?$"
 )
+# Une rangée BNP, quel que soit le pays : « … Belgique IG 100,0% 100,0% ». Hors de France, elle
+# n'est pas lue, mais elle termine le nom en cours (T055 : avant, elle se collait au nom suivant).
+_BNP_RANGEE = re.compile(r" (?:IG|ME|MEE)(?:\(\d+\))? (?:\d{1,3},\d%|-) (?:\d{1,3},\d%|-)(?: |$)")
 # Airbus : « <F|E|P> <% intérêt> <nom> France » (F intégration globale, E équivalence, P proportionnelle).
 _AIRBUS = re.compile(r"^(?P<meth>[FEP]) (?P<taux>\d{1,3}\.\d+) (?P<corps>.+) France$")
 _AIRBUS_METHODES = {"F": "IG", "E": "MEE", "P": "autre"}
@@ -655,6 +732,9 @@ def _extraire_sections(texte: str) -> list[LignePerimetre]:
         if len(ligne) > _PARAGRAPHE:
             section_tableau = None
         lue = _ligne_texte_t054(avant, ligne, section_texte)
+        if lue is None and _BNP_RANGEE.search(ligne):  # rangée BNP d'un autre pays : pas un début de nom
+            avant = []
+            continue
         if lue is None:
             avant = (avant + [ligne])[-LIGNES_AVANT:]
             continue
@@ -715,7 +795,9 @@ def _ligne_texte_t054(avant: list[str], ligne: str, section_fr: bool) -> LignePe
         if not noms or _SUCCURSALE.search(noms[0][0]):
             return LignePerimetre((), "", 0.0, ligne)
         long, *courts = reversed(noms)
-        candidats = [Candidat(long[0], None)] + [
+        # Le nom, sans son sigle final (« Crédit Agricole Assurances (CAA) »), ses côtés du tiret,
+        # puis les bouts plus courts, de secours.
+        candidats = list(_candidats_tableau(long[0], sigle_seul=False)) + [
             Candidat(n, None, secours=True) for n, _ in courts if len(n.split()) > 1
         ]
         return LignePerimetre(_unique(candidats), meth, _taux(m["taux"]), noms[0][1])
