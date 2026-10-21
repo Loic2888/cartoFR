@@ -121,8 +121,8 @@ Ouverte le 2026-10-16, après la révision de `PRD.md` (US7, US2 réécrite, US8
 - [x] `T052` [P] — Mesurer la carto du pays : justesse sans correction, fraîcheur, couverture *(mergée le 2026-10-19 ; groupes cotés à mesurer quand la liste sera là)*
 - [x] `T051` — Corriger la carto d'un groupe sans étape de validation, et en montrer l'effet *(P2, après T050 ; 2026-10-19)*
 - [x] `T053` — Retrouver 90 % de LVMH sans correction *(mergée le 2026-10-19, #63 : 158/172)*
-- [ ] `T054` — Lire les listes du CAC 40 et noter la mère des groupes étrangers *(2026-10-21)*
-- [ ] `T055` — Rapprocher les lignes refusées par des règles écrites *(2026-10-21)*
+- [x] `T054` — Lire les listes du CAC 40 et noter la mère des groupes étrangers *(mergée le 2026-10-21, #67 ; 17 listes illisibles)*
+- [x] `T055` — Rapprocher les lignes refusées par des règles écrites *(mergée le 2026-10-21, #68 ; carto du pays : LVMH 158/172, VINCI 834/1 007, CMAF 43/52)*
 
 En parallèle, hors code : Loïc cherche et dépose les documents des groupes cotés à Paris (SC-008), dès que T046 est là.
 
