@@ -54,7 +54,7 @@ Porto Rico|Portugal|Qatar|République dominicaine|République tchèque|Tchéquie
 Royaume-Uni|Russie|Fédération de Russie|Rwanda|Saint-Marin|Salvador|El Salvador|Sénégal|Serbie|
 Seychelles|Sierra Leone|Singapour|Slovaquie|Slovénie|Somalie|Soudan|Sri Lanka|Suède|Suisse|
 Suriname|Syrie|Tadjikistan|Taïwan|Taiwan|Tanzanie|Tchad|Thaïlande|Togo|Trinité-et-Tobago|Tunisie|
-Turkménistan|Turquie|Ukraine|Uruguay|Venezuela|Vietnam|Viêt Nam|Wallis-et-Futuna|Yémen|Zambie|
+Tahiti|Turkménistan|Turquie|Ukraine|Uruguay|Venezuela|Vietnam|Viêt Nam|Wallis-et-Futuna|Yémen|Zambie|
 Zimbabwe
 """
 # Zones qui ouvrent une section hors de France.

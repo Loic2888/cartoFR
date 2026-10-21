@@ -76,6 +76,7 @@ class _Societe:
     commune: str = "PARIS"
     cp: str = "75000"
     sigle: str | None = None
+    usuelle: str | None = None  # dénomination usuelle SIRENE (T055)
 
 
 @dataclass
@@ -101,11 +102,12 @@ class MiniRegistre:
         commune: str = "PARIS",
         cp: str = "75000",
         sigle: str | None = None,
+        usuelle: str | None = None,
     ) -> str:
         """Ajoute une société ; par défaut une SAS de 10 à 19 salariés, seule à son adresse, à Paris."""
         self.societes.append(
             _Societe(siren, nom, cj, naf, tranche, adresse or f"{siren} RUE INVENTEE 75000", salaries,
-                     diffusion_commerciale, active, commune, cp, sigle)
+                     diffusion_commerciale, active, commune, cp, sigle, usuelle)
         )  # fmt: skip
         return siren
 
@@ -152,9 +154,10 @@ class MiniRegistre:
                         ],
                     )
                 con.execute(
-                    "insert into unites_legales (siren, denomination, sigle, categorie_juridique, naf,"
-                    " tranche_effectifs, etat_administratif, debut) values (?, ?, ?, ?, ?, ?, ?, ?)",
-                    [s.siren, s.nom, s.sigle, s.cj, s.naf, s.tranche, etat, DEBUT],
+                    "insert into unites_legales (siren, denomination, sigle, denomination_usuelle_1,"
+                    " categorie_juridique, naf, tranche_effectifs, etat_administratif, debut)"
+                    " values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [s.siren, s.nom, s.sigle, s.usuelle, s.cj, s.naf, s.tranche, etat, DEBUT],
                 )
                 con.execute(
                     "insert into societes (siren, denomination, diffusion_commerciale,"

@@ -853,3 +853,45 @@ Pour Crédit Agricole S.A., on dépose un extrait des pages 761 à 776 de son DE
 Pas encore lues : 17 listes. Ce sont surtout des listes de « principales filiales » sans taux (Air Liquide, Hermès, ArcelorMittal), des PDF de mise en page propre (Orange, Danone, Kering, Michelin, Publicis, Eiffage, EssilorLuxottica) et le xlsx d'AXA.
 
 Point ouvert (garde-fou 6) : quand un nom est coupé sur deux lignes (Société Générale, Crédit Agricole S.A., Eurofins), la preuve recopie la rangée recollée, au plus deux lignes d'avant. C'est la plus courte qui porte le nom. Dans ces listes, les lignes d'avant sont des cellules du tableau, et je n'y ai vu aucun nom de personne. Mais une ligne étrangère au tableau, comme un pied de page, pourrait s'y glisser. Les anciens formats ne recopient que la ligne courante. À trancher par Loïc.
+
+### Rapprocher les lignes refusées par des règles écrites (T055)
+
+Sur les 23 documents de T054, 1 156 lignes étaient refusées. La correspondance cherchait déjà parmi les 13 M d'unités légales du registre : une ligne refusée était un nom écrit autrement, un fonds, une société fermée depuis, ou un nom pollué par la mise en page. Règles ajoutées, mesurées une à une, chaque ligne gagnée relue à la main.
+
+**Résultat** : 2 285 → 2 357 lignes retrouvées (+72). Introuvables : 876 → 657. Les refus sont maintenant expliqués pour 82 sociétés fermées et 62 fonds.
+
+| Règle | Lignes gagnées |
+|---|---|
+| Nom sans son sigle final, formats texte de T054 (« Crédit Agricole Assurances (CAA) »), et recherche parmi les sigles SIRENE (« PREDICA », « UBAF ») | 48 |
+| Nom sans ses espaces (« CRFP22 », « SolaireGréoux 1 ») | 20 |
+| Départage par le registre de ces nouveaux candidats | 4 |
+| Dénomination usuelle, seulement dans le groupe ou la ville du document | 0 |
+| Début de raison sociale d'une société reliée au groupe | 0 |
+
+| Document | Avant | Après |
+|---|---|---|
+| Crédit Agricole S.A. | 138 | 180 (les SCI IMEFA, que SIRENE écrit en lettres : « IMEFA CENT VINGT ») |
+| Carrefour | 287 | 294 |
+| BNP Paribas | 87 | 93 |
+| Engie | 691 | 696 |
+| TotalEnergies | 320 | 325 |
+| Société Générale | 251 | 255 |
+| Accor, Saint-Gobain | 79 | 82 |
+
+**Erreurs trouvées à la relecture et à la revue adverse**, chacune devenue une règle et un test :
+- « CPR AM » → une SCI C'PRAM : une clé sans espaces doit avoir 6 caractères au moins. On perd 6 lignes justes (ENR 5, les SCI CMN1 à CMN3 de CMAF…) ;
+- « Franck & Fils » (LVMH) → une société de travaux de Menton, dont c'est seulement la dénomination usuelle. La vraie société est fermée. Désormais, une enseigne n'est retenue que dans le groupe ou dans la ville du document, et une raison sociale fermée passe avant elle ;
+- « SOGECAP - … FUND » → un hôtel ; « Viparis - Porte de Versailles » → une société de portefeuille ; deux succursales de Bureau Veritas → la tête. On ne coupe plus au tiret que « SIGLE - Nom », quand le sigle se lit dans les initiales du nom (SIME, SPIF, SFPIE). « X - LYON » ne cherche plus le sigle LYON ;
+- l'étape 6 ne reprend jamais une société déjà retenue aux étapes 1 à 5 : la règle la moins sûre ne fait plus perdre la plus sûre ;
+- « CACEIS Fund Administration » n'est pas un fonds.
+
+**Non-régression** :
+- aucune ligne retenue sous T054 n'est perdue ni changée ;
+- LVMH ne bouge pas, VINCI gagne 1 ligne (Reso Tertiaire IDF), CMAF 2 (Media Portage) ;
+- scores inchangés : 90 %, 81 %, 83 %.
+
+Coût : 7 s de plus par correspondance (43 → 50 s pour les 23 documents). Les clés déjà calculées sont réutilisées, et les sociétés fermées sont filtrées par DuckDB avant d'être lues. Une première version, `list_has_any`, levait une erreur interne de DuckDB 1.5 par intermittence : elle est remplacée par une expression régulière.
+
+**Pas de redépôt** : les documents sont les mêmes (même empreinte), et la correspondance se refait à chaque carto. Les compteurs de `documents_perimetre` restent ceux du dépôt.
+
+**Ce que les règles ne rattrapent pas** : 657 introuvables et 283 homonymes. Ce sont surtout des fonds et véhicules d'assurance de Crédit Agricole S.A. (259), des SPV solaires de TotalEnergies, et des homonymes de Carrefour (« SCI 2F », « CANDIS ») que le registre ne relie pas au groupe. Les liens RNE de ces grands groupes sont minces : 7 sociétés sous Bureau Veritas, par exemple. La suite possible est une table de correspondance par recherche web, avec la source de chaque SIREN et la validation de Loïc : à décider.

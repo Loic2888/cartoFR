@@ -48,11 +48,16 @@ from pypdf.errors import PyPdfError
 
 from cartofr.perimetre.correspondance import (
     COMMUNE,
+    COMPACTE,
     CONFLIT,
+    DEBUT,
+    FERMEE,
+    FONDS,
     HOMONYMES,
     INTROUVABLE,
     REGISTRE,
     UNIQUE,
+    USUELLE,
     Correspondance,
     correspondre_plusieurs,
 )
@@ -277,20 +282,28 @@ def resume(depot: Depot) -> list[str]:
     raisons = collections.Counter(c.raison for c in depot.resultats)
     etat = f"gardé sous {depot.fichier}" if depot.fichier else "identique au document en vigueur, rien changé"
     mere = depot.demande.mere
+    # Étape 6 (T055) : dites seulement quand elle a servi, le compte rendu d'avant ne change pas.
+    retrouvees_6 = [(raisons[COMPACTE], "sans espaces"), (raisons[USUELLE], "par la dénomination usuelle"),
+                    (raisons[DEBUT], "par le début de la raison sociale")]  # fmt: skip
+    refusees_6 = [(raisons[FONDS], "fonds"), (raisons[FERMEE], "fermées")]
     sortie = [
         f"{depot.demande.tete} · {etat}"
         + (f" · mère étrangère : {mere} ({depot.demande.pays_mere})" if mere else ""),
         f"  lignes en France : {len(depot.resultats)} · retrouvées : {depot.retenues}"
         f" ({raisons[UNIQUE]} uniques, {raisons[COMMUNE]} par la commune,"
-        f" {raisons[REGISTRE]} par le registre)"
+        f" {raisons[REGISTRE]} par le registre{_en_plus(retrouvees_6)})"
         f" · refusées : {raisons[HOMONYMES]} homonymes, {raisons[INTROUVABLE]} introuvables,"
-        f" {raisons[CONFLIT]} en conflit",
+        f" {raisons[CONFLIT]} en conflit{_en_plus(refusees_6)}",
     ]
     for c in depot.resultats:
         if not c.retenue:
             porteurs = f", {c.porteurs} porteurs" if c.porteurs else ""
             sortie.append(f"  refusée ({c.raison}{porteurs}) : {c.ligne.texte}")
     return sortie
+
+
+def _en_plus(comptes: list[tuple[int, str]]) -> str:
+    return "".join(f", {n} {quoi}" for n, quoi in comptes if n)
 
 
 def _pays(code: str | None) -> str | None:

@@ -184,7 +184,7 @@ def test_societe_generale():
 
 def test_societe_generale_suite_de_ligne_jamais_candidate_seule():
     (ligne,) = extraire("France\nOMEGA INVENTEE Banque de détail en France et Banque\nprivée IG 55 80\n")
-    assert [c.nom for c in ligne.candidats] == ["OMEGA INVENTEE"]
+    assert [c.nom for c in ligne.candidats if not c.sigle] == ["OMEGA INVENTEE"]
 
 
 def test_ligne_de_societe_hors_d_une_section_france_non_lue():
@@ -216,7 +216,8 @@ def test_credit_agricole_sa():
         ("ZETA PARTICIPATIONS INVENTEES", "autre", 24.5),
     ]
     # « (FMU) » seul, la fin d'un nom coupé, n'est jamais candidat. EPSILON est sortie (« - »).
-    assert [c.nom for c in lignes[2].candidats] == ["DELTA INVENTEE (FMU)"]
+    assert [c.nom for c in lignes[2].candidats if not c.sigle] == ["DELTA INVENTEE (FMU)", "DELTA INVENTEE"]
+    assert "FMU" not in [c.nom for c in lignes[2].candidats]  # un type de fonds, pas un sigle
 
 
 # --- Pays sur la ligne : BNP Paribas, Airbus, Eurofins, Euronext ---------------------------------
@@ -309,9 +310,9 @@ def test_airbus_methode_et_taux_de_la_ligne_meme():
 def test_bout_de_nom_coupe_de_secours_et_jamais_un_mot_seul():
     """« BONDS » seul, la fin d'un nom de fonds coupé, retrouvait une autre société (revue T054)."""
     (fonds,) = extraire("FRANCE\nALPHA INVENTEE CREDIT GREEN\nBONDS (1) ■ - ESC GEA 100,0 100,0 84,9 84,9\n")
-    assert [c.nom for c in fonds.candidats] == ["ALPHA INVENTEE CREDIT GREEN BONDS"]
+    assert [c.nom for c in fonds.candidats if not c.sigle] == ["ALPHA INVENTEE CREDIT GREEN BONDS"]
     (deux,) = extraire("FRANCE\nALPHA INVENTEE\nBETA GAMMA (1) ■ - ESC GEA 100,0 100,0 84,9 84,9\n")
-    assert [(c.nom, c.secours) for c in deux.candidats] == [
+    assert [(c.nom, c.secours) for c in deux.candidats if not c.sigle] == [
         ("ALPHA INVENTEE BETA GAMMA", False),
         ("BETA GAMMA", True),
     ]
@@ -354,3 +355,46 @@ def test_methode_non_publiee_en_clair_dans_la_preuve():
 
     (ligne,) = extraire("Alpha Inventée S.A. France 100.00% 100.00%\n")
     assert methode(ligne) == "méthode non publiée"
+
+
+# --- Candidats ajoutés par T055 ------------------------------------------------------------------
+
+
+def _nom_seul(texte: str) -> list[tuple[str, bool, bool]]:
+    (ligne,) = extraire(texte)
+    return [(c.nom, c.secours, c.sigle) for c in ligne.candidats]
+
+
+def test_format_texte_nom_sans_son_sigle_final_jamais_le_sigle_seul():
+    candidats = _nom_seul("France\nDELTA INVENTEE ASSURANCES (DIA) ■ - ESC GEA 100,0 100,0 100,0 100,0\n")
+    assert ("DELTA INVENTEE ASSURANCES", False, False) in candidats
+    assert all(n != "DIA" for n, _, _ in candidats)
+
+
+def test_nom_et_sigle_separes_par_un_tiret():
+    candidats = _nom_seul("SIME - Société d'Ingénierie Maintenance Exploitation | France | IG | 100\n")
+    assert ("SIME", True, True) in candidats
+    assert ("Société d'Ingénierie Maintenance Exploitation", True, False) in candidats
+    # « GENECAR » ne se lit pas dans les initiales du nom : pas de coupe.
+    candidats = _nom_seul("GENECAR - Société Inventée de Courtage | France | IG | 100\n")
+    assert all(n != "GENECAR" for n, _, _ in candidats)
+
+
+def test_tiret_jamais_coupe_pour_un_lieu_un_fonds_ou_deux_noms():
+    for nom in (
+        "Bureau Inventé SA – Tahiti",
+        "SOGEINVENT - DIVERSIFIED LOANS FUND",
+        "SNC Inventée - Porte de Versailles",
+    ):
+        cotes = {c.strip() for c in nom.replace("–", "-").split(" - ")}
+        noms = {n for n, _, _ in _nom_seul(f"{nom} | France | IG | 100\n")}
+        assert not noms & cotes, nom
+
+
+def test_rangee_bnp_d_un_autre_pays_ne_se_colle_pas_au_nom_suivant():
+    (ligne,) = extraire(
+        " Alpha Inventée Holding Belgique IG 100,0% 100,0%  IG 100,0% 100,0%\n"
+        " Beta Inventée SA France IG 100,0% 100,0%  IG 100,0% 100,0%\n"
+    )
+    assert ligne.candidats[0].nom == "Beta Inventée SA"
+    assert ligne.texte.startswith(" Beta") or ligne.texte.startswith("Beta")
