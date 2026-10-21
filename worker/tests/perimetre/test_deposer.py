@@ -300,3 +300,86 @@ def test_la_reconstruction_du_registre_garde_les_depots(data: Path, tmp_path: Pa
     finally:
         con.close()
     assert troisieme.fichier
+
+
+# --- Mère hors de France (T054) -----------------------------------------------------------------
+
+
+def _meres(data: Path) -> list[tuple[Any, ...]]:
+    con = duckdb.connect(str(data / "registre.duckdb"), read_only=True)
+    try:
+        return con.execute(
+            "select tete, fin is null, mere_etrangere, pays_mere from documents_perimetre order by id"
+        ).fetchall()
+    finally:
+        con.close()
+
+
+def test_la_mere_etrangere_est_gardee_et_affichee(data: Path, tmp_path: Path) -> None:
+    doc = _document(tmp_path, "liste-a.txt", DOCUMENTS[A])
+    [depot] = deposer([Demande(A, doc, "MERE INVENTEE N.V.", "NL")], data, LE)
+    assert _meres(data) == [(A, True, "MERE INVENTEE N.V.", "NL")]
+    assert resume(depot)[0].endswith("mère étrangère : MERE INVENTEE N.V. (NL)")
+
+
+def test_meme_document_mere_changee_nouveau_depot(data: Path, tmp_path: Path) -> None:
+    doc = _document(tmp_path, "liste-a.txt", DOCUMENTS[A])
+    deposer([Demande(A, doc)], data, LE)
+    [encore] = deposer([Demande(A, doc, "MERE INVENTEE SE", "LU")], data, LE + timedelta(days=1))
+    assert encore.fichier is not None
+    assert _meres(data) == [(A, False, None, None), (A, True, "MERE INVENTEE SE", "LU")]
+
+
+@pytest.mark.parametrize(
+    ("mere", "pays", "message"),
+    [
+        ("MERE INVENTEE N.V.", None, "vont ensemble"),
+        (None, "NL", "vont ensemble"),
+        ("MERE INVENTEE N.V.", "Pays-Bas", "code ISO"),
+        ("MERE INVENTEE SA", "FR", "hors FR"),
+    ],
+)
+def test_mere_etrangere_invalide_refusee(
+    data: Path, tmp_path: Path, mere: str | None, pays: str | None, message: str
+) -> None:
+    doc = _document(tmp_path, "liste-a.txt", DOCUMENTS[A])
+    with pytest.raises(DepotInvalide, match=message):
+        deposer([Demande(A, doc, mere, pays)], data, LE)
+    assert not (data / "perimetre").exists()
+
+
+def test_mere_etrangere_par_l_index_et_par_la_commande(
+    data: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lot = tmp_path / "lot"
+    lot.mkdir()
+    _document(lot, "a.txt", DOCUMENTS[A])
+    _document(lot, "b.txt", DOCUMENTS[B])
+    (lot / "index.csv").write_text(
+        f"tete,fichier,mere,pays_mere\n{A},a.txt,MERE INVENTEE N.V.,nl\n{B},b.txt,,\n", encoding="utf-8"
+    )
+    monkeypatch.setenv("CARTOFR_DATA", str(data))
+    assert main(["--dossier", str(lot)]) == 0
+    doc_c = _document(tmp_path, "c.txt", DOCUMENTS[C])
+    assert main([C, str(doc_c), "--mere", "MERE INVENTEE SE", "--pays-mere", "LU"]) == 0
+    assert _meres(data) == [
+        (A, True, "MERE INVENTEE N.V.", "NL"),
+        (B, True, None, None),
+        (C, True, "MERE INVENTEE SE", "LU"),
+    ]
+
+
+def test_reprise_d_un_registre_d_avant_t054(data: Path, tmp_path: Path) -> None:
+    """Un ancien registre n'a pas les colonnes de la mère : la reconstruction le reprend par nom."""
+    from cartofr.registre import construire
+
+    ancien = tmp_path / "ancien.duckdb"
+    con = duckdb.connect(str(ancien))
+    con.execute(
+        "create table documents_perimetre (id bigint, tete varchar, fichier varchar, empreinte varchar,"
+        " debut timestamptz, fin timestamptz, lignes integer, retenues integer, refusees integer)"
+    )
+    con.execute("insert into documents_perimetre values (1, ?, 'a.pdf', 'x', ?, null, 2, 2, 0)", [A, LE])
+    con.close()
+    construire._reprendre_documents(ancien, data / "registre.duckdb")  # pyright: ignore[reportPrivateUsage]
+    assert _meres(data) == [(A, True, None, None)]

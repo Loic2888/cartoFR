@@ -2,9 +2,15 @@
 
 Usage, depuis la racine du dépôt (ou dans le conteneur du worker) :
     CARTOFR_DATA=data .venv/bin/python -m cartofr.perimetre.deposer <SIREN de la tête> <fichier>
+        [--mere "<raison sociale>" --pays-mere <code ISO>]
     CARTOFR_DATA=data .venv/bin/python -m cartofr.perimetre.deposer --dossier <dossier>
 Avec `--dossier`, le fichier `<dossier>/index.csv` (UTF-8, séparateur virgule) donne une ligne par
-document : `tete,fichier`, le chemin relatif au dossier.
+document : `tete,fichier`, le chemin relatif au dossier, et en option `mere,pays_mere`.
+
+Groupe dont la mère est à l'étranger (T054, décision de Loïc du 2026-10-21) : la tête est une
+société française du groupe (sa holding en France, ou la plus souvent mère directe dans la liste),
+et le dépôt garde qui est la mère et son pays (« Stellantis N.V. », « NL »). C'est une donnée de
+société saisie par un humain, sourcée (GLEIF) : elle ne décide rien dans la carto.
 
 Entrées : les documents (PDF, page HTML ou texte), déjà téléchargés : la commande ne va jamais sur
 le réseau (principe 3). `<CARTOFR_DATA>/registre.duckdb` : lu pendant la correspondance, ouvert en
@@ -14,7 +20,7 @@ Sorties :
   UTC>` et son extension. Un fichier déposé n'est jamais écrasé ni effacé ;
 - une ligne par document dans `documents_perimetre`. Un nouveau dépôt pour la même tête ferme la
   ligne du précédent (`fin`) : un seul document en vigueur par groupe. Un document identique
-  (même empreinte) à celui en vigueur ne change rien ;
+  (même empreinte, même mère étrangère) à celui en vigueur ne change rien ;
 - à l'écran, par document : les lignes lues, retrouvées et refusées par raison, puis les lignes
   refusées. Seule la ligne de la société est recopiée, jamais les lignes d'avant du document : un
   pied de page pourrait porter un nom de personne (garde-fou 6). Le nom du fichier d'origine n'est
@@ -57,6 +63,7 @@ NOM_REGISTRE = "registre.duckdb"
 DOSSIER_DOCUMENTS = "perimetre"
 INDEX = "index.csv"
 _SIREN = re.compile(r"\d{9}")
+_PAYS_ISO = re.compile(r"[A-Z]{2}")
 OCCUPE = "Le registre est occupé (synchro en cours ?) : réessayez plus tard."
 
 
@@ -70,6 +77,8 @@ class Demande:
 
     tete: str
     source: Path
+    mere: str | None = None  # raison sociale de la mère hors de France (T054)
+    pays_mere: str | None = None  # son pays, code ISO à 2 lettres
 
 
 @dataclass(frozen=True)
@@ -109,7 +118,8 @@ def lire_index(dossier: Path) -> list[Demande]:
         tete, fichier = (ligne.get("tete") or "").strip(), (ligne.get("fichier") or "").strip()
         if not tete or not fichier:
             raise DepotInvalide(f"{index}, ligne {numero} : il faut une tête et un fichier.")
-        demandes.append(Demande(tete, dossier / fichier))
+        mere, pays = (ligne.get("mere") or "").strip(), (ligne.get("pays_mere") or "").strip()
+        demandes.append(Demande(tete, dossier / fichier, mere or None, _pays(pays)))
     return demandes
 
 
@@ -126,6 +136,12 @@ def verifier(demandes: Sequence[Demande]) -> None:
         if d.tete in vues:
             raise DepotInvalide(f"La tête {d.tete} a deux documents dans ce dépôt : un seul par groupe.")
         vues.add(d.tete)
+        if (d.mere is None) != (d.pays_mere is None):
+            raise DepotInvalide(f"Tête {d.tete} : la mère étrangère et son pays vont ensemble.")
+        if d.pays_mere is not None and (not _PAYS_ISO.fullmatch(d.pays_mere) or d.pays_mere == "FR"):
+            raise DepotInvalide(
+                f"Tête {d.tete} : pays de la mère « {d.pays_mere} » invalide (code ISO à 2 lettres, hors FR)."
+            )
 
 
 def _lire(demande: Demande) -> list[LignePerimetre]:
@@ -134,7 +150,8 @@ def _lire(demande: Demande) -> list[LignePerimetre]:
         lignes = extraire(texte_document(demande.source))
     except (ValueError, OSError, PyPdfError) as erreur:
         raise DepotInvalide(
-            f"Document illisible pour la tête {demande.tete} : fichier abîmé, ou de plus de 50 Mo."
+            f"Document illisible pour la tête {demande.tete} : fichier abîmé, ou trop gros"
+            " (50 Mo, 300 Mo pour un paquet ESEF ou une page HTML)."
         ) from erreur
     if not lignes:
         raise DepotInvalide(
@@ -204,9 +221,11 @@ def deposer(demandes: Sequence[Demande], data: Path, maintenant: datetime | None
         for demande, res in zip(demandes, resultats, strict=True):
             empreinte = _empreinte(demande.source)
             en_vigueur = con.execute(
-                "select empreinte from documents_perimetre where tete = ? and fin is null", [demande.tete]
+                "select empreinte, mere_etrangere, pays_mere from documents_perimetre"
+                " where tete = ? and fin is null",
+                [demande.tete],
             ).fetchone()
-            if en_vigueur and en_vigueur[0] == empreinte:
+            if en_vigueur and tuple(en_vigueur) == (empreinte, demande.mere, demande.pays_mere):
                 depots.append(Depot(demande, tuple(res), None, empreinte))
                 continue
             nom = f"{demande.tete}-{horodatage}{demande.source.suffix.lower()}"
@@ -221,10 +240,20 @@ def deposer(demandes: Sequence[Demande], data: Path, maintenant: datetime | None
             )
             retenues = sum(c.retenue for c in res)
             con.execute(
-                "insert into documents_perimetre"
-                " (id, tete, fichier, empreinte, debut, lignes, retenues, refusees)"
-                " values (?, ?, ?, ?, ?, ?, ?, ?)",
-                [prochain, demande.tete, nom, empreinte, maintenant, len(res), retenues, len(res) - retenues],
+                "insert into documents_perimetre (id, tete, fichier, empreinte, debut, lignes, retenues,"
+                " refusees, mere_etrangere, pays_mere) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    prochain,
+                    demande.tete,
+                    nom,
+                    empreinte,
+                    maintenant,
+                    len(res),
+                    retenues,
+                    len(res) - retenues,
+                    demande.mere,
+                    demande.pays_mere,
+                ],  # fmt: skip
             )
             prochain += 1
             depots.append(Depot(demande, tuple(res), nom, empreinte))
@@ -247,8 +276,10 @@ def resume(depot: Depot) -> list[str]:
     """Le compte rendu d'un document, en français : des nombres et les lignes refusées."""
     raisons = collections.Counter(c.raison for c in depot.resultats)
     etat = f"gardé sous {depot.fichier}" if depot.fichier else "identique au document en vigueur, rien changé"
+    mere = depot.demande.mere
     sortie = [
-        f"{depot.demande.tete} · {etat}",
+        f"{depot.demande.tete} · {etat}"
+        + (f" · mère étrangère : {mere} ({depot.demande.pays_mere})" if mere else ""),
         f"  lignes en France : {len(depot.resultats)} · retrouvées : {depot.retenues}"
         f" ({raisons[UNIQUE]} uniques, {raisons[COMMUNE]} par la commune,"
         f" {raisons[REGISTRE]} par le registre)"
@@ -262,6 +293,10 @@ def resume(depot: Depot) -> list[str]:
     return sortie
 
 
+def _pays(code: str | None) -> str | None:
+    return (code or "").strip().upper() or None
+
+
 def main(arguments: list[str] | None = None) -> int:
     parseur = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -269,15 +304,26 @@ def main(arguments: list[str] | None = None) -> int:
     parseur.add_argument("tete", nargs="?", help="SIREN de la tête du groupe")
     parseur.add_argument("fichier", nargs="?", type=Path, help="le document du groupe")
     parseur.add_argument("--dossier", type=Path, help=f"un dossier de documents, avec {INDEX}")
+    parseur.add_argument("--mere", help="raison sociale de la mère, si elle est hors de France")
+    parseur.add_argument("--pays-mere", help="pays de la mère, code ISO à 2 lettres (« NL »)")
     options = parseur.parse_args(arguments)
-    if options.dossier and (options.tete or options.fichier):
-        parseur.error("donnez soit une tête et un fichier, soit --dossier")
+    if options.dossier and (options.tete or options.fichier or options.mere or options.pays_mere):
+        parseur.error("donnez soit une tête et un fichier, soit --dossier (la mère va dans index.csv)")
     if not options.dossier and not (options.tete and options.fichier):
         parseur.error("il faut une tête et un fichier, ou --dossier")
     data = Path(os.environ.get("CARTOFR_DATA", "data"))
     try:
         demandes = (
-            lire_index(options.dossier) if options.dossier else [Demande(options.tete, options.fichier)]
+            lire_index(options.dossier)
+            if options.dossier
+            else [
+                Demande(
+                    options.tete,
+                    options.fichier,
+                    (options.mere or "").strip() or None,
+                    _pays(options.pays_mere),
+                )
+            ]
         )
         depots = deposer(demandes, data)
     except DepotInvalide as erreur:

@@ -117,6 +117,8 @@ class LigneGroupe:
     mutualiste: bool
     parent: str | None
     date_donnees: date | None
+    mere_etrangere: str | None = None  # la mère hors de France, déclarée au dépôt (T054)
+    pays_mere: str | None = None
 
 
 @dataclass(frozen=True)
@@ -178,6 +180,20 @@ def documents_en_vigueur(con: duckdb.DuckDBPyConnection) -> list[tuple[str, str]
     return [(t, f) for t, f in con.execute(
         "select tete, fichier from documents_perimetre where fin is null order by tete"
     ).fetchall()]  # fmt: skip
+
+
+def meres_etrangeres(con: duckdb.DuckDBPyConnection) -> dict[str, tuple[str, str]]:
+    """Tête -> (mère hors de France, pays), d'après les documents en vigueur (T054). Un registre
+    d'avant T054 n'a pas ces colonnes : aucune."""
+    colonnes = {c for (c,) in con.execute(
+        "select column_name from information_schema.columns where table_name = 'documents_perimetre'"
+    ).fetchall()}  # fmt: skip
+    if not {"mere_etrangere", "pays_mere"} <= colonnes:
+        return {}
+    return {t: (m, p) for t, m, p in con.execute(
+        "select tete, mere_etrangere, pays_mere from documents_perimetre"
+        " where fin is null and mere_etrangere is not null"
+    ).fetchall()}  # fmt: skip
 
 
 def _lire_documents(
@@ -470,9 +486,12 @@ def ranger(con: duckdb.DuckDBPyConnection, registre: Path, dossier_documents: Pa
         taille[li.groupe] = taille.get(li.groupe, 0) + 1
     noms = {li.siren: li.nom for li in (*lignes_doc, *lignes_arbre)}
     tetes_doc = {g.tete for g in groupes_doc}
+    meres = meres_etrangeres(con)
     groupes = [
         LigneGroupe(tete=g.tete, nom=noms.get(g.tete), taille=taille[g.tete], document=g.fichier,
-                    mutualiste=g.mutualiste, parent=parent_de.get(g.tete), date_donnees=date_donnees)
+                    mutualiste=g.mutualiste, parent=parent_de.get(g.tete), date_donnees=date_donnees,
+                    mere_etrangere=meres.get(g.tete, (None, None))[0],
+                    pays_mere=meres.get(g.tete, (None, None))[1])
         for g in groupes_doc
     ] + [
         LigneGroupe(tete=t, nom=noms.get(t), taille=n, document=None, mutualiste=False, parent=None,

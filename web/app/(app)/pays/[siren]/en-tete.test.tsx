@@ -75,4 +75,25 @@ describe("EnTete", () => {
     const lien = screen.getByRole("link", { name: "Voir la carto corrigée" });
     expect(lien.getAttribute("href")).toBe("/groupes/g-1/cartos/c-1");
   });
+  it("nomme la mère hors de France du groupe et son pays (T054)", () => {
+    const carto: CartoPays = {
+      ...SOUS_GROUPE,
+      groupe: { tete: "100000061", nom: "TETE B INVENTEE", taille: 2 },
+      groupe_entier: {
+        tete: "100000060",
+        nom: "TETE D INVENTEE",
+        taille: 5,
+        mere_etrangere: "MERE INVENTEE N.V.",
+        pays_mere: "NL",
+      },
+    };
+    render(<EnTete carto={carto} correction={null} />);
+    expect(screen.getByText("Mère du groupe, hors de France")).toBeTruthy();
+    expect(screen.getByText("MERE INVENTEE N.V. (Pays-Bas)")).toBeTruthy();
+  });
+
+  it("ne dit rien de la mère étrangère quand le groupe n'en a pas", () => {
+    render(<EnTete carto={SOUS_GROUPE} correction={null} />);
+    expect(screen.queryByText("Mère du groupe, hors de France")).toBeNull();
+  });
 });

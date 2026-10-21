@@ -797,3 +797,59 @@ Gardés tels quels, notés :
 - la règle n'est pas étendue à BPCE, au Crédit Agricole ni à Groupama : elle repose sur les GIE et la table des fédérations du Crédit Mutuel. Aucun de ces groupes n'a de document déposé. À mesurer quand leurs DEU le seront.
 
 Tests : `worker/tests/perimetre/test_esef.py` (23) et `worker/tests/pays/test_mutualiste.py` (15), sur des documents et mini-registres inventés. Suite worker : 758 réussis, 142 sautés (sans Postgres).
+
+## 2026-10-21
+
+### Listes du CAC 40 et groupes à mère étrangère (T054)
+
+Les listes trouvées le 2026-10-20 (`out/perimetre/cac40/listes/inventaire.csv`) se lisaient à 0 ligne. Il y a maintenant de nouveaux formats. Ils ne sont essayés que si les formats VINCI, LVMH et ESEF ne lisent rien :
+- tableaux avec le pays dans une cellule, quel que soit l'ordre des colonnes (TotalEnergies, Bureau Veritas, Renault…) ;
+- pays en titre de section (Carrefour, Société Générale, Crédit Agricole S.A.) ;
+- pays sur la ligne (BNP Paribas, Airbus, Eurofins, Euronext).
+
+Les rangées des rapports HTML indentés étaient coupées par leurs retours à la ligne. Elles sont recollées.
+
+Correctif : un paquet ESEF est lu jusqu'à 300 Mo. Avant, il était refusé au-delà de 50 Mo (Accor, Saint-Gobain).
+
+Règles écrites contre les faux positifs. La revue adverse les a trouvés, dont deux bloquants :
+- une rangée sans méthode n'est lue que si le document a une rangée de même forme pour un pays étranger : une liste de filiales couvre plusieurs pays, un tableau de chiffres sur la France non ;
+- un bout de nom coupé (« BONDS », la fin d'un nom de fonds) n'est qu'un candidat de secours, et jamais un mot seul. Avant, il retrouvait une autre société ;
+- chez Airbus, la méthode et le taux sont pris sur la ligne même. Avant, 23 lignes sur 63 les prenaient sur la ligne d'avant.
+
+**Non-régression** :
+- LVMH, VINCI et CMAF, déjà déposés, se lisent ligne pour ligne à l'identique ;
+- scores inchangés : LVMH 90 % (155/172), VINCI 81 % (813/1 007), CMAF 83 % (43/52).
+
+**Groupes à mère étrangère** (décision de Loïc du 2026-10-21) : la tête est une société française du groupe. La mère et son pays sont gardés au dépôt, dans `documents_perimetre` puis `pays_groupes`, et affichés dans l'en-tête de la carto. Sources : GLEIF pour la mère, registre pour la tête.
+
+| Groupe | Tête en France | Mère |
+|---|---|---|
+| Airbus | 383474814 AIRBUS (Airbus SAS) | AIRBUS SE, NL |
+| Eurofins | 510019037 EUROFINS BIOLOGIE MEDICALE HOLDING FRANCE SAS | EUROFINS SCIENTIFIC SE, LU |
+| Stellantis | 542065479 STELLANTIS AUTO SAS | STELLANTIS N.V., NL |
+| STMicroelectronics | 341459386 STMICROELECTRONICS FRANCE | STMICROELECTRONICS N.V., NL |
+| Euronext | 343406732 EURONEXT PARIS SA | Euronext N.V., NL |
+
+Eurofins n'a pas de holding unique en France. La tête retenue est la holding française que sa propre liste cite le plus souvent comme mère directe (17 sociétés). Pour Airbus et Eurofins, les autres holdings françaises entrent dans le groupe par leur ligne du document. ArcelorMittal n'est pas déposé : sa liste ne donne aucun taux.
+
+**Dépôt du 2026-10-21** : 23 documents, 3 441 lignes en France, 2 285 retrouvées au registre (66 %).
+
+| Groupe | Lignes | Retrouvées | Refusées : homonymes / introuvables |
+|---|---|---|---|
+| Engie | 783 | 691 | 32 / 60 |
+| Crédit Agricole S.A. (note 12.4 seule) | 526 | 138 | 30 / 358 (des fonds, surtout) |
+| TotalEnergies | 421 | 320 | 15 / 86 |
+| Société Générale | 392 | 251 | 22 / 119 |
+| BNP Paribas | 145 | 87 | 7 / 51 |
+| Carrefour | 446 | 287 | 111 / 48 |
+| Eurofins | 255 | 189 | 6 / 60 |
+| Accor | 129 | 66 | 22 / 41 |
+| Airbus | 63 | 46 | 9 / 8 |
+| Renault | 73 | 43 | 14 / 16 |
+| 13 autres (Safran, L'Oréal, Bureau Veritas…) | 208 | 167 | 12 / 29 |
+
+Pour Crédit Agricole S.A., on dépose un extrait des pages 761 à 776 de son DEU (note 12.4), rangé dans `out/`. Le DEU contient aussi la liste du Groupe Crédit Agricole, avec les caisses régionales, qui sont les actionnaires de CASA : elles seraient entrées dans son groupe.
+
+Pas encore lues : 17 listes. Ce sont surtout des listes de « principales filiales » sans taux (Air Liquide, Hermès, ArcelorMittal), des PDF de mise en page propre (Orange, Danone, Kering, Michelin, Publicis, Eiffage, EssilorLuxottica) et le xlsx d'AXA.
+
+Point ouvert (garde-fou 6) : quand un nom est coupé sur deux lignes (Société Générale, Crédit Agricole S.A., Eurofins), la preuve recopie la rangée recollée, au plus deux lignes d'avant. C'est la plus courte qui porte le nom. Dans ces listes, les lignes d'avant sont des cellules du tableau, et je n'y ai vu aucun nom de personne. Mais une ligne étrangère au tableau, comme un pied de page, pourrait s'y glisser. Les anciens formats ne recopient que la ligne courante. À trancher par Loïc.

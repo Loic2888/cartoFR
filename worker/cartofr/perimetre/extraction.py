@@ -54,11 +54,8 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 
-# Outre-mer présent dans SIRENE. La Nouvelle-Calédonie et la Polynésie ont leurs propres registres.
-OUTRE_MER = (
-    "Guadeloupe", "Martinique", "Guyane", "La Réunion", "Réunion", "Mayotte",
-    "Saint-Martin", "Saint-Barthélemy", "Saint-Pierre-et-Miquelon", "Antilles françaises",
-)  # fmt: skip
+from cartofr.perimetre.pays import OUTRE_MER, cle_pays, est_pays, est_zone, francais
+
 METHODES_LONGUES = {
     "Intégration globale": "IG",
     "Mise en équivalence": "MEE",
@@ -67,6 +64,7 @@ METHODES_LONGUES = {
 }
 METHODES_COURTES = {"IG": "IG", "MEE": "MEE", "ME": "MEE", "IP": "autre", "JV": "autre"}
 NON_CONSOLIDEE = "NC"
+SANS_METHODE = "inconnue"  # la liste ne publie pas la méthode, seulement le taux (T054)
 LIGNES_AVANT = 2  # lignes non terminées gardées pour recoller un nom coupé
 LIGNES_SUITE = 2  # lignes lues au plus pour finir une ligne coupée après la virgule
 # « MH Inventé – Moët Inventé » : deux noms de la même société. Le tiret long seul : « Hôtel -
@@ -80,8 +78,9 @@ TAILLE_MAX_ESEF = 300 * 1024 * 1024
 _FR = r"(?:(?:" + "|".join(re.escape(o) for o in OUTRE_MER) + r"), )?France"
 # Format VINCI. Seule la France est lue en détail : le nom d'un pays étranger peut avoir plusieurs mots.
 _LONGUE = "|".join(METHODES_LONGUES)
-_VINCI_FR = re.compile(rf"^(?P<avant>.+?) {_FR} (?P<taux>\d{{1,3}},\d{{2}}) (?P<meth>{_LONGUE})$")
-_VINCI_FIN = re.compile(rf" \d{{1,3}},\d{{2}} (?:{_LONGUE})$")
+# Le taux : « 100,00 » chez VINCI, « 100 » ou « 20,89161 » chez Engie (T054).
+_VINCI_FR = re.compile(rf"^(?P<avant>.+?) {_FR} (?P<taux>\d{{1,3}}(?:,\d+)?) (?P<meth>{_LONGUE})$")
+_VINCI_FIN = re.compile(rf" \d{{1,3}}(?:,\d+)? (?:{_LONGUE})$")
 # Format LVMH : « <nom> <ville>, <pays> <méthode> <taux> % ».
 _COURTE = "|".join(METHODES_COURTES)
 _LVMH = re.compile(
@@ -143,14 +142,15 @@ class LignePerimetre:
 
     candidats: tuple[Candidat, ...]
     methode: str  # « IG » (intégration globale), « MEE » (mise en équivalence), « NC » (non
-    # consolidée) ou « autre »
+    # consolidée), « inconnue » (non publiée) ou « autre »
     taux: float  # taux d'intérêt du groupe, en %
     texte: str  # la ligne de la société telle que lue, sans les lignes d'avant : la preuve
 
     @property
     def controlee(self) -> bool:
-        """Le groupe contrôle la société : intégration globale, ou non consolidée à plus de 50 % (T053)."""
-        return self.methode == "IG" or (self.methode == NON_CONSOLIDEE and self.taux > 50)
+        """Le groupe contrôle la société : intégration globale, ou non consolidée (T053) ou de méthode
+        non publiée (T054) à plus de 50 %."""
+        return self.methode == "IG" or (self.methode in (NON_CONSOLIDEE, SANS_METHODE) and self.taux > 50)
 
 
 @dataclass(frozen=True)
@@ -197,6 +197,7 @@ class _Rangees(_Texte):
         super().__init__()
         self._cellule = 0  # profondeur dans une cellule
         self._cellules = 0  # cellules déjà ouvertes dans la rangée
+        self._rangee = False  # dans une rangée : ses retours à la ligne ne la coupent pas (T054)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag in ("td", "th"):
@@ -205,6 +206,7 @@ class _Rangees(_Texte):
             self._cellule += 1
         elif tag == "tr":
             self._cellules = 0
+            self._rangee = True
             self.morceaux.append("\n")
         elif self._cellule and tag in self.BLOCS:
             self.morceaux.append(" ")
@@ -216,11 +218,16 @@ class _Rangees(_Texte):
             self._cellule = max(0, self._cellule - 1)
         elif tag == "tr":
             self._cellules = 0
+            self._rangee = False
             self.morceaux.append("\n")
         elif self._cellule and tag in self.BLOCS:
             self.morceaux.append(" ")
         else:
             super().handle_endtag(tag)
+
+    def handle_data(self, data: str) -> None:
+        # Un rapport indenté (TotalEnergies, Carrefour) a des retours à la ligne entre deux cellules.
+        super().handle_data(data.replace("\r", " ").replace("\n", " ") if self._rangee else data)
 
 
 def _texte_esef(xhtml: str) -> str:
@@ -251,32 +258,33 @@ def _rapport_esef(chemin: Path) -> str:
 
 
 def texte_document(chemin: Path) -> str:
-    """Le texte d'un document de périmètre : PDF (pypdf), paquet ESEF (.zip ou .xhtml, une ligne par
-    rangée de tableau), page HTML (balises retirées) ou texte."""
+    """Le texte d'un document de périmètre : PDF (pypdf), paquet ESEF (.zip ou .xhtml), page HTML
+    (une ligne par rangée de tableau, cellules séparées par « | ») ou texte.
+
+    Limites : 300 Mo pour un rapport ESEF ou son paquet (le zip d'Accor ou de Saint-Gobain dépasse
+    50 Mo, T054), 50 Mo pour le reste."""
     taille = chemin.stat().st_size
-    if chemin.suffix.lower() == ".xhtml":  # rapport ESEF hors de son paquet
+    suffixe = chemin.suffix.lower()
+    if suffixe in (".xhtml", ".html", ".htm"):  # rapport ESEF hors de son paquet, ou page HTML
         if taille > TAILLE_MAX_ESEF:
-            raise ValueError("Rapport ESEF de plus de 300 Mo.")
+            raise ValueError("Rapport ESEF ou page HTML de plus de 300 Mo.")
         return _texte_esef(chemin.read_text(encoding="utf-8", errors="replace"))
-    if taille > TAILLE_MAX:
-        raise ValueError("Le document dépasse 50 Mo : ce n'est pas une liste de sociétés consolidées.")
     with chemin.open("rb") as f:
         debut = f.read(5)
-    if debut.startswith(b"PK\x03\x04") or chemin.suffix.lower() == ".zip":
+    if debut.startswith(b"PK\x03\x04") or suffixe == ".zip":
+        if taille > TAILLE_MAX_ESEF:
+            raise ValueError("Paquet ESEF de plus de 300 Mo.")
         return _texte_esef(_rapport_esef(chemin))
-    if debut.startswith(b"%PDF") or chemin.suffix.lower() == ".pdf":
+    if taille > TAILLE_MAX:
+        raise ValueError("Le document dépasse 50 Mo : ce n'est pas une liste de sociétés consolidées.")
+    if debut.startswith(b"%PDF") or suffixe == ".pdf":
         from pypdf import PdfReader
 
         # pypdf signale chaque police qu'il décode mal : le texte reste lisible, le journal non.
         logging.getLogger("pypdf").setLevel(logging.ERROR)
         return "\n".join((page.extract_text() or "") for page in PdfReader(chemin).pages)
     texte = chemin.read_text(encoding="utf-8", errors="replace")
-    if chemin.suffix.lower() in (".html", ".htm") or texte.lstrip()[:1] == "<":
-        lecteur = _Texte()
-        lecteur.feed(texte)
-        lecteur.close()
-        texte = "".join(lecteur.morceaux)
-    return texte
+    return _texte_esef(texte) if texte.lstrip()[:1] == "<" else texte
 
 
 def _propre(ligne: str) -> str:
@@ -375,7 +383,13 @@ def _unique(candidats: list[Candidat]) -> tuple[Candidat, ...]:
 
 
 def extraire(texte: str) -> list[LignePerimetre]:
-    """Les sociétés situées en France ou en outre-mer, dans l'ordre du document."""
+    """Les sociétés situées en France ou en outre-mer, dans l'ordre du document. Les formats de
+    T054 ne sont essayés que si les formats VINCI, LVMH et ESEF ne lisent rien : un document déjà
+    lu l'est toujours de la même façon."""
+    return _extraire_vinci_lvmh_esef(texte) or _extraire_sections(texte)
+
+
+def _extraire_vinci_lvmh_esef(texte: str) -> list[LignePerimetre]:
     sortie: list[LignePerimetre] = []
     avant: list[str] = []
     coupee: list[str] = []  # une ligne finie par une virgule, et ce qui l'a suivie
@@ -391,6 +405,8 @@ def extraire(texte: str) -> list[LignePerimetre]:
                 sortie.append(LignePerimetre(_candidats_tableau(nom), meth, _taux(m["taux"]), ligne))
             avant, coupee = [], []
             continue
+        if "|" in ligne:  # une page HTML au format VINCI ou LVMH : la rangée se lit sans ses cellules
+            ligne = " ".join(c.strip() for c in ligne.split("|") if c.strip())
         if coupee:
             seule = _VINCI_FR.match(ligne) or _LVMH.match(ligne) or _VINCI_FIN.search(ligne)
             recollee = None if seule else _LVMH.match(" ".join([*coupee, ligne]))
@@ -431,3 +447,276 @@ def extraire(texte: str) -> list[LignePerimetre]:
             continue
         avant = []  # une ligne de société, en France ou non, termine le nom en cours
     return sortie
+
+
+# --- Formats ajoutés le 2026-10-21 (T054) ------------------------------------------------------
+# Méthodes écrites dans une cellule ou en fin de ligne, ramenées par `cle_pays` (majuscules, sans
+# accents) : « E » chez TotalEnergies, « MEP », « MEI », « MES » à la Société Générale.
+_METHODES_T054 = {
+    "IG": "IG", "INTEGRATION GLOBALE": "IG", "FC": "IG",
+    "MEE": "MEE", "ME": "MEE", "E": "MEE", "MEP": "MEE", "MEI": "MEE", "MES": "MEE",
+    "MISE EN EQUIVALENCE": "MEE", "EM": "MEE",
+    "IP": "autre", "JV": "autre", "INTEGRATION PROPORTIONNELLE": "autre", "OPERATION CONJOINTE": "autre",
+    "NC": NON_CONSOLIDEE,
+}  # fmt: skip
+_POURCENT = re.compile(r"^\d{1,3}(?:[,.]\d+)?$")
+_MONTANT = re.compile(r"^\(?-?\d[\d  ]*(?:[,.]\d+)?\)?$")  # « 1 995 », « (1 693) » : un montant
+_SIREN_CELLULE = re.compile(r"^\d{3} ?\d{3} ?\d{3}$")  # Hermès donne le SIREN de ses filiales
+_VIDE = {"", "-", "–", "—", "n.a."}
+# Succursale, établissement d'une société étrangère : jamais une société française à retrouver.
+_SUCCURSALE = re.compile(r"(?i)\b(?:succursale|succ\.|branch|niederlassung|sucursal)")
+_NOTES_TETE = re.compile(r"^(?:\(\d+\)\s*)+")  # « (1)(6) TREEZOR SAS »
+_NOTES_FIN = re.compile(r"(?:\s*\(\d+\))+$")  # « ACTICCIA VIE 3 (1) »
+_TAUX_T054 = r"\d{1,3}(?:,\d+)?"
+# Société Générale : « <NOM> <Activité> <méthode> <% intérêt> <% contrôle> », pays en titre.
+_SG = re.compile(rf"^(?P<corps>.+?) (?P<meth>IG|MEP|MEI|MES|MEE|ME) (?P<taux>{_TAUX_T054}) {_TAUX_T054}$")
+# Crédit Agricole S.A. : « <nom> <symbole> <variation> <type> <pôle> <% contrôle 2025> <2024>
+# <% intérêt 2025> <2024> », pays en titre. ■ intégration globale, ▲ équivalence, ● mère, X juste valeur.
+_CASA_VALEUR = r"(?:\d{1,3},\d|-)"
+_CASA = re.compile(
+    rf"^(?P<corps>.+?) (?P<sym>[■▲●X]) \S+ \S+ \S+ {_CASA_VALEUR} {_CASA_VALEUR}"
+    rf" (?P<taux>{_CASA_VALEUR}) {_CASA_VALEUR}$"
+)
+_CASA_METHODES = {"■": "IG", "●": "IG", "▲": "MEE", "X": "autre"}
+# BNP Paribas : « <nom> France <méthode>(<note>) <% contrôle> <% intérêt> », puis l'exercice d'avant.
+_BNP = re.compile(
+    r"^(?P<corps>.+?) France (?P<meth>IG|ME|MEE)(?:\(\d+\))? (?:\d{1,3},\d%) (?P<taux>\d{1,3},\d)%(?: .*)?$"
+)
+# Airbus : « <F|E|P> <% intérêt> <nom> France » (F intégration globale, E équivalence, P proportionnelle).
+_AIRBUS = re.compile(r"^(?P<meth>[FEP]) (?P<taux>\d{1,3}\.\d+) (?P<corps>.+) France$")
+_AIRBUS_METHODES = {"F": "IG", "E": "MEE", "P": "autre"}
+# Eurofins : « <nom> FR <mère directe> <% détenu> <mois/année d'entrée> ».
+# Longueurs bornées : sans elles, une longue ligne pleine de « FR » prend un temps quadratique.
+_EUROFINS = re.compile(
+    r"^(?P<corps>[^%]{1,200}?) FR (?P<mere>[^%]{1,200}?) (?P<taux>\d{1,3}[.,]\d+)% \d{2}/\d{2}$"
+)
+# Euronext : « <nom> France <% 2025> <% 2024> ». Le nom finit par sa forme juridique : sans elle,
+# « Effectifs France 62,3% 60,1% » se lirait comme une société.
+_FORME = r"(?:S\.?A\.?S?\.?U?|SARL|SNC|SCI|SE|GIE|N\.V\.|B\.V\.|Ltd\.?|S\.p\.A\.|S\.r\.l\.|GmbH)"
+_POURCENTS = re.compile(
+    rf"^(?P<corps>.{{1,200}}? {_FORME}) France (?P<taux>\d{{1,3}}[.,]\d+)% (?:\d{{1,3}}[.,]\d+%|—|-)$"
+)
+# Les formats où le pays est sur la ligne : ils se lisent hors d'une section « France ».
+_PAYS_SUR_LA_LIGNE = (_BNP, _AIRBUS, _EUROFINS, _POURCENTS)
+_PARAGRAPHE = 80  # une ligne sans « | » plus longue est du texte courant : elle ferme une section de tableau
+_LIGNE_MAX = 1000  # une rangée de liste tient en moins ; au-delà, du texte : pas de motif à essayer
+# Titre d'une section de tableau : le pays, puis l'intitulé d'une colonne de détention (Carrefour :
+# « FRANCE | Pourcentage d'intérêts retenus en consolidation »).
+_TITRE_DETENTION = re.compile(r"(?i)pourcentage|%|int[ée]r[êe]t|contr[ôo]le|d[ée]tention|interest|ownership")
+# « Sortie Inventée | France |  |  |  | 100 | 98 | IG » : trois cellules vides de suite avant le premier
+# taux, ce sont les colonnes de l'exercice ; les suivantes sont celles d'avant. Stellantis laisse
+# des colonnes vides de mise en page, une à la fois.
+_VIDES_SORTIE = 3
+
+
+def _nom_t054(corps: str, majuscules: bool = False) -> str:
+    """Le nom d'une ligne : sans appels de note, et pour la Société Générale sans la colonne
+    d'activité, écrite en minuscules (« SODEPROM Banque de détail en France ») : on garde les mots
+    du début qui n'ont aucune minuscule."""
+    nom = _NOTES_FIN.sub("", _NOTES_TETE.sub("", corps)).strip()
+    if majuscules:
+        mots = []
+        for mot in nom.split():
+            if any(c.islower() for c in mot):
+                break
+            mots.append(mot)
+        nom = " ".join(mots)
+    return nom
+
+
+def _nom_plausible(nom: str) -> bool:
+    """Deux lettres au moins (« AS 24 », pas « # »), et pas la fin d'un nom coupé (« (FMU) », « privée »)."""
+    return sum(c.isalpha() for c in nom) >= 2 and not nom.startswith("(") and not nom[:1].islower()
+
+
+@dataclass(frozen=True)
+class _Rangee:
+    """Une rangée de tableau lue par `_cellules_t054`."""
+
+    nom: str
+    en_france: bool
+    methode: str
+    taux: float
+    pays_etranger: bool  # la rangée porte un pays étranger (pas une zone) : un tableau de sociétés
+    avec_methode: bool
+    forme: tuple[int, int]  # (cellules, place de la cellule du pays) : la forme du tableau
+
+
+def _cellules_t054(ligne: str, section: tuple[bool, int] | None) -> _Rangee | None:
+    """Une rangée de tableau : (nom, en France, méthode, taux), ou None. Le pays est la première
+    cellule qui est un nom de pays (TotalEnergies : le pays du siège avant le pays d'opération), à
+    défaut celui du titre de la section de tableau, si la rangée a autant de cellules que lui. Une
+    rangée qui porte un montant (« 1 995 ») ou plus de 4 taux est un tableau financier ; sans
+    méthode ni titre de section, une rangée doit porter deux taux, ou un taux à décimales."""
+    cellules = [c.strip() for c in ligne.split("|")]
+    nom = pays = meth = None
+    place = -1  # place de la cellule du pays
+    taux: list[float] = []
+    vides = 0  # cellules vides de suite après le nom, avant le premier taux
+    decimal = False  # un taux écrit avec ses décimales (« 15,00 ») : une colonne de pourcentages
+    for c in cellules:
+        if c in _VIDE:
+            if nom is not None and not taux:
+                vides += 1
+                if vides >= _VIDES_SORTIE:  # l'exercice est vide : société sortie, pas l'exercice d'avant
+                    return None
+            continue
+        vides = 0
+        if _SIREN_CELLULE.match(c):
+            continue
+        if _POURCENT.match(c):
+            if float(c.replace(",", ".")) > 100:
+                return None
+            if nom is not None:
+                taux.append(_taux(c))
+                decimal = decimal or not c.isdigit()
+            continue
+        if _MONTANT.match(c):
+            return None
+        if (m := _METHODES_T054.get(cle_pays(c))) is not None:
+            meth = meth or m
+        elif est_pays(c):
+            if pays is None:
+                pays, place = c, cellules.index(c)
+        elif "," in c and est_pays(debut := c.split(",", 1)[0]):  # « France, Crolles » (STMicro)
+            if pays is None:
+                pays, place = debut, cellules.index(c)
+            decimal = True  # une colonne d'adresse : un tableau de sociétés, pas de sites
+        elif nom is None:
+            nom = c
+    if (
+        nom is None
+        or not taux
+        or len(taux) > 4
+        or _SUCCURSALE.search(nom)
+        or sum(c.isalpha() for c in nom) < 2
+    ):
+        return None
+    if pays is not None:
+        # « Cristallerie | France | 2 » (un tableau de sites, Hermès) : sans méthode, il faut deux taux
+        # ou un taux à décimales pour croire à une liste de sociétés.
+        if meth is None and len(taux) == 1 and not decimal:
+            return None
+        en_france = francais(pays)
+    elif section is not None and section[1] == len(cellules):
+        en_france = section[0]
+    else:
+        return None
+    etranger = pays is not None and not en_france and not est_zone(pays)
+    return _Rangee(
+        nom, en_france, meth or SANS_METHODE, taux[0], etranger, meth is not None, (len(cellules), place)
+    )
+
+
+def _extraire_sections(texte: str) -> list[LignePerimetre]:
+    """Les formats de T054 :
+    - une rangée de tableau dont une cellule est le pays (TotalEnergies, Bureau Veritas, Hermès), ou
+      sous un titre de section de tableau « FRANCE | Pourcentage d'intérêts » (Carrefour) ;
+    - une ligne de la Société Générale ou du Crédit Agricole S.A., sous un titre « France » ;
+    - une ligne de BNP Paribas (« <nom> France IG 100,0% 100,0% »), d'Airbus, d'Eurofins ou
+      d'Euronext, où le pays est sur la ligne ;
+    - une rangée « France, <ville> | <nom> | <taux> » (STMicroelectronics).
+    Le nom d'une ligne de texte peut être coupé sur les deux lignes d'avant : les noms recollés sont
+    essayés d'abord, la ligne seule ensuite, si son nom est plausible.
+
+    Une rangée de tableau sans méthode n'est gardée que si le document a, de la même forme (nombre
+    de cellules, place du pays), une rangée d'un pays étranger : une liste de filiales couvre
+    plusieurs pays, parfois en blocs par région (Renault) ; un tableau de chiffres sur la France
+    (« Répartition des effectifs | France | 55 | 54 ») non. Sous un titre de section de détention
+    (Carrefour), le titre suffit. La lecture se fait donc en deux temps : rangées, puis formes."""
+    sortie: list[LignePerimetre] = []
+    avant: list[str] = []
+    section_texte = False  # sous un titre « France » d'une liste en texte
+    section_tableau: tuple[bool, int] | None = None  # (France ?, cellules) du titre de tableau
+    # Dans l'ordre du document : une ligne de texte déjà lue, ou une rangée de tableau à trancher.
+    lues: list[LignePerimetre | tuple[_Rangee, str, bool]] = []
+
+    for brute in texte.splitlines():
+        ligne = _rangee(_propre(brute))
+        if not ligne or ligne.isdigit() or len(ligne) > _LIGNE_MAX:
+            continue
+        if "|" in ligne:
+            cellules = ligne.split(" | ")
+            if (
+                est_pays(cellules[0])
+                and len(cellules) > 1
+                and all(_TITRE_DETENTION.search(c) for c in cellules[1:])
+            ):
+                section_tableau = (francais(cellules[0]), len(cellules))
+            elif r := _cellules_t054(ligne, section_tableau):
+                lues.append((r, ligne, section_tableau is not None and section_tableau[1] == len(cellules)))
+            avant = []
+            continue
+        if est_pays(ligne):
+            section_texte = francais(ligne)
+            section_tableau = None
+            avant = []
+            continue
+        if len(ligne) > _PARAGRAPHE:
+            section_tableau = None
+        lue = _ligne_texte_t054(avant, ligne, section_texte)
+        if lue is None:
+            avant = (avant + [ligne])[-LIGNES_AVANT:]
+            continue
+        if lue.candidats:
+            lues.append(lue)
+        avant = []
+    listes = {x[0].forme for x in lues if isinstance(x, tuple) and x[0].pays_etranger}
+    for x in lues:
+        if isinstance(x, LignePerimetre):
+            sortie.append(x)
+            continue
+        r, texte, par_titre = x
+        if r.en_france and (r.avec_methode or par_titre or r.forme in listes):
+            sortie.append(LignePerimetre(_candidats_tableau(r.nom), r.methode, r.taux, texte))
+    return sortie
+
+
+_MOTIFS_TEXTE = (
+    (_SG, True), (_CASA, False), (_BNP, False), (_AIRBUS, False), (_EUROFINS, False), (_POURCENTS, False),
+)  # fmt: skip
+
+
+def _ligne_texte_t054(avant: list[str], ligne: str, section_fr: bool) -> LignePerimetre | None:
+    """Une ligne de société (Société Générale, Crédit Agricole S.A., BNP Paribas, Airbus, Eurofins,
+    Euronext), recollée aux lignes d'avant si sa fin y commence. None : pas une ligne de société.
+    Une ligne de société hors de France, ou sans nom plausible, rend une ligne sans candidat.
+
+    Méthode et taux : ceux de la rangée la plus courte qui se lit (Airbus les écrit en tête de
+    ligne : une rangée plus longue les prendrait sur la ligne d'avant, une autre société). Noms :
+    le plus long d'abord ; les plus courts, des bouts possibles d'un nom coupé, ne sont que de
+    secours, et jamais un mot seul (« BONDS », la fin d'un nom de fonds, est une autre société).
+    Preuve : la rangée la plus courte qui porte un nom plausible."""
+    for motif, majuscules in _MOTIFS_TEXTE:
+        jointes = []  # (texte, correspondance), de la ligne seule à la plus longue
+        # Airbus commence sa rangée par la méthode : elle n'est jamais la suite d'une ligne d'avant.
+        for k in range(len(avant), len(avant) - 1 if motif is _AIRBUS else -1, -1):
+            texte = " ".join([*avant[k:], ligne])
+            if mk := motif.match(texte):
+                jointes.append((texte, mk))
+        if not jointes:
+            continue
+        m = jointes[0][1]
+        if motif is _CASA and m["taux"] == "-":  # sortie du périmètre dans l'exercice
+            return LignePerimetre((), "", 0.0, ligne)
+        if motif not in _PAYS_SUR_LA_LIGNE and not section_fr:
+            return LignePerimetre((), "", 0.0, ligne)
+        if motif is _CASA:
+            meth = _CASA_METHODES[m["sym"]]
+        elif motif is _AIRBUS:
+            meth = _AIRBUS_METHODES[m["meth"]]
+        elif motif in (_EUROFINS, _POURCENTS):
+            meth = SANS_METHODE
+        else:
+            meth = _METHODES_T054[m["meth"]]
+        noms = [
+            (nom, texte) for texte, mk in jointes if _nom_plausible(nom := _nom_t054(mk["corps"], majuscules))
+        ]
+        if not noms or _SUCCURSALE.search(noms[0][0]):
+            return LignePerimetre((), "", 0.0, ligne)
+        long, *courts = reversed(noms)
+        candidats = [Candidat(long[0], None)] + [
+            Candidat(n, None, secours=True) for n, _ in courts if len(n.split()) > 1
+        ]
+        return LignePerimetre(_unique(candidats), meth, _taux(m["taux"]), noms[0][1])
+    return None

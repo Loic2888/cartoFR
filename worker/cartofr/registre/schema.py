@@ -148,10 +148,15 @@ create table if not exists documents_perimetre (
     fin timestamptz,                    -- remplacé le ; vide = en vigueur
     lignes integer not null,            -- lignes en France lues dans le document
     retenues integer not null,          -- lignes retrouvées dans le registre
-    refusees integer not null           -- homonymes, introuvables, conflits
+    refusees integer not null,          -- homonymes, introuvables, conflits
+    mere_etrangere varchar,             -- raison sociale de la mère hors de France (T054), ou vide
+    pays_mere varchar                   -- son pays, code ISO à 2 lettres (« NL »), ou vide
 );
 comment on table documents_perimetre is
     'Documents de périmètre déposés, un en vigueur par tête. Fermés, jamais effacés.';
+-- Un registre d'avant T054 n'a pas les colonnes de la mère étrangère.
+alter table documents_perimetre add column if not exists mere_etrangere varchar;
+alter table documents_perimetre add column if not exists pays_mere varchar;
 """
 
 
