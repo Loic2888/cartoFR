@@ -61,6 +61,8 @@ class Groupe:
     tete: str
     nom: str | None
     taille: int  # sociétés, tête comprise (sous-groupes compris pour le groupe entier)
+    mere_etrangere: str | None = None  # la mère hors de France du groupe, s'il y en a une (T054)
+    pays_mere: str | None = None  # son pays, code ISO à 2 lettres
 
 
 @dataclass(frozen=True)
@@ -148,8 +150,12 @@ select coalesce(sum(g.taille), 0) from pays.pays_groupes g where g.tete in (sele
 
 
 def _groupe(con: duckdb.DuckDBPyConnection, tete: str) -> Groupe | None:
-    ligne = con.execute("select tete, nom, taille from pays.pays_groupes where tete = ?", [tete]).fetchone()
-    return Groupe(str(ligne[0]), ligne[1], int(ligne[2])) if ligne else None
+    sql = "select tete, nom, taille{} from pays.pays_groupes where tete = ?"
+    try:
+        ligne = con.execute(sql.format(", mere_etrangere, pays_mere"), [tete]).fetchone()
+    except duckdb.BinderException:  # carto du pays calculée avant T054 : pas de mère étrangère
+        ligne = con.execute(sql.format(""), [tete]).fetchone()
+    return Groupe(str(ligne[0]), ligne[1], int(ligne[2]), *ligne[3:]) if ligne else None
 
 
 def _groupe_entier(con: duckdb.DuckDBPyConnection, groupe: str, siren: str) -> Groupe | None:
@@ -163,7 +169,9 @@ def _groupe_entier(con: duckdb.DuckDBPyConnection, groupe: str, siren: str) -> G
     if haut is None:
         return None
     total = con.execute(_TAILLE_ENTIERE, {"tete": sommet}).fetchone()
-    return Groupe(haut.tete, haut.nom, int(total[0]) if total else haut.taille)
+    return Groupe(
+        haut.tete, haut.nom, int(total[0]) if total else haut.taille, haut.mere_etrangere, haut.pays_mere
+    )
 
 
 def _date_donnees(con: duckdb.DuckDBPyConnection) -> str | None:

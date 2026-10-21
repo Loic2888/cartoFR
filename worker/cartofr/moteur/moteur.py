@@ -103,6 +103,7 @@ METHODES = {
     "IG": "intégration globale",
     "MEE": "mise en équivalence",
     "NC": "non consolidée",
+    "inconnue": "méthode non publiée",
     "autre": "autre méthode",
 }
 

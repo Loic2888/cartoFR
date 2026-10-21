@@ -35,11 +35,13 @@ def ecrire_pays(chemin: Path, filles: list[tuple[str, str]], date_donnees: date 
     con = duckdb.connect(str(chemin))
     con.execute(DDL_PAYS)
     con.execute(
-        "insert into pays_groupes values (?, 'TETE INVENTEE', ?, null, false, null, ?)",
+        "insert into pays_groupes (tete, nom, taille, document, mutualiste, parent, date_donnees)"
+        " values (?, 'TETE INVENTEE', ?, null, false, null, ?)",
         [TETE, len(filles) + 1, date_donnees],
     )
     con.execute(
-        "insert into pays_groupes values (?, 'AUTRE INVENTEE', 2, 'autre.pdf', false, null, ?)",
+        "insert into pays_groupes (tete, nom, taille, document, mutualiste, parent, date_donnees)"
+        " values (?, 'AUTRE INVENTEE', 2, 'autre.pdf', false, null, ?)",
         [AUTRE_TETE, date_donnees],
     )
     lignes = [(TETE, TETE, None, 0, "inscription"), (AUTRE_TETE, AUTRE_TETE, None, 0, "inscription")]

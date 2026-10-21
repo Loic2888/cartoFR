@@ -20,10 +20,21 @@ export function nomAffiche(c: { siren: string; nom: string | null }): string {
   return c.nom ?? `SIREN ${sirenFr(c.siren)}`;
 }
 
+/** « NL » -> « Pays-Bas » ; le code tel quel si le navigateur ne connaît pas le pays. */
+export function paysFr(code: string): string {
+  try {
+    return new Intl.DisplayNames(["fr"], { type: "region" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
 export function EnTete({ carto, correction }: { carto: CartoPays; correction: Correction }) {
   const nom = nomAffiche(carto);
   const chiffres = compter(carto.societes);
   const entier = carto.groupe_entier;
+  // La mère hors de France du groupe (T054) : le groupe entier d'abord, sinon celui de la société.
+  const etranger = [entier, carto.groupe].find((g) => g?.mere_etrangere);
   return (
     <>
       <div className="flex flex-col gap-1">
@@ -57,6 +68,15 @@ export function EnTete({ carto, correction }: { carto: CartoPays; correction: Co
       <dl className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
         <dt className="text-muted-foreground">Données du registre au</dt>
         <dd className="mb-2 font-medium sm:mb-0">{dateDonneesFr(carto.date_donnees)}</dd>
+        {etranger?.mere_etrangere ? (
+          <>
+            <dt className="text-muted-foreground">Mère du groupe, hors de France</dt>
+            <dd className="mb-2 break-words sm:mb-0">
+              {etranger.mere_etrangere}
+              {etranger.pays_mere ? ` (${paysFr(etranger.pays_mere)})` : ""}
+            </dd>
+          </>
+        ) : null}
         <dt className="text-muted-foreground">Carto</dt>
         <dd className="mb-2 sm:mb-0">Calculée sans correction, à partir du registre et des documents publiés</dd>
         <dt className="text-muted-foreground">Sociétés</dt>

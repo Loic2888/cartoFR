@@ -501,3 +501,22 @@ def test_tete_de_sous_groupe_dont_la_mere_directe_est_rangee_ailleurs(tmp_path: 
     assert lignes[mu]["groupe"] == z
     assert (lignes[b]["groupe"], lignes[b]["mere"], lignes[b]["confiance"]) == (b, d, "C")
     assert lignes[b]["preuve"] == f"Déduit : maison mère directe {mu} rangée dans le groupe {z}"
+
+
+def test_mere_etrangere_du_document_dans_pays_groupes(tmp_path: Path) -> None:
+    """T054 : la mère hors de France déclarée au dépôt suit le groupe dans la carto du pays."""
+    k1, kf = siren(110), siren(111)
+    data = tmp_path / "data"
+    data.mkdir()
+    mini = MiniRegistre()
+    mini.societe(k1, "TETE FRANCE INVENTEE")
+    mini.societe(kf, "FILLE FRANCE INVENTEE")
+    mini.ecrire(data / "registre.duckdb")
+    chemin = tmp_path / "k1.txt"
+    chemin.write_text(_ligne("Fille France Inventée") + "\n", encoding="utf-8")
+    deposer([Demande(k1, chemin, "MERE INVENTEE N.V.", "NL")], data, maintenant=LE)
+    calcul.lancer(data)
+    groupes = {
+        t: (m, p) for t, m, p in _lire(data, "select tete, mere_etrangere, pays_mere from pays_groupes")
+    }
+    assert groupes[k1] == ("MERE INVENTEE N.V.", "NL")

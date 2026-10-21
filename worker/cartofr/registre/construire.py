@@ -183,7 +183,8 @@ def _reprendre_documents(ancien: Path, nouveau: Path) -> None:
             " and table_name = 'documents_perimetre'"
         ).fetchone()
         if existe and existe[0]:
-            con.execute("insert into documents_perimetre select * from ancien.documents_perimetre")
+            # Par nom : l'ancien registre peut ne pas avoir les colonnes ajoutées depuis (T054).
+            con.execute("insert into documents_perimetre by name select * from ancien.documents_perimetre")
         con.execute("detach ancien")
         con.execute("checkpoint")
     finally:

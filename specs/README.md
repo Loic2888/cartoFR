@@ -121,6 +121,7 @@ Ouverte le 2026-10-16, après la révision de `PRD.md` (US7, US2 réécrite, US8
 - [x] `T052` [P] — Mesurer la carto du pays : justesse sans correction, fraîcheur, couverture *(mergée le 2026-10-19 ; groupes cotés à mesurer quand la liste sera là)*
 - [x] `T051` — Corriger la carto d'un groupe sans étape de validation, et en montrer l'effet *(P2, après T050 ; 2026-10-19)*
 - [x] `T053` — Retrouver 90 % de LVMH sans correction *(mergée le 2026-10-19, #63 : 158/172)*
+- [ ] `T054` — Lire les listes du CAC 40 et noter la mère des groupes étrangers *(2026-10-21)*
 
 En parallèle, hors code : Loïc cherche et dépose les documents des groupes cotés à Paris (SC-008), dès que T046 est là.
 
@@ -174,7 +175,7 @@ Vérifié par fichiers partagés : deux tâches `[P]` d'une même phase ne touch
 |---|---|---|---|---|
 | US1 | P1 | T010–T015 (+ T007) | FR-001, FR-002, FR-003 | SC-003 |
 | US2 | P1 | T016–T024 (+ T019 recherche), T050 (lecture de la carto du pays, 2026-10-16) | FR-004, FR-006, FR-007 | SC-001, SC-002, SC-004, SC-005 |
-| US7 | P1 | T045–T049, T052, T053 | FR-012, FR-013, FR-014 | SC-001, SC-004, SC-008, SC-009 |
+| US7 | P1 | T045–T049, T052–T054 | FR-012, FR-013, FR-014 | SC-001, SC-004, SC-008, SC-009 |
 | US8 | P2 | T051 (+ T020, T021) | FR-005 | — |
 | US3 | P3 depuis le 2026-10-16 | T025, T026 | FR-008 | ~~SC-007~~ retiré |
 | US4 | P2 | T027, T028 | FR-009 | — |

@@ -23,6 +23,9 @@ const groupe = z.object({
   tete: siren,
   nom: z.string().nullable(),
   taille: z.number().int().nonnegative(),
+  // Mère hors de France, déclarée au dépôt du document du groupe (T054). Absente d'un worker d'avant.
+  mere_etrangere: z.string().nullable().optional(),
+  pays_mere: z.string().regex(/^[A-Z]{2}$/).nullable().optional(),
 });
 export type GroupePays = z.infer<typeof groupe>;
 

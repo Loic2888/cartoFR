@@ -295,7 +295,9 @@ def _pays(dossier: Path) -> Path:
     con = duckdb.connect(str(chemin))
     con.execute(DDL_PAYS)
     con.execute(
-        "insert into pays_groupes values (?, 'BOULONNERIE QUANTIQUE', 2, null, false, null, ?)", [TETE, JOUR]
+        "insert into pays_groupes (tete, nom, taille, document, mutualiste, parent, date_donnees)"
+        " values (?, 'BOULONNERIE QUANTIQUE', 2, null, false, null, ?)",
+        [TETE, JOUR],
     )
     for siren, nom, mere, niveau, preuve, confiance in (
         (TETE, "BOULONNERIE QUANTIQUE", None, 0, "Tête du groupe", "A"),
@@ -316,7 +318,13 @@ def test_groupe_rend_la_societe_et_sa_descendance(registre: Path, serveur: str) 
     statut, corps = _get(f"{serveur}/groupe?siren={TETE}")
     assert statut == 200
     assert corps["date_donnees"] == JOUR.isoformat()
-    assert corps["groupe"] == {"tete": TETE, "nom": "BOULONNERIE QUANTIQUE", "taille": 2}
+    assert corps["groupe"] == {
+        "tete": TETE,
+        "nom": "BOULONNERIE QUANTIQUE",
+        "taille": 2,
+        "mere_etrangere": None,
+        "pays_mere": None,
+    }
     assert corps["groupe_entier"] is None and corps["mere"] is None
     assert [s["siren"] for s in corps["societes"]] == [TETE, FILLE]
     assert corps["societes"][1]["maison_mere_siren"] == TETE

@@ -20,7 +20,9 @@ create table pays_groupes (
     document varchar,                   -- fichier du document de périmètre utilisé, ou vide
     mutualiste boolean not null,        -- groupe de Crédit Mutuel qui a reçu ses caisses locales (T049)
     parent varchar,                     -- tête du groupe parent (groupes emboîtés), ou vide
-    date_donnees date
+    date_donnees date,
+    mere_etrangere varchar,             -- mère hors de France, déclarée au dépôt du document (T054)
+    pays_mere varchar                   -- son pays, code ISO à 2 lettres
 );
 create table pays_societes (
     siren varchar primary key,
