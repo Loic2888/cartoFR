@@ -895,3 +895,17 @@ Coût : 7 s de plus par correspondance (43 → 50 s pour les 23 documents). Les 
 **Pas de redépôt** : les documents sont les mêmes (même empreinte), et la correspondance se refait à chaque carto. Les compteurs de `documents_perimetre` restent ceux du dépôt.
 
 **Ce que les règles ne rattrapent pas** : 657 introuvables et 283 homonymes. Ce sont surtout des fonds et véhicules d'assurance de Crédit Agricole S.A. (259), des SPV solaires de TotalEnergies, et des homonymes de Carrefour (« SCI 2F », « CANDIS ») que le registre ne relie pas au groupe. Les liens RNE de ces grands groupes sont minces : 7 sociétés sous Bureau Veritas, par exemple. La suite possible est une table de correspondance par recherche web, avec la source de chaque SIREN et la validation de Loïc : à décider.
+
+### Carto du pays avec les listes du CAC 40 (après T054 et T055)
+
+`pays.duckdb` recalculé sur `main` (7287b41) : 288 367 groupes, 939 809 sociétés rangées, 26 documents (LVMH, VINCI, CMAF et les 23 du CAC 40), aucun en échec, 237 s. Données du registre du 2026-03-04.
+
+Mesure `non_regression.py --depuis-pays` (seuils de SC-001 tenus, code 0) :
+
+| Groupe | Retrouvées | En plus | dont inscrites au document | Avant (T049) |
+|---|---|---|---|---|
+| LVMH | 92 % (158/172) | 75 | 66 | 158/172, 75 en plus |
+| VINCI | 83 % (834/1 007) | 625 | 519 | 836/1 007, 624 en plus |
+| CMAF | 83 % (43/52) | 1 754 | 55 | 43/52 |
+
+VINCI perd 2 sociétés de sa référence : SCCV Villeneuve Village Bongarde et SCCV Villeneuve Bongarde T2, détenues à 51 % par Sogeprom. La liste de Société Générale les inscrit, et au départage l'inscription au document passe avant la descente depuis VINCI (règle de T047). Elles sont rangées chez Société Générale, confiance A. Ce n'est pas une erreur du moteur : deux groupes se partagent ces sociétés, et le document de l'actionnaire majoritaire l'emporte.
